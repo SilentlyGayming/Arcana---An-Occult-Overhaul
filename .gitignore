@@ -1,0 +1,19 @@
+# Local Sims 3 references and extracted layout donors
+/.deps/
+/references/
+
+# Build outputs and generated source
+/build/
+*.dll
+*.package
+*.pdb
+/src/Occults/OccultAssetData.g.cs
+/src/Localization/ArcanaEnglish.g.cs
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Local editor state
+/.vs/
+*.user
