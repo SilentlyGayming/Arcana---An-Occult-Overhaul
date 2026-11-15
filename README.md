@@ -1,6 +1,6 @@
 # Arcana – An Occult Overhaul
 
-Arcana is a script mod for The Sims 3 that adds the Supernatural Journal to Simology. The Journal displays occult status and power for supported Sims and gives Witches a five-rank progression system and a perk tree.
+Arcana work in progress script mod to overhaul all of the occult races for the Sims 3. Current implementation is limited to a UI journal and perk system fully implemented for witches. This mod does utilise AI for research and assisting the overhaul project. No AI-generated images will ever be involved in the making of this mod, and all assets are either TS4, TS3, or hand-created. 
 
 ## Requirements
 
