@@ -13,6 +13,7 @@ namespace SupernaturalExpanded.Journal
             AttributeSources.Register(OccultTypes.Witch, "Power Regeneration", delegate { return new ModifierReading(15f, ""); });
             AttributeSources.Register(OccultTypes.Witch, "Spellcasting Success", delegate { return new ModifierReading(10f, ""); });
             AttributeSources.Register(OccultTypes.Witch, "Magical Cost Reduction", delegate { return new ModifierReading(-25f, ""); });
+            AccuracySources.Register(OccultTypes.Witch, delegate { return new AccuracyReading(55f, new float[] { 85f, 70f, 55f, 40f, 25f, 12.5f }); });
         }
     }
 

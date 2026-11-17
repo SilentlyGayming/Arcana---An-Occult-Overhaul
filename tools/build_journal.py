@@ -17,6 +17,7 @@ from package_journal import ASSEMBLY
 from hud_icons import generate as generate_hud_keys
 from localization import generate as generate_english
 from prepare_sims3_deps import REQUIRED, prepare_references, validated_references
+from build_vampire_bitemark import replacement_payloads, thumbnail_payloads
 
 PROJECT = Path(__file__).resolve().parent.parent
 PACKAGE = "Arcana - An Occult Overhaul.package"
@@ -49,6 +50,11 @@ def run_stage(name, command):
 
 
 def build(args):
+    # Fail fast before dependency extraction and C# compilation if textures are absent.
+    # The normal package_journal step includes these files in Arcana's one .package.
+    replacement_payloads()
+    thumbnail_payloads()
+    print("Vampire bite-mark resources verified (2 DDS textures + 4 CAS thumbnails).", flush=True)
     if args.game_assemblies:
         paths, hashes = validated_references(args.game_assemblies.resolve())
     else:

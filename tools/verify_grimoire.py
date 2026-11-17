@@ -924,6 +924,13 @@ def check_perk_feedback(root, root_dir, constants):
     assert order.index(page_id(64)) < order.index(WITCH.id(5, 0)), 'Tip is visible in front of rank markers'
     assert order.index(WITCH.id(5, 0)) < order.index(page_id(40)) < order.index(page_id(1)) < order.index(page_id(0))
     assert page_id(12) not in order and page_id(13) not in order
+    # Each perk's edge window is above its tile and its plates, takes no clicks, and draws the shared white edge image.
+    for i in range(len(WITCH.catalog())):
+        assert order.index(WITCH.id(9, i)) < order.index(WITCH.id(0, i)), 'Outline over the tile'
+        assert all(order.index(WITCH.id(9, i)) < order.index(WITCH.id(kind, i)) for kind in (1, 2, 3, 4, 7, 8)), 'Outline over the plates, so no plate cuts it'
+        edge = control(root, WITCH.id(9, i))
+        assert flags(edge) == 0x2012, 'The edge takes no clicks'
+        check_animation_drawable(edge, ui_resources.TILE_EDGE_INSTANCE)
 
     images = {key.instance: png for key, png in content_resources() if key.type == IMAGE}
     for instance in (ui_resources.HALO_INSTANCE, ui_resources.GLITTER_BODY_INSTANCE, ui_resources.GLITTER_TIP_INSTANCE,
@@ -1444,7 +1451,31 @@ def check_attributes(root_dir, data):
     assert 'else if (compact && rows.Count > (int)Math.Floor(listHeight / RowHeight + 0.001f))' in lst
     panel_rows = constant_int(page, 'UpperSlots') * constant(lst, 'RowHeight') / constant(lst, 'MinCompactRow')
     assert panel_rows >= 4.0 and constant_int(page, 'StatisticsRows') >= 4, 'Four attribute rows fit the unchanged panel without a scrollbar'
+    # Accuracy: one row directly under regeneration for casters, a dash until a casting system registers a source, one tooltip line per tier up to Legendary.
+    accuracy = cs_source.file_text(root_dir, 'AccuracySources')
+    assert 'OverviewRow accuracy = AccuracySources.Row(context);' in sources and 'regenerationRow < 0 ? data.Statistics.Count : regenerationRow + 1' in sources, 'Accuracy follows the regeneration row'
+    assert 'reading == null ? unavailable : reading.OverallText' in accuracy and 'reading == null ? unavailable : reading.TierText(tier)' in accuracy, 'No source means dashes, never a figure'
+    assert 'species == OccultTypes.Witch || species == OccultTypes.Genie || species == OccultTypes.Fairy' in accuracy, 'Only the magically inclined occults show Accuracy'
+    assert 'catch (ResetException)' in accuracy and 'ReportOnce("Reading Accuracy"' in accuracy, 'One failing source cannot blank the Overview'
+    exempt = {cs_source.file_path(root_dir, 'AttributeTestData')}
+    assert 'AccuracySources.Register(' not in ''.join(p.read_text() for p in src.rglob('*.cs') if p not in exempt), 'No production code registers a made-up accuracy'
+    assert 'AccuracySources.Register(' in test, 'The sample accuracy is fenced behind the test flag'
+    for key, text in (('Attributes.Accuracy', 'Accuracy'), ('Accuracy.Tagline', 'Chance a spell succeeds, by tier.'), ('Accuracy.Line', '{0}: {1}'),
+                      ('Accuracy.Tier.1', 'Tier 1'), ('Accuracy.Tier.2', 'Tier 2'), ('Accuracy.Tier.3', 'Tier 3'),
+                      ('Accuracy.Tier.4', 'Tier 4'), ('Accuracy.Tier.5', 'Tier 5'), ('Accuracy.Tier.Legendary', 'Legendary')):
+        check_text(accuracy, 'Arcana.Journal.Overview.' + key, text)
+    check_text(accuracy, 'Arcana.Common.Percent', '{0}%')
+    assert accuracy.count('"Arcana.Journal.Overview.Accuracy.Tier.') == 6, 'Tiers 1 to 5 and Legendary'
+    assert 'Math.Max(0.0, Math.Min(100.0, percent))' in accuracy and 'MidpointRounding.AwayFromZero' in accuracy and 'CultureInfo.InvariantCulture' in accuracy
+    def shown_percent(p):
+        clamped = max(0.0, min(100.0, p))
+        whole = float(decimal.Decimal(repr(clamped)).quantize(decimal.Decimal('1'), rounding=decimal.ROUND_HALF_UP))
+        exact = abs(clamped - whole) < 0.05
+        value = whole if exact else float(decimal.Decimal(repr(clamped)).quantize(decimal.Decimal('0.1'), rounding=decimal.ROUND_HALF_UP))
+        return (('%d' % value) if exact else ('%g' % value)) + '%'
+    assert [shown_percent(v) for v in (85.0, 12.5, 100.0, -3.0, 120.0, 0.04)] == ['85%', '12.5%', '100%', '0%', '100%', '0%']
     print('PASS: Attributes: regeneration row persists as — when no gameplay modifier source exists; genuine registered percentages take its place; four rows fit unchanged panel')
+    print('PASS: Accuracy: caster-only row under regeneration, dashes without a registered source, six tooltip tiers (1-5, Legendary), clamped whole percentages')
 
 
 def check_overview_hover(root, root_dir, jl, data, page):
@@ -1735,7 +1766,32 @@ def check_r72(root, root_dir, layout):
     check_text(grimoire, 'Arcana.Journal.Grimoire.Details.Cost', 'Energy Cost: {0}')
     assert 'sorted[category].Count == 0 ? EmptyPrompts[category] : SelectPrompts[category]' in grimoire, 'An empty category does not repeat the list message'
     assert 'journal.Place(descriptionMeta,' in grimoire and 'journal.Place(descriptionPrompt,' in grimoire
+    # Each specialization names the colour of its tile's edge gradient in the tree; the shared overlay window carries it, so regular perks and every icon stay as they are.
+    witch_tree = cs_source.class_text(root_dir, 'WitchTree')
+    assert witch_tree.count('.Conflict = ') == 2 and 'perks[15].Conflict = perks[16];' in witch_tree, 'The two High Witch perks are the only specializations'
+    assert witch_tree.count('.Face = ') == 2 and 'perks[15].Face = 0xFF7A45E0;' in witch_tree and 'perks[16].Face = 0xFF2E9E4F;' in witch_tree
+    assert 'internal uint Face;' in cs_source.class_text(root_dir, 'Perk')
+    assert 'SetEdge(i, perk, !open);' in page and 'if (perk.Face != 0)' in page, 'Only a perk with a Face gets an edge'
+    assert 'edge.Visible = false;' in page and 'edges[i] = Add(edge);' in page
+    assert 'edge.ShadeColor = new Color(perk.Face);' in page and 'edges[index].ShadeColor = new Color(wanted);' in page
+    assert 'tiles[i].ShadeColor' not in page and 'tiles[index].ShadeColor' not in page, 'The tile face is no longer tinted'
+    assert 'FaceShade' not in theme and 'StockFace' not in page, 'The whole-tile tint is gone'
+    set_icon = page.split('private void SetPerkFaded(')[1].split('private static Color GetFadedColor(')[0]
+    assert 'Face' not in set_icon and 'icons[index].ShadeColor = fade ? FadedIcon : LitIcon;' in set_icon, 'The icon shade never involves the specialization colour'
+    assert 'Edge = 9' in cs_source.class_text(root_dir, 'PageControl') or 'Edge = 9' in (root_dir / 'src' / 'Occults' / 'OccultPerks.cs').read_text()
+    # The generated image: white, transparent in the middle and outside the rounded outline, strongest just inside the outline.
+    size, px = generated_rgba(ui_resources.tile_edge_png())
+    d = ui_resources.TILE_EDGE_DENSITY
+    assert size == (ui_resources.TILE_EDGE_WIDTH * d, ui_resources.TILE_EDGE_HEIGHT * d)
+    centre = px[size[0] // 2, size[1] // 2]
+    assert centre[3] == 0, 'The middle of the tile shows through'
+    assert px[0, 0][3] == 0, 'Outside the rounded corner stays clear'
+    top = px[size[0] // 2, int(ui_resources.TILE_EDGE_INSET * d) + 1]
+    assert top[:3] == (255, 255, 255) and top[3] == 255, 'A solid outline, white so the shade sets the colour'
+    column = [px[size[0] // 2, y][3] for y in range(int(ui_resources.TILE_EDGE_INSET * d), int((ui_resources.TILE_EDGE_INSET + ui_resources.TILE_EDGE_DEPTH) * d))]
+    assert column == sorted(column, reverse=True) and column[-1] < 12, 'Solid ring, then a fading glow'
     print('PASS: perk states, pending footer, native-centred X/checkmark, Grimoire empty/selection states')
+    print('PASS: specialization perks get an edge gradient in the colour their tree names; tile face, icon and regular perks untouched')
 
 
 def check_perk_navigation(root_dir, window):

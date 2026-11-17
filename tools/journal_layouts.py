@@ -8,7 +8,7 @@ from ui_icons import GRIMOIRE_CATEGORY_NAMES, grimoire_icon_instance
 from ui_resources import (portrait_mask_key, TAB_BODY_INSTANCE, TAB_BODY_MARGIN_X,
     TAB_BODY_MARGIN_Y, TAB_BODY_HEIGHT, TAB_BODY_WIDTH,
     HALO_INSTANCE, STAR_INSTANCE, GLITTER_BODY_INSTANCE,
-    GLITTER_TIP_INSTANCE, TABLE_CORNER_INSTANCE_LEFT, TABLE_CORNER_INSTANCE_RIGHT)
+    GLITTER_TIP_INSTANCE, TABLE_CORNER_INSTANCE_LEFT, TABLE_CORNER_INSTANCE_RIGHT, TILE_EDGE_INSTANCE)
 
 
 def _layout_name(constant):
@@ -445,6 +445,12 @@ def perk_icon(identifier, art=None):
     return hover_glow(window(identifier, image_drawable(f"{art[1]:016x}" if art else MOODLET_ICON)), "0x12ffffff")
 
 
+def tile_edge(identifier):
+    """The coloured edge gradient of a specialization tile. It draws no hit region, so clicks and hover reach the tile
+    under it; PowerPage sets its shade to the perk's colour."""
+    return window(identifier, image_drawable(f"{TILE_EDGE_INSTANCE:016x}"), flags="0x00002012")
+
+
 def marker(identifier):
     normal, hover, pressed = MOODLET_FRAME
     return state_button(identifier, RANK_MARKER_SIZE, "0x062eae07", standard_drawable(
@@ -710,6 +716,8 @@ def tree_controls(tree):
         label(page(9), font=FOOTER_FONT),
         label(page(14), font=FOOTER_FONT, color=BLUE),
         *(marker(ids(5, i)) for i in range(RANKS)),
+        # Above every part of the tile, so the outline is never cut by a plate; the glow stays clear of the icon.
+        *(tile_edge(ids(9, i)) for i in perks),
         *(label(ids(1, i), align=1) for i in perks),
         *(window(ids(2, i), standard_drawable((DIALOG_BUTTON[0],))) for i in perks),
         *(label(ids(3, i), align=1) for i in perks),

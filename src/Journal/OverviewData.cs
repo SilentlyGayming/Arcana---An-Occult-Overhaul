@@ -398,6 +398,7 @@ namespace SupernaturalExpanded.Journal
             string regenerationLabel = JournalText.Get(RegenerationKey);
             string englishRegeneration = JournalText.English(RegenerationKey);
             bool reportedRegeneration = false;
+            int regenerationRow = -1;
             foreach (Entry entry in entries)
             {
                 if (entry.Species != context.Primary)
@@ -429,6 +430,10 @@ namespace SupernaturalExpanded.Journal
                 string name = reading.Condition.Length == 0 ? label
                     : JournalText.Format("Arcana.Common.WithQualifier", label, reading.Condition);
                 data.Statistics.Add(new OverviewRow(icon, name, "", reading.Text));
+                if (isRegeneration)
+                {
+                    regenerationRow = data.Statistics.Count - 1;
+                }
                 reportedRegeneration |= isRegeneration;
             }
             // The UI should not silently lose the regeneration row just because the
@@ -438,6 +443,14 @@ namespace SupernaturalExpanded.Journal
             if (!reportedRegeneration && context.Power != null && context.Power.Available)
             {
                 data.Statistics.Add(new OverviewRow(icon, regenerationLabel, "", JournalText.Get("Arcana.Common.UnavailableValue")));
+                regenerationRow = data.Statistics.Count - 1;
+            }
+
+            // Accuracy sits directly under the regeneration row, or last when the Sim has none.
+            OverviewRow accuracy = AccuracySources.Row(context);
+            if (accuracy != null)
+            {
+                data.Statistics.Insert(regenerationRow < 0 ? data.Statistics.Count : regenerationRow + 1, accuracy);
             }
         }
     }

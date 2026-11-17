@@ -25,6 +25,9 @@ namespace SupernaturalExpanded.Journal
         internal Perk Conflict;
         internal int Index;
 
+        // The colour of the gradient along the edge of this perk's tile, as 0xAARRGGBB; zero leaves the tile plain. A tree sets it on its specializations.
+        internal uint Face;
+
         internal Perk(string key, Rank rank, int column, float shift, string name, int[] costs)
         {
             Key = key;
@@ -127,7 +130,8 @@ namespace SupernaturalExpanded.Journal
         RankMarker = 5,
         Page = 6,
         CostIcon = 7,
-        Icon = 8
+        Icon = 8,
+        Edge = 9
     }
 
     internal static class WitchTree
@@ -184,6 +188,9 @@ namespace SupernaturalExpanded.Journal
             // High Witch: choose only one; a staged choice can be cancelled to pick the other, an acquired one is final.
             perks[15].Conflict = perks[16];
             perks[16].Conflict = perks[15];
+            // Each specialization names the colour of its tile's edge: violet for Arcane Ascendancy (the Witch UI), green for The Old Ways.
+            perks[15].Face = 0xFF7A45E0;
+            perks[16].Face = 0xFF2E9E4F;
             return perks;
         }
 

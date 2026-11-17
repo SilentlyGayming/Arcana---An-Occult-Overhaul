@@ -282,3 +282,50 @@ def tab_body_png():
 def tab_clear_png():
     """Three by three, fully transparent, so the stock slicing has a whole pixel in every part."""
     return rgba_png(3, 3, lambda x, y: (0, 0, 0, 0))
+
+
+# Specialization perks get a coloured outline just inside their tile's border, with a short soft glow inside it. The image is
+# white, so each perk's window shade is the colour. It is transparent in the middle and draws above the tile's plates, so the
+# outline runs unbroken around the tile, and the glow stops short of the icon.
+TILE_EDGE_NAME = "SupernaturalExpanded.UI.PerkTileEdge.r2"
+TILE_EDGE_INSTANCE = fnv64(TILE_EDGE_NAME)
+# Journal units; match PowerLayout.TileSize and PowerLayout.CellHeight.
+TILE_EDGE_WIDTH, TILE_EDGE_HEIGHT = 84, 90
+TILE_EDGE_DENSITY = 2
+TILE_EDGE_RADIUS = 6.0
+# The outline starts this far inside the tile's own border so it never covers it.
+TILE_EDGE_INSET = 1.0
+TILE_EDGE_RING = 2.5
+TILE_EDGE_GLOW = 5.0
+TILE_EDGE_GLOW_PEAK = 0.4
+TILE_EDGE_DEPTH = TILE_EDGE_RING + TILE_EDGE_GLOW
+
+
+def tile_edge_alpha(x, y):
+    """Alpha (0 to 1) at a point in journal units: a solid ring, then a glow fading inwards."""
+    cx = min(max(x, TILE_EDGE_RADIUS), TILE_EDGE_WIDTH - TILE_EDGE_RADIUS)
+    cy = min(max(y, TILE_EDGE_RADIUS), TILE_EDGE_HEIGHT - TILE_EDGE_RADIUS)
+    corner = math.hypot(x - cx, y - cy)
+    # Distance inside the rounded rectangle's outline, from the corner arc or the nearest straight side.
+    if corner > 0:
+        depth = TILE_EDGE_RADIUS - corner
+    else:
+        depth = min(x, TILE_EDGE_WIDTH - x, y, TILE_EDGE_HEIGHT - y)
+    depth -= TILE_EDGE_INSET
+    if depth < 0 or depth >= TILE_EDGE_DEPTH:
+        return 0.0
+    if depth < TILE_EDGE_RING:
+        return 1.0
+    return TILE_EDGE_GLOW_PEAK * (1 - (depth - TILE_EDGE_RING) / TILE_EDGE_GLOW) ** 2
+
+
+def tile_edge_png():
+    width, height = TILE_EDGE_WIDTH * TILE_EDGE_DENSITY, TILE_EDGE_HEIGHT * TILE_EDGE_DENSITY
+
+    def pixel(column, row):
+        # Four samples per pixel keep the ring's edges and the rounded corners smooth.
+        alpha = sum(tile_edge_alpha((column + ox) / TILE_EDGE_DENSITY, (row + oy) / TILE_EDGE_DENSITY)
+                    for ox in (.25, .75) for oy in (.25, .75)) / 4
+        return (255, 255, 255, round(255 * alpha))
+
+    return rgba_png(width, height, pixel)

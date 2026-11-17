@@ -26,11 +26,15 @@ namespace SupernaturalExpanded.Journal
         private static readonly Color UnaffordableCost = new Color(0xFFC02828);
         private static readonly Color PendingPlate = new Color(0xFFFFD4D0);
         private static readonly Color PendingText = new Color(0xFFD42020);
+        // A faded perk's outline keeps its colour but loses most of its strength, like the icon.
+        private const uint FadedEdgeAlpha = 0x66000000;
 
         private readonly OccultTree tree;
         private readonly List<WindowBase> controls = new List<WindowBase>();
         private readonly Button[] tiles;
         private readonly Window[] icons;
+        // Only a perk with a Face has an edge; the rest stay null.
+        private readonly Window[] edges;
         private readonly UIImage[] iconImages;
         private readonly Text[] counts;
         private readonly Window[] counterPlates;
@@ -68,6 +72,7 @@ namespace SupernaturalExpanded.Journal
             int perks = tree.Perks.Length;
             tiles = new Button[perks];
             icons = new Window[perks];
+            edges = new Window[perks];
             iconImages = new UIImage[perks];
             counts = new Text[perks];
             counterPlates = new Window[perks];
@@ -130,6 +135,18 @@ namespace SupernaturalExpanded.Journal
                 tiles[i] = Add(journal.Button(tree.Id(PageControl.Tile, i), "", x, y, PowerLayout.TileSize, PowerLayout.CellHeight,
                     delegate { StagePerk(perk); }));
                 tiles[i].CreateTooltipCallbackFunction = TooltipFor(perk);
+                Window edge = journal.Control<Window>(tree.Id(PageControl.Edge, i));
+                if (perk.Face != 0)
+                {
+                    // In front of the tile and its plates; the icon never takes this colour.
+                    edges[i] = Add(edge);
+                    journal.Place(edge, x, y, PowerLayout.TileSize, PowerLayout.CellHeight);
+                    edge.ShadeColor = new Color(perk.Face);
+                }
+                else
+                {
+                    edge.Visible = false;
+                }
                 icons[i] = Add(journal.Control<Window>(tree.Id(PageControl.Icon, i)));
                 journal.Place(icons[i], x + (PowerLayout.TileSize - PowerLayout.IconSize) / 2f, y + PowerLayout.IconTop,
                     PowerLayout.IconSize, PowerLayout.IconSize);
@@ -404,6 +421,7 @@ namespace SupernaturalExpanded.Journal
                 bool open = tier > 0 || selection.CanStage(perk);
                 tiles[i].Enabled = open;
                 tiles[i].Selected = tier > 0;
+                SetEdge(i, perk, !open);
                 SetPerkFaded(i, !open, selection.ShortOnPoints(perk));
                 // A rank that is selected but not bought shows the badge even on a single-rank perk ("+1"), tinted, so it never
                 // reads as already owned.
@@ -429,6 +447,21 @@ namespace SupernaturalExpanded.Journal
             int waiting = selection.PendingCount;
             pendingText.Caption = waiting > 0 ? JournalText.Format("Arcana.Journal.Perks.Pending", waiting) : "";
             pendingText.Visible = visible && waiting > 0;
+        }
+
+        // A specialization's outline takes the colour its tree names; the tile face and the icon are left as they are.
+        private void SetEdge(int index, Perk perk, bool fade)
+        {
+            if (edges[index] == null)
+            {
+                return;
+            }
+            uint wanted = fade ? (perk.Face & 0x00FFFFFF) | FadedEdgeAlpha : perk.Face;
+            if (edges[index].ShadeColor.ARGB != wanted)
+            {
+                edges[index].ShadeColor = new Color(wanted);
+                edges[index].Invalidate();
+            }
         }
 
         private void SetPending(int index, bool staged)

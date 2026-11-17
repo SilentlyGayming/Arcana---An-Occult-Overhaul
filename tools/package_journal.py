@@ -11,6 +11,8 @@ from trees import IMAGE, icons
 from hud_icons import resources as hud_resources, status_resources, life_state_resources
 from ui_icons import resources as ui_icon_resources
 from ui_resources import (portrait_mask_resources, star_resources as selection_star_resources, glitter_resources)
+from build_vampire_bitemark import (replacement_payloads as vampire_bite_resources,
+                                   thumbnail_payloads as vampire_bite_thumbnails)
 
 
 ASSEMBLY = "SupernaturalExpanded.Journal"
@@ -100,6 +102,14 @@ def content_resources():
     resources.extend(status_resources())
     resources.extend(life_state_resources())
     resources.extend(locale_resources())
+    # Default replacement: TS4 vampire punctures mapped to the vanilla TS3 mark UV.
+    # Keep the original CASP/masks untouched. Override the two original-TGI IMG resources.
+    resources.extend((Key(typ, group, instance), data)
+                     for typ, group, instance, data in vampire_bite_resources())
+    # Game-rendered mannequin previews from the user's regenerated CAS cache.
+    # Four 256x256 THUM resources for the four observed preset groups (1..4).
+    resources.extend((Key(typ, group, instance), data)
+                     for typ, group, instance, data in vampire_bite_thumbnails())
     if len({key for key, _ in resources}) != len(resources):
         raise ValueError("Duplicate package resource key")
     return resources
@@ -126,6 +136,7 @@ def main():
     finally:
         staging.unlink(missing_ok=True)
     print(f"Verified {args.package}")
+    print("Included vampire bite-mark default replacement (2 DDS + 4 regenerated CAS thumbnails).")
     for key, _ in resources:
         print(key)
 
