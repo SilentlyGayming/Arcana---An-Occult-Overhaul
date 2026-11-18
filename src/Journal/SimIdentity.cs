@@ -56,11 +56,7 @@ namespace SupernaturalExpanded.Journal
                 return null;
             }
 
-            SimDescription description = sim == null ? null : sim.SimDescription;
-            if (description == null && info.UninstantiatedButInHousehold)
-            {
-                description = SimDescription.Find(info.UninstantiatedSimDescriptionId);
-            }
+            SimDescription description = ReadDescription(model, info, sim);
             string name = info.mName;
             if (string.IsNullOrEmpty(name) && sim != null)
             {
@@ -68,6 +64,23 @@ namespace SupernaturalExpanded.Journal
             }
             return new SimIdentity(info.mGuid, name ?? JournalText.Get("Arcana.Common.SelectedSim"),
                 LifeStateName(types), types, Math.Max(0, (int)info.mMood), description);
+        }
+
+        private static SimDescription ReadDescription(IHudModel model, SimInfo info, Sim sim)
+        {
+            if (sim != null && sim.SimDescription != null)
+            {
+                return sim.SimDescription;
+            }
+            if (info.UninstantiatedButInHousehold && info.UninstantiatedSimDescriptionId != 0UL)
+            {
+                return SimDescription.Find(info.UninstantiatedSimDescriptionId);
+            }
+
+            // The HUD can report the selection before the ObjectGuid resolves through GlobalFunctions.
+            SimDescription selected = model.GetSimDescription() as SimDescription;
+            Sim actor = selected == null ? null : selected.CreatedSim;
+            return actor != null && actor.ObjectId == info.mGuid ? selected : null;
         }
 
         // Reads just the supported occult flags for frequent HUD refreshes.

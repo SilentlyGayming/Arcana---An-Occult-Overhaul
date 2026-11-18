@@ -33,25 +33,15 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Returns the two shells, so the window can show the single-notch one on Overview and Grimoire and the two-notch one on Perks.
-        internal static JournalFrames ApplyDialog(Dialog journal, Button[] tabs, Button[] grimoireTabs)
+        internal static JournalFrames ApplyDialog(Dialog journal)
         {
             JournalFrames frames = new JournalFrames(journal);
             UseDonor("HUDCollectionJournalDialog", 1, delegate(WindowBase donor)
             {
-                CopyFace(DialogFrame(journal), DialogFrame(donor));
-                journal.ShadeColor = donor.ShadeColor;
-                StyleInnerPanels(journal, donor);
+                frames.StyleCollection(donor);
                 StyleClose(journal, donor);
             });
-            // The Collection Journal donor supplies the typography, panel textures and the single-notch frame, which Overview and Grimoire show;
-            // the frame comes with its own slicing, as the two-notch one does.
-            // Perks shows the two-notch dialog built for both buttons; its slicing must travel with its artwork.
-            frames.CaptureSingleNotch();
-            if (StyleTwoButtonFrame(journal))
-            {
-                frames.CaptureTwoNotch();
-            }
+            frames.HasTwoButtonFace = StyleTwoButtonFrame(frames.TwoButtonFace);
             // The party picker's Cancel face does not render a circular backdrop outside its dialog, so Cancel copies the checkmark's frame and keeps its own X glyph.
             StyleCancel(journal);
             UseDonor("ThreeButtonDialog", 0x10000, delegate(WindowBase donor)
@@ -78,14 +68,7 @@ namespace SupernaturalExpanded.Journal
                 Button sample = NativeLayouts.Find<Button>(donor, 2);
                 if (sample != null)
                 {
-                    StdDrawable face = Frame(sample.Drawable);
-                    foreach (Button tab in tabs)
-                    {
-                        CopyFace(Frame(tab.Drawable), face);
-                    }
-                    // Grimoire buttons deliberately use the native Simology face,
-                    // not this pale dialog face (which blends into the page).
-                    StyleCounters(journal, face);
+                    StyleCounters(journal, Frame(sample.Drawable));
                 }
             });
             // Unlike native button captions, the Grimoire labels remain fixed
@@ -173,54 +156,6 @@ namespace SupernaturalExpanded.Journal
             });
         }
 
-        // The Collection Journal's inset panel has no control ID. It is the largest plain Window
-        // with a drawn face, so it is found by what it is rather than by its position in the layout.
-        private static Window FindInsetPanel(WindowBase donor)
-        {
-            Rect bounds = donor.Area;
-            Window best = null;
-            float bestSize = 0f;
-            for (uint i = 0; ; i++)
-            {
-                WindowBase child = donor.GetChildByIndex(i);
-                if (child == null)
-                {
-                    break;
-                }
-                Window window = child as Window;
-                if (window == null)
-                {
-                    continue;
-                }
-                StdDrawable face = Frame(window.Drawable);
-                if (face == null || face[DrawableBase.ControlStates.kNormal] == null)
-                {
-                    continue;
-                }
-                Rect area = window.Area;
-                float size = area.Width * area.Height;
-                if (area.Width >= bounds.Width * 0.5f && area.Height >= bounds.Height * 0.4f && size > bestSize)
-                {
-                    best = window;
-                    bestSize = size;
-                }
-            }
-            return best;
-        }
-
-        private static void StyleInnerPanels(Dialog journal, WindowBase donor)
-        {
-            Window sample = FindInsetPanel(donor);
-            StdDrawable face = sample == null ? null : Frame(sample.Drawable);
-            if (face == null)
-            {
-                return;
-            }
-
-            // The Grimoire list and description keep the stock list outline named in the layout, like the Lifetime Rewards list.
-            StyleFace(NativeLayouts.Find<Window>(journal, NativeLayouts.StatusPanel), face);
-        }
-
         private static void StyleClose(Dialog journal, WindowBase donor)
         {
             Button sample = NativeLayouts.Find<Button>(donor, NativeLayouts.CollectionOkay);
@@ -257,9 +192,9 @@ namespace SupernaturalExpanded.Journal
         };
         private static readonly int[] TwoButtonExports = { 1, 1, 0x10000 };
 
-        private static bool StyleTwoButtonFrame(Dialog journal)
+        private static bool StyleTwoButtonFrame(Window footer)
         {
-            StdDrawable target = DialogFrame(journal);
+            StdDrawable target = Frame(footer.Drawable);
             if (target == null)
             {
                 return false;
@@ -288,7 +223,8 @@ namespace SupernaturalExpanded.Journal
 
                     // The donor's ScaleType, ScaleAmount and ScaleArea travel with its image; the Collection frame's cuts would stretch the recesses.
                     CopyFace(target, source);
-                    journal.Invalidate();
+                    footer.ShadeColor = donor.ShadeColor;
+                    footer.Invalidate();
                     return true;
                 }
                 catch (ResetException)
@@ -385,7 +321,7 @@ namespace SupernaturalExpanded.Journal
             return layers == null ? drawable as StdDrawable : layers[0] as StdDrawable;
         }
 
-        private static void CopyFace(StdDrawable target, StdDrawable source)
+        internal static void CopyFace(StdDrawable target, StdDrawable source)
         {
             if (CopyImages(target, source))
             {
@@ -415,7 +351,7 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // The Grimoire categories keep the native faces; the three main tabs draw a clear face over their permanent shells (tinted by JournalWindow).
+    // Grimoire categories use the native pressed face to show which filter is active.
     internal sealed class TabFaces
     {
         private static readonly DrawableBase.ControlStates[] Replaced =
@@ -427,32 +363,13 @@ namespace SupernaturalExpanded.Journal
             DrawableBase.ControlStates.kCheckedActive
         };
 
-        private static readonly Color SelectedTint = new Color(0xFFC4D0DE);
-        private static readonly Color Untinted = new Color(0xFFFFFFFF);
-
         private readonly Button[] buttons;
-        private readonly bool plainFace;
-        private readonly UIImage open;
         private readonly UIImage[][] original;
         private readonly UIImage[] pressed;
 
-        internal TabFaces(Button[] buttons) : this(buttons, false)
-        {
-        }
-
-        // Without the packaged clear face, fall back to normal native button faces and hide the shells.
-        internal TabFaces(Button[] buttons, UIImage open) : this(buttons, true)
-        {
-            this.open = open;
-        }
-
-        // Whether every main tab button draws a clear face over its corresponding shell.
-        internal bool Open { get { return open != null; } }
-
-        internal TabFaces(Button[] buttons, bool plainFace)
+        internal TabFaces(Button[] buttons)
         {
             this.buttons = buttons;
-            this.plainFace = plainFace;
             original = new UIImage[buttons.Length][];
             pressed = new UIImage[buttons.Length];
             for (int i = 0; i < buttons.Length; i++)
@@ -482,108 +399,95 @@ namespace SupernaturalExpanded.Journal
                     continue;
                 }
 
-                bool on = i == active;
-                UIImage selected = plainFace ? original[i][0] : pressed[i];
                 for (int s = 0; s < Replaced.Length; s++)
                 {
                     UIImage keep = original[i][s] ?? original[i][0];
-                    face[Replaced[s]] = open != null ? open : (on ? selected : keep);
-                }
-                // A pressed inactive tab must not flash its old rectangular button face on mouse-down.
-                // Restore that native pressed image if the open tab texture is unavailable.
-                face[DrawableBase.ControlStates.kActive] = open ?? pressed[i];
-                if (plainFace && open == null)
-                {
-                    buttons[i].ShadeColor = on ? SelectedTint : Untinted;
+                    face[Replaced[s]] = i == active ? pressed[i] : keep;
                 }
                 buttons[i].Invalidate();
             }
         }
     }
 
-    // The Journal's two native shells: the single-notch Collection frame (Overview, Grimoire) and the two-notch frame (Perks).
-    // Each keeps its artwork with its own slicing and is copied back onto the dialog as a pair, so the window is never rebuilt or resized.
+    // The Collection frame owns the silhouette on every page. Only the lower-right corner can switch to the two-notch artwork.
     internal sealed class JournalFrames
     {
-        private const int StateCount = 8;
-
-        private sealed class Face
-        {
-            internal readonly UIImage[] Images = new UIImage[StateCount];
-            internal StdDrawable.ScalingType ScaleType;
-            internal Vector2 ScaleAmount;
-            internal Rect ScaleArea;
-        }
+        private const float FooterWidth = 144f;
+        private const float FooterHeight = 86f;
 
         private readonly Dialog journal;
-        private Face single;
-        private Face twoNotch;
-        private Face current;
+        private readonly Window upper;
+        private readonly Window lowerLeft;
+        private readonly Window footer;
+        private readonly Window upperFace;
+        private readonly Window lowerLeftFace;
+        private readonly Window singleButtonFace;
+        internal readonly Window TwoButtonFace;
+        internal bool HasTwoButtonFace;
 
         internal JournalFrames(Dialog journal)
         {
             this.journal = journal;
+            upper = Clip(NativeLayouts.FrameUpper);
+            lowerLeft = Clip(NativeLayouts.FrameLowerLeft);
+            footer = Clip(NativeLayouts.FrameFooter);
+            upperFace = Face(upper, NativeLayouts.FrameUpper + 1);
+            lowerLeftFace = Face(lowerLeft, NativeLayouts.FrameLowerLeft + 1);
+            singleButtonFace = Face(footer, NativeLayouts.FrameFooter + 1);
+            TwoButtonFace = Face(footer, NativeLayouts.FrameFooter + 2);
         }
 
-        // The frame as it is now: the Collection Journal artwork with the layout's own slicing.
-        internal void CaptureSingleNotch()
+        private Window Clip(uint id)
         {
-            single = Capture();
-            current = single;
+            Window clip = NativeLayouts.Require<Window>(journal, id);
+            clip.Clip = true;
+            clip.IgnoreMouse = true;
+            return clip;
         }
 
-        // The frame as it is after the two-notch donor was copied onto it, with the donor's slicing.
-        internal void CaptureTwoNotch()
+        private static Window Face(Window clip, uint id)
         {
-            twoNotch = Capture();
-            current = twoNotch;
+            Window face = NativeLayouts.Require<Window>(clip, id);
+            face.IgnoreMouse = true;
+            return face;
         }
 
-        // Perks gets the two-notch shell when it loaded; every other page, and Perks without it, gets the single-notch one.
+        internal void StyleCollection(WindowBase donor)
+        {
+            StdDrawable face = JournalTheme.DialogFrame(donor);
+            Apply(upperFace, face, donor.ShadeColor);
+            Apply(lowerLeftFace, face, donor.ShadeColor);
+            Apply(singleButtonFace, face, donor.ShadeColor);
+        }
+
+        private static void Apply(Window target, StdDrawable face, Color shade)
+        {
+            JournalTheme.CopyFace(JournalTheme.Frame(target.Drawable), face);
+            target.ShadeColor = shade;
+            target.Invalidate();
+        }
+
+        internal void Layout(float scale)
+        {
+            float width = journal.Area.Width;
+            float height = journal.Area.Height;
+            float x = width - (float)Math.Round(FooterWidth * scale);
+            float y = height - (float)Math.Round(FooterHeight * scale);
+            // All copies draw at the same pixel coordinates so the clip boundaries meet without a seam.
+            upper.Area = new Rect(0f, 0f, width, y);
+            lowerLeft.Area = new Rect(0f, y, x, height);
+            footer.Area = new Rect(x, y, width, height);
+            upperFace.Area = NativeLayouts.Box(0f, 0f, width, height);
+            lowerLeftFace.Area = NativeLayouts.Box(0f, -y, width, height);
+            singleButtonFace.Area = NativeLayouts.Box(-x, -y, width, height);
+            TwoButtonFace.Area = singleButtonFace.Area;
+        }
+
         internal void Show(bool wantTwoNotch)
         {
-            Face face = wantTwoNotch && twoNotch != null ? twoNotch : single;
-            if (face == null || face == current)
-            {
-                return;
-            }
-            StdDrawable target = JournalTheme.DialogFrame(journal);
-            if (target == null)
-            {
-                return;
-            }
-
-            for (int i = 0; i < StateCount; i++)
-            {
-                if (face.Images[i] != null)
-                {
-                    target[(DrawableBase.ControlStates)i] = face.Images[i];
-                }
-            }
-            target.ScaleType = face.ScaleType;
-            target.ScaleAmount = face.ScaleAmount;
-            target.ScaleArea = face.ScaleArea;
-            current = face;
-            journal.Invalidate();
-        }
-
-        private Face Capture()
-        {
-            StdDrawable source = JournalTheme.DialogFrame(journal);
-            if (source == null || source[DrawableBase.ControlStates.kNormal] == null)
-            {
-                return null;
-            }
-
-            Face face = new Face();
-            for (int i = 0; i < StateCount; i++)
-            {
-                face.Images[i] = source[(DrawableBase.ControlStates)i];
-            }
-            face.ScaleType = source.ScaleType;
-            face.ScaleAmount = source.ScaleAmount;
-            face.ScaleArea = source.ScaleArea;
-            return face;
+            bool twoButtons = wantTwoNotch && HasTwoButtonFace;
+            singleButtonFace.Visible = !twoButtons;
+            TwoButtonFace.Visible = twoButtons;
         }
     }
 }

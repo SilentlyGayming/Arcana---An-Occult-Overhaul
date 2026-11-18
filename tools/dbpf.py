@@ -131,8 +131,9 @@ def refpack(data, expected_size):
         cursor += literal
         if back > len(output):
             raise ValueError("RefPack copy before start of output")
-        for _ in range(count):
-            output.append(output[-back])
+        start = len(output) - back
+        for offset in range(count):
+            output.append(output[start + offset])
         if len(output) > expected_size:
             raise ValueError("RefPack exceeded declared size")
 
@@ -147,10 +148,13 @@ def read(package, entry):
         raise ValueError(f"{package}: truncated {entry.key}")
     if entry.compression == 0 and entry.size == entry.uncompressed_size:
         return data
-    if entry.compression == 0xFFFF:
-        return refpack(data, entry.uncompressed_size)
-    if entry.compression == 0x5A42:
-        return zlib.decompress(data)
+    try:
+        if entry.compression == 0xFFFF:
+            return refpack(data, entry.uncompressed_size)
+        if entry.compression == 0x5A42:
+            return zlib.decompress(data)
+    except (IndexError, SystemError, zlib.error) as error:
+        raise ValueError(f"{package}: corrupt {entry.key}: {error}") from error
     raise ValueError(f"{package}: unsupported compression {entry.compression:#x}")
 
 

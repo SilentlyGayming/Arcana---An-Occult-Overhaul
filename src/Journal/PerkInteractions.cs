@@ -4,11 +4,27 @@ using System;
 
 namespace SupernaturalExpanded.Journal
 {
+    internal struct TooltipModifier
+    {
+        internal readonly string Text;
+        internal readonly bool Positive;
+
+        internal TooltipModifier(string text, bool positive)
+        {
+            Text = text;
+            Positive = positive;
+        }
+    }
+
     // The perk tooltip (title, blue tagline, description, red conflict line) in the mod's own layout, sized like the stock SimpleTextTooltip: each Text is fitted to its wrapped height and the window is sized around them.
     internal sealed class PerkTooltip : Tooltip
     {
         private const uint TaglineColor = 0xFF2D8CD8;
         private const uint ConflictColor = 0xFFD03030;
+        private const uint PositiveModifierColor = 0xFFA0E9AE;
+        private const uint NegativeModifierColor = 0xFFFFA5A5;
+        private const uint DarkPositiveModifierColor = 0xFF1D7038;
+        private const uint DarkNegativeModifierColor = 0xFFAA273C;
 
         // In UI units, before the UI scale; the stock tooltips wrap at 180, which is too narrow for these descriptions.
         private const float TextWidth = 320f;
@@ -16,11 +32,14 @@ namespace SupernaturalExpanded.Journal
         private const float TaglineGap = 2f;
         private const float BodyGap = 6f;
         private const float ConflictGap = 4f;
+        private const float ModifierIndent = 14f;
+        private const float ModifierGap = 2f;
 
         private const uint TitleId = 0x53E00081;
         private const uint TaglineId = 0x53E00082;
         private const uint BodyId = 0x53E00083;
         private const uint ConflictId = 0x53E00084;
+        private const uint FirstModifierId = 0x53E00085;
 
         private PerkTooltip()
             : base(NativeLayouts.PerkTooltip, NativeLayouts.RootExport)
@@ -30,11 +49,16 @@ namespace SupernaturalExpanded.Journal
         // Never shows a half-built tooltip: a failure falls back to the stock plain one, which is always readable.
         internal static Tooltip Create(string title, string tagline, string description, string conflict)
         {
+            return Create(title, tagline, description, conflict, null);
+        }
+
+        internal static Tooltip Create(string title, string tagline, string description, string conflict, TooltipModifier[] modifiers)
+        {
             PerkTooltip tooltip = null;
             try
             {
                 tooltip = new PerkTooltip();
-                if (tooltip.Fill(title, tagline, description, conflict))
+                if (tooltip.Fill(title, tagline, description, conflict, modifiers))
                 {
                     return tooltip;
                 }
@@ -49,12 +73,19 @@ namespace SupernaturalExpanded.Journal
             }
 
             Discard(tooltip);
-            return Plain(title + "\n" + tagline + "\n\n" + description
-                + (string.IsNullOrEmpty(conflict) ? "" : "\n" + conflict));
+            string text = title + "\n" + tagline + "\n\n" + description;
+            if (modifiers != null)
+            {
+                foreach (TooltipModifier modifier in modifiers)
+                {
+                    text += "\n    " + modifier.Text;
+                }
+            }
+            return Plain(text + (string.IsNullOrEmpty(conflict) ? "" : "\n" + conflict));
         }
 
-        // Returns false when the layout did not load with all four text controls.
-        private bool Fill(string title, string tagline, string description, string conflict)
+        // Returns false when the layout did not load with the text controls in use.
+        private bool Fill(string title, string tagline, string description, string conflict, TooltipModifier[] modifiers)
         {
             Window root = TooltipWindow as Window;
             if (root == null)
@@ -83,6 +114,28 @@ namespace SupernaturalExpanded.Journal
             top += Place(name, title, left, top, width, scale) + TaglineGap * scale;
             top += Place(line, tagline, left, top, width, scale) + BodyGap * scale;
             top += Place(body, description, left, top, width, scale);
+            if (modifiers != null && modifiers.Length != 0)
+            {
+                float indent = ModifierIndent * scale;
+                Color ink = body.TextColor;
+                bool lightPanel = 3 * ink.Red + 6 * ink.Green + ink.Blue < 1280;
+                Color positive = new Color(lightPanel ? DarkPositiveModifierColor : PositiveModifierColor);
+                Color negative = new Color(lightPanel ? DarkNegativeModifierColor : NegativeModifierColor);
+                top += ModifierGap * scale;
+                for (int i = 0; i < modifiers.Length; i++)
+                {
+                    Text modifier = root.GetChildByID(FirstModifierId + (uint)i, true) as Text;
+                    if (modifier == null)
+                    {
+                        return false;
+                    }
+
+                    modifier.TextStyle = body.TextStyle;
+                    modifier.TextColor = modifiers[i].Positive ? positive : negative;
+                    top += Place(modifier, modifiers[i].Text, left + indent, top, width - indent, scale);
+                    modifier.Visible = true;
+                }
+            }
             if (!string.IsNullOrEmpty(conflict))
             {
                 top += ConflictGap * scale;

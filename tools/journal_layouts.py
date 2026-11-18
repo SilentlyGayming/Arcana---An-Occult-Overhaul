@@ -5,10 +5,8 @@ from hud_icons import BAR_TRACK, PALETTE
 
 from trees import ROOT as PROJECT, WITCH, icons
 from ui_icons import GRIMOIRE_CATEGORY_NAMES, grimoire_icon_instance
-from ui_resources import (portrait_mask_key, TAB_BODY_INSTANCE, TAB_BODY_MARGIN_X,
-    TAB_BODY_MARGIN_Y, TAB_BODY_HEIGHT, TAB_BODY_WIDTH,
-    HALO_INSTANCE, STAR_INSTANCE, GLITTER_BODY_INSTANCE,
-    GLITTER_TIP_INSTANCE, TABLE_CORNER_INSTANCE_LEFT, TABLE_CORNER_INSTANCE_RIGHT, TILE_EDGE_INSTANCE)
+from ui_resources import (portrait_mask_key, HALO_INSTANCE, STAR_INSTANCE,
+    GLITTER_BODY_INSTANCE, GLITTER_TIP_INSTANCE, TILE_EDGE_INSTANCE)
 
 
 def _layout_name(constant):
@@ -32,7 +30,9 @@ OCCULT_RANK = 0x53E0000C
 CLOSE = 0x53E00009
 CONTENT = 0x53E0000A
 CANCEL = 0x53E0000D  # the X left of the checkmark
-TAB_BODY = 0x53E00020  # three continuous tab bodies behind Overview, Perks, Grimoire
+FRAME_UPPER = 0x53E00020
+FRAME_LOWER_LEFT = 0x53E00022
+FRAME_FOOTER = 0x53E00024
 ENTRY_GLYPH = 0x53E0000B
 PERK_PULSE = 0x53E000ED
 FIRST_TAB = 0x53E00010
@@ -46,9 +46,7 @@ GRIMOIRE_EMPTY_LIST = 0x53E000D4
 GRIMOIRE_TIER_HEADER = 0x53E000D7
 GRIMOIRE_COST_HEADER = 0x53E000D8
 GRIMOIRE_FIRST_COLUMN_BUTTON = 0x53E000D9
-GRIMOIRE_FIRST_SEPARATOR = 0x53E000DC
-GRIMOIRE_FIRST_TABLE_EDGE = 0x53E000E9
-GRIMOIRE_FIRST_TABLE_CORNER = 0x53E000EB
+GRIMOIRE_TABLE_HEADER = 0x53E000DC
 GRIMOIRE_FIRST_SORT_ARROW = 0x53E000DF  # Ascending arrows, one per column.
 GRIMOIRE_FIRST_SORT_ARROW_DOWN = 0x53E000E2  # Descending arrows, one per column.
 GRIMOIRE_DESC_PANEL = 0x53E000E5
@@ -74,8 +72,6 @@ STATUS_SPARKLE_FIRST = 0x53E00260
 OV_FRAME = 0x53E00300
 OV_HEADER_CELL = 0x53E0030A  # one header band for each of the three lists
 OV_HEADER_TITLE = 0x53E0030D
-OV_HEADER_CORNER = 0x53E00310  # two rounded top corners per header
-OV_HEADER_EDGE = 0x53E00316  # two edge lines per header
 OV_RANK_TITLE = 0x53E0031C
 OV_RANK_TEXT = 0x53E0031D
 OV_ARTWORK = 0x53E00320
@@ -112,6 +108,8 @@ TOOLTIP_TITLE = 0x53E00081
 TOOLTIP_TAGLINE = 0x53E00082
 TOOLTIP_BODY = 0x53E00083
 TOOLTIP_CONFLICT = 0x53E00084
+TOOLTIP_FIRST_MODIFIER = 0x53E00085
+TOOLTIP_MODIFIERS = 8
 CONFLICT_RED = "0xffd03030"
 TAGLINE_BLUE = "0xff2d8cd8"
 
@@ -119,8 +117,7 @@ TAGLINE_BLUE = "0xff2d8cd8"
 # The Collection Journal keys are read from HUDCollectionJournalDialog
 # (025C95B6:00000000:57560E847AC1F2F1) in the game's UI package.
 COLLECTION_FRAME = "163462cf3324a2a8"
-# The native slicing of the Collection Journal and of the two-button dialogs: 0.5 on every side. Every page shows the same
-# window size, so both frames cut and scale their artwork the same way. Also applies if the live Collection frame cannot be loaded.
+# The native Collection Journal slice, used for all frame pieces until the live skin is loaded.
 FRAME_MARGINS = (0.5, 0.5, 0.5, 0.5)
 CHECK_STATES = ("7a91827e813bb2f2", "ca45721b0a7fbeba", "7a91827e813bb2f2", "d0c25a031bc3b081")
 CHECK_GLOW = "191215ac147a4e1c"
@@ -163,11 +160,6 @@ SURROUND = "1d22a854c78c91b3"
 # The thin outline the Lifetime Rewards list draws in front of its white body.
 LIST_OUTLINE = "0db945ce1fe0e14f"
 HEADER_CELL = "07beea261832de47"
-# The column divider of the Lifetime Rewards table: a one unit window with this fill and artwork (HUDRewardTraitsShopDialog).
-DIVIDER = "ce94bff5e22d1622"
-DIVIDER_FILL = "0xff002040"
-# The colour of the outline's side lines, measured from the in-game list; the same line continues up the header edges.
-TABLE_EDGE = "0xff3c5998"
 SCROLL_TRACK = "8af6409d7469288c"
 SCROLL_THUMB = "07670b7c0c62a8f7"
 # Hover glow masks of the stock scrollbar parts.
@@ -183,7 +175,7 @@ NAVY = "0xff0b246e"
 BLUE = "0xff124f92"
 WITCH_ACCENT = f"0x{dict(PALETTE)['Witch']:08x}"  # same vibrant palette as the in-game HUD meter
 MILESTONE_GREEN = "0x907fcf9f"  # translucent mint green at about 56% opacity
-STATUS_GLASS = "0xb0ffffff"  # the header panel's plate at about 69% opacity, so the dialog shows through
+STATUS_PLATE = "0xcfffffff"
 # The stock HUD meter bar (Motives, the Sim display's magic meter, the Celebrity Journal's performance bar): one nine-slice capsule
 # (Borders 0.5) drawn twice, tinted by ShadeColor, plus the glass overlay that gives it its cylindrical highlight.
 BAR_ART = "9c8c7369cf8efcc7"
@@ -315,12 +307,14 @@ def button(identifier, hud=False, grimoire=False, tab=False):
         children.append(window(PERK_PULSE, image_drawable(f"{HALO_INSTANCE:016x}"), flags="0x00002012"))
     else:
         node = control("Button", "0xeeefe2c3", identifier, "0x0000200a",
-                       font="0x062eae06", fill="0x00000000" if grimoire else "0xffd3e5f8", sound=2)
-        # Existing EA Simology button artwork, tinted by GrimoirePage rather
-        # than copying a white HUD/Family Tree button from the active UI skin.
-        face = SIMOLOGY_BUTTON if grimoire else DIALOG_BUTTON
-        # The checked half of a tab repeats the pressed face, so a selected tab never falls back to the disabled one.
-        drawing = standard_drawable(face + ((face[3],) * 4 if tab else (face[3], face[1], face[2], face[3])))
+                       font="0x062eae06", sound=2)
+        normal, disabled, highlighted, pressed = SIMOLOGY_BUTTON
+        if tab:
+            # Page tabs use the normal face while held, for both checked and unchecked states.
+            states = (normal, disabled, highlighted, normal)
+            drawing = standard_drawable(states * 2)
+        else:
+            drawing = standard_drawable(SIMOLOGY_BUTTON + (pressed, disabled, highlighted, pressed))
     if grimoire and not hud:
         node.find("prop[@name='ShadeColor']").set("value", "0xff9ec1e4")
     prop(node, "ButtonFlags", "0xeec1d002", "uint32", 0)
@@ -352,10 +346,17 @@ def native_button(identifier, drawing):
     return node
 
 
-def header_cell_button(identifier):
-    """One column header: the stock ColumnControl cell, which also supplies the hover glow."""
-    return native_button(identifier, standard_drawable(
-        (HEADER_CELL,), stretch="2", edge=HEADER_SLICE, glow_scale="1.33333,1.33333"))
+def list_header(identifier):
+    return window(identifier, standard_drawable((HEADER_CELL,), edge=HEADER_SLICE),
+                  flags="0x00002003")
+
+
+def sort_button(identifier):
+    # The shared header provides the face. This overlay appears only on focus, hover or press.
+    drawing = standard_drawable(("", "", HEADER_CELL, HEADER_CELL), edge=HEADER_SLICE)
+    node = native_button(identifier, drawing)
+    node.find("prop[@name='ShadeColor']").set("value", "0x30305480")
+    return node
 
 
 def scroll_arrow_button(identifier, images, glow_mask):
@@ -533,12 +534,15 @@ def cancel_button(identifier):
     return node
 
 
-def tab_body(identifier):
-    """A permanent main tab body (tools/ui_resources.py): rounded top corners and open lower edge.
-    The button draws only its caption; selection changes this body's tint, never its geometry."""
-    edge = (TAB_BODY_MARGIN_X / TAB_BODY_WIDTH, TAB_BODY_MARGIN_Y / TAB_BODY_HEIGHT,
-            TAB_BODY_MARGIN_X / TAB_BODY_WIDTH, TAB_BODY_MARGIN_Y / TAB_BODY_HEIGHT)
-    return window(identifier, standard_drawable((f"{TAB_BODY_INSTANCE:016x}",), stretch="2", edge=edge), flags="0x00002003")
+def frame_piece(identifier, two_faces=False):
+    """Give each clip the same full-size native frame coordinates."""
+    clip = window(identifier, flags="0x00002413")
+    faces = [window(identifier + 1, standard_drawable((COLLECTION_FRAME,), edge=FRAME_MARGINS))]
+    if two_faces:
+        faces.append(window(identifier + 2, standard_drawable((COLLECTION_FRAME,), edge=FRAME_MARGINS),
+                            flags="0x00002012"))
+    prop(clip, "Children", "0xeec1b00b", "object", count=str(len(faces))).extend(faces)
+    return clip
 
 
 def help_face(identifier):
@@ -691,11 +695,9 @@ def status_row(first, default_icon=None, glint=False):
 
 
 def status_panel(identifier):
-    """The header panel: the native rounded inset panel (the artwork behind the perk page), shaded translucent so the
-    journal header shows through. JournalTheme restyles it with the active skin's inset face like the other panels."""
-    node = panel(identifier, flags="0x00002003")
-    node.find("prop[@name='ShadeColor']").set("value", STATUS_GLASS)
-    return node
+    """Use the same native plate as the Overview list bodies so UI skins reach the status header."""
+    return window(identifier, standard_drawable((LIST_BODY,)), flags="0x00002003",
+                  shade=STATUS_PLATE)
 
 
 def tree_controls(tree):
@@ -777,16 +779,6 @@ def grimoire_controls():
         controls.append(window(GRIMOIRE_FIRST_SORT_ARROW_DOWN + i,
                                image_drawable(SORT_DESCENDING_ARROW, fixed=True, horizontal=2),
                                flags="0x00002003"))
-    # The two rounded top corners of the header draw in front of the header, its edge lines and the dividers.
-    for i, instance in enumerate((TABLE_CORNER_INSTANCE_LEFT, TABLE_CORNER_INSTANCE_RIGHT)):
-        controls.append(window(GRIMOIRE_FIRST_TABLE_CORNER + i,
-                               standard_drawable((f"{instance:016x}",), stretch="1"), flags="0x00002003"))
-    for i in range(2):
-        controls.append(window(GRIMOIRE_FIRST_SEPARATOR + i,
-                               standard_drawable((DIVIDER,), stretch="1", glow_scale="1.33333,1.33333"),
-                               fill=DIVIDER_FILL, flags="0x00002003"))
-    for i in range(2):
-        controls.append(window(GRIMOIRE_FIRST_TABLE_EDGE + i, fill=TABLE_EDGE, flags="0x00002003"))
     for i in range(GRIMOIRE_ROWS):
         base = GRIMOIRE_FIRST_ROW + 5 * i
         controls += [
@@ -809,7 +801,8 @@ def grimoire_controls():
         window(GRIMOIRE_SCROLL_TRACK, standard_drawable((SCROLL_TRACK,)), flags="0x00002013"),
     ]
     for i in range(3):
-        controls.append(header_cell_button(GRIMOIRE_FIRST_COLUMN_BUTTON + i))
+        controls.append(sort_button(GRIMOIRE_FIRST_COLUMN_BUTTON + i))
+    controls.append(list_header(GRIMOIRE_TABLE_HEADER))
     for i, category in enumerate(GRIMOIRE_CATEGORY_NAMES):
         controls.append(label(GRIMOIRE_FIRST_CAPTION + i, font="0x062eae06",
                               color=NAVY, align=1, flags="0x00002003"))
@@ -852,8 +845,7 @@ def overview_list(first, rows, font=OV_ROW_FONT):
 
 
 def overview_controls():
-    """The five Overview panels, front to back. Positions and sizes are set by OverviewPage; the artwork is the stock list artwork
-    the Grimoire table uses (outline, pale body, header cell, rounded corners, scrollbar), so the page looks like the same family."""
+    """The five Overview panels, front to back, using the Grimoire's native list artwork."""
     controls = []
     for index, rows in enumerate(OV_LIST_ROWS):
         controls += overview_list(OV_LIST_FIRST + index * OV_LIST_STRIDE, rows,
@@ -870,11 +862,7 @@ def overview_controls():
     ]
     # The three list headings are centred across their whole header band.
     controls += [label(OV_HEADER_TITLE + i, font=OV_HEADING_FONT, color=NAVY, align=1) for i in range(3)]
-    for i in range(3):
-        for side, instance in enumerate((TABLE_CORNER_INSTANCE_LEFT, TABLE_CORNER_INSTANCE_RIGHT)):
-            controls.append(window(OV_HEADER_CORNER + 2 * i + side, standard_drawable((f"{instance:016x}",), stretch="1")))
-    controls += [window(OV_HEADER_EDGE + i, fill=TABLE_EDGE) for i in range(6)]
-    controls += [window(OV_HEADER_CELL + i, standard_drawable((HEADER_CELL,), stretch="2", edge=HEADER_SLICE)) for i in range(3)]
+    controls += [list_header(OV_HEADER_CELL + i) for i in range(3)]
     for panel_index in range(5):
         controls.append(list_outline(OV_FRAME + 2 * panel_index))
         controls.append(list_body(OV_FRAME + 2 * panel_index + 1))
@@ -899,7 +887,6 @@ def dialog():
         *status_row(STATUS_POWER, glint=True),
         status_panel(STATUS_PANEL),
         *(button(FIRST_TAB + i, tab=True) for i in range(TABS)),
-        *(tab_body(TAB_BODY + i) for i in range(TABS)),
         *grimoire_controls(),
         *overview_controls(),
         *front,
@@ -907,11 +894,13 @@ def dialog():
         *back,
         # The Overview, Grimoire and Perks panels use the stock pale blue surround, like the Lifetime Rewards dialog.
         surround_panel(CONTENT, flags="0x00002003"),
+        frame_piece(FRAME_UPPER),
+        frame_piece(FRAME_LOWER_LEFT),
+        frame_piece(FRAME_FOOTER, two_faces=True),
     ]
     prop(root, "Children", "0xeec1b00b", "object", count=str(len(children))).extend(children)
     prop(root, "DialogFlags", "0xeec2a002", "uint32", 0)
-    prop(root, "DialogDrawable", "0xeec1b007", "object").append(
-        standard_drawable((COLLECTION_FRAME,), stretch="2", edge=FRAME_MARGINS))
+    prop(root, "DialogDrawable", "0xeec1b007", "object").append(standard_drawable(("",)))
     prop(root, "MinWidth", "0xeec2a009", "float", 0)
     prop(root, "MinHeight", "0xeec2a00a", "float", 0)
     prop(root, "MaxWidth", "0xeec2a00b", "float", 10000)
@@ -945,6 +934,9 @@ def perk_tooltip():
         label(TOOLTIP_BODY, top=True, area="10,52,330,110"),
         label(TOOLTIP_CONFLICT, color=CONFLICT_RED, top=True, area="10,112,330,128"),
     ]
+    # Accuracy shows up to eight signed rows. Other tooltips leave every row hidden.
+    texts.extend(label(TOOLTIP_FIRST_MODIFIER + i, top=True, flags="0x00002012")
+                 for i in range(TOOLTIP_MODIFIERS))
     for text in texts:
         text.find("prop[@name='Overflow']").set("value", "0")
     prop(root, "Children", "0xeec1b00b", "object", count=str(len(texts))).extend(texts)

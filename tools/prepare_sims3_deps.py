@@ -20,19 +20,20 @@ from itertools import chain
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from check_game_api import module_name, read_types, require_genie_contract, require_ui_contract
+from check_game_api import (module_name, read_types, require_genie_contract, require_station_contract,
+                            require_ui_contract, require_witch_contract)
 from dbpf import S3SA, index, read
 
 REQUIRED = (
     "mscorlib.dll", "System.dll", "SimIFace.dll", "UI.dll",
-    "Sims3GameplaySystems.dll", "Sims3MetaData.dll",
+    "Sims3GameplaySystems.dll", "Sims3GameplayObjects.dll", "Sims3MetaData.dll",
 )
 CANONICAL = {name.casefold(): name for name in REQUIRED}
 PACKAGES = ("simcore.package", "scripts.package", "gameplay.package")
 
 
 MANIFEST = "references.json"
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def decode_s3sa(blob):
@@ -210,7 +211,11 @@ def validated_references(folder):
             if name == "UI.dll":
                 require_ui_contract(read_types(data))
             elif name == "Sims3GameplaySystems.dll":
-                require_genie_contract(read_types(data))
+                gameplay_types = read_types(data)
+                require_genie_contract(gameplay_types)
+                require_witch_contract(gameplay_types)
+            elif name == "Sims3GameplayObjects.dll":
+                require_station_contract(read_types(data))
         except (ValueError, IndexError, KeyError, struct.error) as error:
             raise ValueError(f"{path}: {error}") from error
         hashes[name] = hashlib.sha256(data).hexdigest()
@@ -246,7 +251,6 @@ def extract(bin_dir, staging):
     missing = set(REQUIRED)
     for package_name in PACKAGES:
         package = bin_dir / package_name
-        print("  examining", package_name, "...", flush=True)
         for entry in index(package):
             if entry.key.type != S3SA:
                 continue
@@ -259,7 +263,6 @@ def extract(bin_dir, staging):
             if name in missing:
                 (staging / name).write_bytes(data)
                 missing.remove(name)
-                print(f"  extracted {name} ({len(data):,} bytes)", flush=True)
                 if not missing:
                     return
     raise ValueError("missing game package resources for " + ", ".join(sorted(missing)))
@@ -267,7 +270,7 @@ def extract(bin_dir, staging):
 
 def extract_reference_set(bin_dir, output, stamp):
     # Stage a complete set. A later build detects an interrupted publication
-    # by comparing all six hashes against the manifest written last.
+    # by comparing every reference hash against the manifest written last.
     target = output.resolve()
     game_root = bin_dir.parent.parent if bin_dir.parent.name.casefold() == "game" else bin_dir
     if target == game_root or game_root in target.parents:
@@ -285,7 +288,6 @@ def extract_reference_set(bin_dir, output, stamp):
         for name in REQUIRED:
             (staging / name).replace(output / name)
         (staging / MANIFEST).replace(output / MANIFEST)
-    print("All six Sims 3 references are ready in:", output, flush=True)
     return {name: output / name for name in REQUIRED}, hashes
 
 
@@ -321,7 +323,6 @@ def prepare_references(project, game_dir=None, refresh=False):
             stamp = source_stamp(bin_dir)
             if (not refresh and cached and manifest
                     and stamp == manifest["source"] and cached[1] == manifest["sha256"]):
-                print("Reusing six verified Sims 3 references from:", output, flush=True)
                 return cached
             print("Extracting Sims 3 references from:", bin_dir, flush=True)
             return extract_reference_set(bin_dir, output, stamp)
@@ -332,7 +333,7 @@ def prepare_references(project, game_dir=None, refresh=False):
     if not checked and not override and not refresh and cached:
         if (not (output / MANIFEST).exists()
                 or (manifest and cached[1] == manifest["sha256"])):
-            print("Reusing six compatible cached references. No installed game packages were found.", flush=True)
+            print("Reusing compatible cached references. No installed game packages were found.", flush=True)
             return cached
         cache_error = ValueError("the cached DLLs no longer match their extraction record")
     detail = last_error or cache_error

@@ -20,6 +20,8 @@ LOCALE_IDS = {locale: index for index, locale in enumerate((
 ))}
 TABLE_FAMILY = fnv64("Arcana.Localization.Strings") & 0x00FFFFFFFFFFFFFF
 PERK_PREFIX = "Arcana.Witch.Perk."
+NATIVE_BUFF_PREFIX = "Gameplay/Excel/buffs/BuffList:"
+NATIVE_BUFF_KEYS = ("Arcana.Witch.Fizzle.Name", "Arcana.Witch.Fizzle.Description")
 KEY = re.compile(r"Arcana(?:\.[A-Za-z0-9]+)+")
 TOKEN = re.compile(r"\{(0|[1-9][0-9]*|name|Name)\}")
 HEADER = struct.Struct("<4sB2xI6x")
@@ -195,8 +197,15 @@ def read_table(data):
 
 def resources(directory=CATALOG_DIR):
     localized = catalogs(directory)
-    return [(table_key(locale), encode_table(localized[locale]))
-            for locale in sorted(localized, key=LOCALE_IDS.__getitem__)]
+    english = localized[ENGLISH]
+    tables = []
+    for locale in sorted(localized, key=LOCALE_IDS.__getitem__):
+        entries = localized[locale].copy()
+        # The native moodlet HUD adds its own lookup prefix.
+        for key in NATIVE_BUFF_KEYS:
+            entries[NATIVE_BUFF_PREFIX + key] = entries.get(key, english[key])
+        tables.append((table_key(locale), encode_table(entries)))
+    return tables
 
 
 def generate(destination=GENERATED):

@@ -18,13 +18,12 @@ namespace SupernaturalExpanded.Journal
         // The rows each row of panels shows at once; the panels are this tall and the lists scroll past it.
         private const int UpperSlots = 3;
         private const int LowerSlots = 5;
-        // The header band, the rounded corners and the outline are measured the way the Grimoire table builds them.
+        // The header band and outline line up the same way as the Grimoire table.
         private const float HeaderHeight = 38f;
         private const float HeadingPadding = 14f;
         private const float OutlineInset = 3f;
         private const float OutlineBottomExtra = 2f;
         private const float BottomEdge = 3f;
-        private const float CornerSize = 7f;
         private const float Gap = 12f;
         private const float TopInset = 14f;
         private const float BottomGap = 14f;
@@ -60,8 +59,6 @@ namespace SupernaturalExpanded.Journal
         private readonly Window[] bodies = new Window[PanelCount];
         private readonly Window[] cells = new Window[3];
         private readonly Text[] titles = new Text[3];
-        private readonly Window[] corners = new Window[6];
-        private readonly Window[] edges = new Window[6];
         private readonly OverviewList[] lists = new OverviewList[3];
         private readonly Text rankTitle;
         private readonly Text rankText;
@@ -105,13 +102,6 @@ namespace SupernaturalExpanded.Journal
                 cells[i] = journal.Control<Window>(NativeLayouts.OverviewHeaderCell + (uint)i);
                 cells[i].IgnoreMouse = true;
                 titles[i] = journal.Label(NativeLayouts.OverviewHeaderTitle + (uint)i, headings[i], 0, 0, 100, HeaderHeight);
-                for (int side = 0; side < 2; side++)
-                {
-                    corners[2 * i + side] = journal.Control<Window>(NativeLayouts.OverviewHeaderCorner + (uint)(2 * i + side));
-                    corners[2 * i + side].IgnoreMouse = true;
-                    edges[2 * i + side] = journal.Control<Window>(NativeLayouts.OverviewHeaderEdge + (uint)(2 * i + side));
-                    edges[2 * i + side].IgnoreMouse = true;
-                }
             }
 
             lists[0] = new OverviewList(journal, GetListId(0), StatisticsRows, bodies[Statistics],
@@ -170,11 +160,6 @@ namespace SupernaturalExpanded.Journal
             {
                 cells[i].Visible = show;
                 titles[i].Visible = show;
-            }
-            for (int i = 0; i < corners.Length; i++)
-            {
-                corners[i].Visible = show;
-                edges[i].Visible = show;
             }
             rankTitle.Visible = show;
             rankText.Visible = show;
@@ -315,10 +300,6 @@ namespace SupernaturalExpanded.Journal
             journal.Place(bodies[panel], x - OutlineInset + 1f, listTop, width + 2f * OutlineInset - 2f, outlineHeight - 1f);
             journal.Place(cells[list], x, y, width, HeaderHeight);
             journal.Place(titles[list], x + HeadingPadding, y, width - 2f * HeadingPadding, HeaderHeight);
-            journal.Place(edges[2 * list], x, y, 1f, HeaderHeight);
-            journal.Place(edges[2 * list + 1], x + width - 1f, y, 1f, HeaderHeight);
-            journal.Place(corners[2 * list], x, y, CornerSize, CornerSize);
-            journal.Place(corners[2 * list + 1], x + width - CornerSize, y, CornerSize, CornerSize);
             lists[list].Layout(x + 1f, y + HeaderHeight, width - 2f, height - HeaderHeight - BottomEdge);
         }
 

@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from dbpf import Key, LAYO, S3SA, STBL, XML, fnv64, index, read, write
 from journal_layouts import layouts
 from localization import read_table, resources as locale_resources
+from station import resources as station_resources
 from trees import IMAGE, icons
 from hud_icons import resources as hud_resources, status_resources, life_state_resources
 from ui_icons import resources as ui_icon_resources
@@ -91,7 +92,7 @@ def verify(package, assembly, tuning, resources):
 
 
 def content_resources():
-    """Journal layouts, artwork and language tables."""
+    """Layouts, artwork, language tables and default replacements."""
     resources = [(Key(LAYO, 0, fnv64(name)), data) for name, data in layouts()]
     resources.extend((Key(IMAGE, 0, instance), data) for _, instance, data in icons().values())
     resources.extend((Key(IMAGE, 0, instance), data) for instance, data in ui_icon_resources())
@@ -102,14 +103,10 @@ def content_resources():
     resources.extend(status_resources())
     resources.extend(life_state_resources())
     resources.extend(locale_resources())
-    # Default replacement: TS4 vampire punctures mapped to the vanilla TS3 mark UV.
-    # Keep the original CASP/masks untouched. Override the two original-TGI IMG resources.
+    # Default replacements under the game's own keys: the vampire bite mark and Aleister's station.
     resources.extend((Key(typ, group, instance), data)
-                     for typ, group, instance, data in vampire_bite_resources())
-    # Game-rendered mannequin previews from the user's regenerated CAS cache.
-    # Four 256x256 THUM resources for the four observed preset groups (1..4).
-    resources.extend((Key(typ, group, instance), data)
-                     for typ, group, instance, data in vampire_bite_thumbnails())
+                     for typ, group, instance, data in vampire_bite_resources() + vampire_bite_thumbnails())
+    resources.extend(station_resources())
     if len({key for key, _ in resources}) != len(resources):
         raise ValueError("Duplicate package resource key")
     return resources
@@ -135,10 +132,6 @@ def main():
         staging.replace(args.package)
     finally:
         staging.unlink(missing_ok=True)
-    print(f"Verified {args.package}")
-    print("Included vampire bite-mark default replacement (2 DDS + 4 regenerated CAS thumbnails).")
-    for key, _ in resources:
-        print(key)
 
 
 if __name__ == "__main__":

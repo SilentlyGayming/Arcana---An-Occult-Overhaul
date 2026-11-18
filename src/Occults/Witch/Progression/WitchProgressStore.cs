@@ -110,6 +110,12 @@ namespace SupernaturalExpanded.Journal
             Records[simId] = record.Encode();
         }
 
+        internal static WitchRecord ReadCommitted(ulong simId)
+        {
+            bool newer;
+            return Load(simId, out newer);
+        }
+
         // Awards every milestone the experience has reached and the Sim has not yet claimed; each is awarded once per Sim.
         internal static WitchRecord ClaimMilestones(ulong simId, long xpMilli, long[] thresholds)
         {

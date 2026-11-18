@@ -2,7 +2,6 @@ using Sims3.SimIFace;
 using Sims3.UI.Hud;
 using Sims3.UI;
 using System.Collections.Generic;
-using System.Globalization;
 using System;
 
 namespace SupernaturalExpanded.Journal
@@ -13,12 +12,19 @@ namespace SupernaturalExpanded.Journal
         internal readonly string Title;
         internal readonly string Tagline;
         internal readonly string Body;
+        internal readonly TooltipModifier[] Modifiers;
 
         internal OverviewTip(string title, string tagline, string body)
+            : this(title, tagline, body, null)
+        {
+        }
+
+        internal OverviewTip(string title, string tagline, string body, TooltipModifier[] modifiers)
         {
             Title = title ?? "";
             Tagline = tagline ?? "";
             Body = body ?? "";
+            Modifiers = modifiers;
         }
 
         internal static bool Same(OverviewTip a, OverviewTip b)
@@ -27,7 +33,26 @@ namespace SupernaturalExpanded.Journal
             {
                 return a == b;
             }
-            return a.Title == b.Title && a.Tagline == b.Tagline && a.Body == b.Body;
+            if (a.Title != b.Title || a.Tagline != b.Tagline || a.Body != b.Body)
+            {
+                return false;
+            }
+            if (a.Modifiers == null || b.Modifiers == null)
+            {
+                return a.Modifiers == b.Modifiers;
+            }
+            if (a.Modifiers.Length != b.Modifiers.Length)
+            {
+                return false;
+            }
+            for (int i = 0; i < a.Modifiers.Length; i++)
+            {
+                if (a.Modifiers[i].Text != b.Modifiers[i].Text || a.Modifiers[i].Positive != b.Modifiers[i].Positive)
+                {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 
@@ -188,9 +213,20 @@ namespace SupernaturalExpanded.Journal
                 StatusField power = context.Power;
                 if (power != null && power.Available)
                 {
-                    data.Statistics.Add(new OverviewRow(power.Icon, power.Label, "", power.Caption));
+                    data.Statistics.Add(new OverviewRow(power.Icon, power.Label, "", power.Caption, power.Tip));
                 }
-                AttributeSources.AddRows(context, data);
+                try
+                {
+                    AttributeSources.AddRows(context, data);
+                }
+                catch (ResetException)
+                {
+                    throw;
+                }
+                catch (Exception error)
+                {
+                    JournalBootstrap.ReportOnce("Reading Overview attributes", error);
+                }
             }
         }
 
@@ -320,39 +356,35 @@ namespace SupernaturalExpanded.Journal
     internal sealed class ModifierReading
     {
         // Reported by a system that has no figure for this Sim, so the Overview leaves the row out.
-        internal static readonly ModifierReading None = new ModifierReading(0f, "", false);
+        internal static readonly ModifierReading None = new ModifierReading(0f, "", false, null);
 
         internal readonly float Percent;
         // The situation the figure applies to ("Sleeping"), or empty when it always does.
         internal readonly string Condition;
+        internal readonly OverviewTip Tip;
         private readonly bool available;
 
         internal ModifierReading(float percent, string condition)
-            : this(percent, condition, !float.IsNaN(percent) && !float.IsInfinity(percent))
+            : this(percent, condition, null)
         {
         }
 
-        private ModifierReading(float percent, string condition, bool available)
+        internal ModifierReading(float percent, string condition, OverviewTip tip)
+            : this(percent, condition, !float.IsNaN(percent) && !float.IsInfinity(percent), tip)
+        {
+        }
+
+        private ModifierReading(float percent, string condition, bool available, OverviewTip tip)
         {
             Percent = percent;
             Condition = condition ?? "";
+            Tip = tip;
             this.available = available;
         }
 
         internal bool Available { get { return available; } }
 
-        // "+15%", "-10%" or "+0%"; a figure that is not a whole number keeps one decimal.
-        internal string Text
-        {
-            get
-            {
-                double whole = Math.Round((double)Percent, MidpointRounding.AwayFromZero);
-                bool exact = Math.Abs(Percent - whole) < 0.05;
-                double shown = exact ? whole : Math.Round((double)Percent, 1, MidpointRounding.AwayFromZero);
-                string sign = shown < 0.0 ? "-" : "+";
-                return JournalText.Format("Arcana.Common.SignedPercent", sign, Math.Abs(shown).ToString(exact ? "0" : "0.#", CultureInfo.InvariantCulture));
-            }
-        }
+        internal string Text { get { return PercentText.Format(Percent, true); } }
     }
 
     internal delegate ModifierReading ModifierSource(OverviewContext context);
@@ -429,7 +461,7 @@ namespace SupernaturalExpanded.Journal
                 string label = isRegeneration ? regenerationLabel : entry.Label;
                 string name = reading.Condition.Length == 0 ? label
                     : JournalText.Format("Arcana.Common.WithQualifier", label, reading.Condition);
-                data.Statistics.Add(new OverviewRow(icon, name, "", reading.Text));
+                data.Statistics.Add(new OverviewRow(icon, name, "", reading.Text, reading.Tip));
                 if (isRegeneration)
                 {
                     regenerationRow = data.Statistics.Count - 1;

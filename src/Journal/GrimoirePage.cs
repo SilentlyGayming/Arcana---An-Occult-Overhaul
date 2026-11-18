@@ -48,10 +48,8 @@ namespace SupernaturalExpanded.Journal
         private const float ScrollGap = 6f;
         // The stock list outline draws its line inside its own area; widening it by this much puts the line on the header's edges.
         private const float OutlineInset = 3f;
-        // The outline's bottom edge sits just under the last row, and the column dividers end 2 units above its area, as in the stock lists.
+        // The outline's bottom edge sits just under the last row.
         private const float OutlineBottomExtra = 2f;
-        // Size of the rounded corner images at the header's two outer top corners (tools/ui_resources.py).
-        private const float CornerSize = 7f;
         // Room kept at the right of a header cell for its sort arrow.
         private const float ArrowGutter = 21f;
         // The category buttons start level with the Overview's first panels, near the top of the content region.
@@ -95,6 +93,7 @@ namespace SupernaturalExpanded.Journal
         private readonly Button[] tabs = new Button[CategoryCount];
         private readonly Window[] icons = new Window[CategoryCount];
         private readonly Text[] captions = new Text[CategoryCount];
+        private readonly Window tableHeader;
         private readonly Window listPanel;
         private readonly Window listBody;
         private readonly Window descriptionPanel;
@@ -103,9 +102,6 @@ namespace SupernaturalExpanded.Journal
         private readonly Text descriptionMeta;
         private readonly Text descriptionPrompt;
         private readonly Text descriptionText;
-        private readonly Window[] separators = new Window[2];
-        private readonly Window[] edges = new Window[2];
-        private readonly Window[] corners = new Window[2];
         private readonly Button[] sortButtons = new Button[3];
         private readonly Text[] headers = new Text[3];
         private readonly Window[] sortArrows = new Window[3];
@@ -192,6 +188,8 @@ namespace SupernaturalExpanded.Journal
                 captions[i].TextColor = TextColor;
             }
 
+            tableHeader = journal.Control<Window>(NativeLayouts.GrimoireTableHeader);
+            tableHeader.IgnoreMouse = true;
             listPanel = journal.Control<Window>(NativeLayouts.GrimoireListPanel);
             listBody = journal.Control<Window>(NativeLayouts.GrimoireListBody);
             listBody.IgnoreMouse = true;
@@ -226,18 +224,6 @@ namespace SupernaturalExpanded.Journal
                 sortArrowsDown[i].IgnoreMouse = true;
                 sortButtons[i] = journal.Button(NativeLayouts.GrimoireFirstColumnButton + (uint)i,
                     "", 0, 0, 100, HeaderHeight, delegate { SortBy(index); });
-            }
-            for (int i = 0; i < separators.Length; i++)
-            {
-                separators[i] = journal.Control<Window>(NativeLayouts.GrimoireFirstSeparator + (uint)i);
-                separators[i].IgnoreMouse = true;
-            }
-            for (int i = 0; i < edges.Length; i++)
-            {
-                edges[i] = journal.Control<Window>(NativeLayouts.GrimoireFirstTableEdge + (uint)i);
-                edges[i].IgnoreMouse = true;
-                corners[i] = journal.Control<Window>(NativeLayouts.GrimoireFirstTableCorner + (uint)i);
-                corners[i].IgnoreMouse = true;
             }
 
             for (int i = 0; i < VisibleRows; i++)
@@ -672,6 +658,7 @@ namespace SupernaturalExpanded.Journal
                 icons[i].Visible = show;
                 captions[i].Visible = show;
             }
+            tableHeader.Visible = show;
             listPanel.Visible = show;
             listBody.Visible = show;
             descriptionPanel.Visible = show;
@@ -686,12 +673,6 @@ namespace SupernaturalExpanded.Journal
                 sortButtons[i].Visible = show;
             }
             RefreshHeader();
-            for (int i = 0; i < separators.Length; i++) separators[i].Visible = show;
-            for (int i = 0; i < edges.Length; i++)
-            {
-                edges[i].Visible = show;
-                corners[i].Visible = show;
-            }
             RefreshRows();
         }
 
@@ -712,8 +693,7 @@ namespace SupernaturalExpanded.Journal
                 journal.Place(captions[i], groupX + IconSize + IconGap,
                     TabTop, CaptionWidths[i], 39f);
             }
-            // As in the stock lists, the header band sits above the list outline and overlaps its top edge by one unit,
-            // so the table has a single outer border: the header's own edge on top, the list outline on the other sides.
+            // The shared header overlaps the top of the list outline by one unit.
             float headY = PaneTop;
             float listTop = headY + HeaderHeight - 1f;
             float tableWidth = paneWidth - ScrollWidth - ScrollGap;
@@ -723,9 +703,9 @@ namespace SupernaturalExpanded.Journal
             journal.Place(listPanel, outlineLeft, listTop, outlineWidth, outlineHeight);
             journal.Place(listBody, outlineLeft + 1f, listTop, outlineWidth - 2f, outlineHeight - 1f);
 
-            // The header cells span exactly the table, edge to edge with the outline, and the rows sit just inside it.
-            // The scrollbar is outside the table, in the strip at the right end of the pane.
+            // Sort targets and row text use the same columns. The scrollbar sits beyond the right edge of the table.
             float headerX = margin;
+            journal.Place(tableHeader, headerX, headY, tableWidth, HeaderHeight);
             scrollbarLeft = margin + paneWidth - ScrollWidth;
             float usableWidth = tableWidth;
             float nameWidth = usableWidth * 0.57f;
@@ -743,16 +723,6 @@ namespace SupernaturalExpanded.Journal
                 journal.Place(sortArrows[i], starts[i], headY, cellWidth - 3f, HeaderHeight);
                 journal.Place(sortArrowsDown[i], starts[i], headY, cellWidth - 3f, HeaderHeight);
             }
-            // The dividers run the full height of the table, header top to the bottom edge, whether or not there are rows.
-            for (int i = 0; i < separators.Length; i++)
-                journal.Place(separators[i], starts[i + 1] - 1f, headY, 1f, PaneHeight);
-            // The outline's side lines continue up through the header, so the table has one unbroken edge.
-            journal.Place(edges[0], headerX, headY, 1f, HeaderHeight);
-            journal.Place(edges[1], headerX + tableWidth - 1f, headY, 1f, HeaderHeight);
-            // The header's outer top corners are rounded, as in Lifetime Rewards.
-            journal.Place(corners[0], headerX, headY, CornerSize, CornerSize);
-            journal.Place(corners[1], headerX + tableWidth - CornerSize, headY, CornerSize, CornerSize);
-
             float rowsY = headY + HeaderHeight;
             rowsLeft = headerX + 1f;
             rowsTop = rowsY;

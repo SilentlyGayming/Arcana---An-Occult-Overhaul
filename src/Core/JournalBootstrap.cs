@@ -25,9 +25,29 @@ namespace SupernaturalExpanded.Journal
 
         static JournalBootstrap()
         {
+            AccuracySources.Register(OccultTypes.Witch, WitchCastingContext.ReadAccuracy);
+            AttributeSources.Register(OccultTypes.Witch, JournalText.Get("Arcana.Journal.Overview.Attributes.PowerRegeneration"),
+                WitchCastingContext.ReadRegeneration);
             World.OnWorldLoadFinishedEventHandler += OnWorldLoaded;
-            World.OnWorldLoadStartedEventHandler += OnWorldExiting;
+            World.OnWorldLoadStartedEventHandler += OnWorldStarting;
             World.OnWorldQuitEventHandler += OnWorldExiting;
+        }
+
+        private static void OnWorldStarting(object sender, EventArgs args)
+        {
+            OnWorldExiting(sender, args);
+            try
+            {
+                WitchCastingLifecycle.Prepare();
+            }
+            catch (ResetException)
+            {
+                throw;
+            }
+            catch (Exception error)
+            {
+                ReportOnce("Registering Witch recovery moodlets", error);
+            }
         }
 
         private static void OnWorldLoaded(object sender, EventArgs args)
@@ -38,12 +58,40 @@ namespace SupernaturalExpanded.Journal
             entry.Refresh();
             meter = new OccultMeter();
             meter.Refresh();
+            try
+            {
+                WitchCastingLifecycle.Start();
+            }
+            catch (ResetException)
+            {
+                throw;
+            }
+            catch (Exception error)
+            {
+                WitchCastingLifecycle.Stop();
+                Report("Starting Witch gameplay", error);
+            }
+            try
+            {
+                SpellStudyStations.Start();
+            }
+            catch (ResetException)
+            {
+                throw;
+            }
+            catch (Exception error)
+            {
+                SpellStudyStations.Stop();
+                Report("Adding Study Spells to stations", error);
+            }
         }
 
         private static void OnWorldExiting(object sender, EventArgs args)
         {
             worldReady = false;
             generation++;
+            WitchCastingLifecycle.Stop();
+            SpellStudyStations.Stop();
             UiAnimationClock.Shutdown();
             Close(window);
             if (meter != null)

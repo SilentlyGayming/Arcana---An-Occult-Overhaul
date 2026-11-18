@@ -33,16 +33,17 @@ namespace SupernaturalExpanded.Journal
         // Shown in perk tooltips wherever the text says {name}.
         internal string SimName = JournalText.Get("Arcana.Common.ThisSim");
 
-        internal PowerSelection(PowerProgress progress, OccultTree tree)
+        internal PowerSelection(ulong simId, PowerProgress progress, OccultTree tree)
         {
             this.tree = tree;
-            simId = progress.SimDescriptionId;
+            this.simId = simId;
             acquired = new int[tree.Perks.Length];
             staged = new int[tree.Perks.Length];
             Apply(progress);
         }
 
         internal ulong SimDescriptionId { get { return simId; } }
+        internal int Milestones { get { return milestones; } }
 
         // Takes in newly read progression, keeping staged picks; returns true when anything the journal shows has changed.
         internal bool Update(PowerProgress progress)

@@ -50,11 +50,9 @@ def run_stage(name, command):
 
 
 def build(args):
-    # Fail fast before dependency extraction and C# compilation if textures are absent.
-    # The normal package_journal step includes these files in Arcana's one .package.
+    # Fail before extracting references or compiling when packaged artwork is missing.
     replacement_payloads()
     thumbnail_payloads()
-    print("Vampire bite-mark resources verified (2 DDS textures + 4 CAS thumbnails).", flush=True)
     if args.game_assemblies:
         paths, hashes = validated_references(args.game_assemblies.resolve())
     else:
@@ -107,13 +105,12 @@ def build(args):
         dll.replace(output / DLL)
         package.replace(output / PACKAGE)
     print(f"Build complete: {output / PACKAGE}")
-    print(f"DLL: {output / DLL}")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     references = parser.add_mutually_exclusive_group()
-    references.add_argument("--game-assemblies", type=Path, help="Use six original DLLs from a local folder.")
+    references.add_argument("--game-assemblies", type=Path, help="Use the original DLLs from a local folder.")
     references.add_argument("--game-dir", help="Override the game installation or Game/Bin folder.")
     parser.add_argument("--refresh-deps", action="store_true", help="Re-extract the local references from the game.")
     parser.add_argument("--output", type=Path, default=PROJECT / "build")

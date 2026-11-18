@@ -4,7 +4,7 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-ASSEMBLIES = ("UI", "SimIFace", "Sims3GameplaySystems", "Sims3MetaData")
+ASSEMBLIES = ("UI", "SimIFace", "Sims3GameplaySystems", "Sims3GameplayObjects", "Sims3MetaData")
 PUBLIC, NESTED_PUBLIC, METHOD_PUBLIC = 1, 2, 6
 CLR_V2 = b"v2.0.50727"
 
@@ -165,7 +165,7 @@ def load(root_dir):
     return found
 
 
-def find(found, qualified):
+def find(found, qualified, allow_private_nested=False):
     """Look up a top-level type or a named nested type on a public owner."""
     owner, _, nested = qualified.partition("/")
     namespace, _, name = owner.rpartition(".")
@@ -179,7 +179,7 @@ def find(found, qualified):
                 following = {k[2]: (k, v) for k, v in assembly.items()}
                 while step in following and following[step][0][0] == "":
                     (_, nm2, _), value2 = following[step]
-                    if nm2 == nested and value2.flags & 7 == NESTED_PUBLIC:
+                    if nm2 == nested and (allow_private_nested or value2.flags & 7 == NESTED_PUBLIC):
                         return value2
                     step += 1
     return None
@@ -199,7 +199,12 @@ MEMBERS = (
     ("Sims3.UI.IResponder", "ClockSpeedModel HudModel"),
     ("Sims3.UI.ISimClockSpeedModel", "GameSpeedLocked LockGameSpeed UnlockGameSpeed"),
     ("Sims3.SimIFace.Audio", "StartSound"),
-    ("Sims3.SimIFace.World", "OnWorldLoadFinishedEventHandler OnWorldLoadStartedEventHandler OnWorldQuitEventHandler"),
+    ("Sims3.SimIFace.World", "OnWorldLoadFinishedEventHandler OnWorldLoadStartedEventHandler OnWorldQuitEventHandler "
+                            "OnObjectPlacedInLotEventHandler"),
+    ("Sims3.Gameplay.Abstracts.GameObject", "AddInteraction GetObject SetGeometryState"),
+    ("Sims3.Gameplay.Abstracts.ScriptObject", "HasBeenDestroyed"),
+    ("Sims3.Gameplay.Skills.SkillManager", "AddElement StartSkillGain StopSkillGain"),
+    ("Sims3.Gameplay.Skills.Skill", "ReachedMaxLevel"),
     ("Sims3.SimIFace.StringTable", "GetLocalizedString GetLocale"),
     ("Sims3.SimIFace.ResourceUtils", "HashString64"),
     ("Sims3.SimIFace.Gameflow/GameSpeed", "Pause"),
@@ -252,12 +257,57 @@ def require_genie_contract(gameplay_types):
         raise ValueError("Sims3GameplaySystems.dll is missing the native Genie magic point fields")
 
 
+def require_witch_contract(gameplay_types):
+    """Check the reflected Witch bindings used by the cast and motive adapters."""
+    types = {"Sims3GameplaySystems": gameplay_types}
+    wand = "Sims3.Gameplay.Objects.Alchemy.MagicWand"
+    bindings = [
+        (wand + "/CastSpell", "AdditionalInteractionPreparation EpicFailureAllowed ShowSuccessVfx",
+         "mJig mWand mSpellEffect mHitEffect mSpellCastingSucceeded mSpellCastingEpiclyFailed "
+         "kCloseEnoughToPlaceJig kDistanceToForceRouteAway"),
+        (wand + "/BeTargetOfSpell", "set_Caster set_Jig", "Singleton"),
+        ("Sims3.Gameplay.Interactions.InteractionInstance", "", "mSkillMultipliers"),
+        ("Sims3.Gameplay.Autonomy.MotiveTuning", "", "mBuffTriggers mMotiveDecayCurve"),
+    ]
+    for spell in ("GoodLuckCharm", "LoveCharm", "IceBlast", "SunlightCharm", "PestilenceCurse", "HauntingCurse"):
+        bindings.append((wand + "/Cast" + spell,
+                         "get_TypeOfSpell get_JazzStateName get_SuccessVfxName get_EpicFailVfxName get_HitVfxName "
+                         "OnSpellSuccess OnSpellEpicFailure", "Singleton kMotiveDrain"))
+    for owner, methods, fields in bindings:
+        info = find(types, owner, allow_private_nested=True)
+        if info is None:
+            raise ValueError("Sims3GameplaySystems.dll is missing " + owner)
+        missing = (set(methods.split()) - info.methods.keys()) | (set(fields.split()) - info.fields.keys())
+        if missing:
+            raise ValueError("Sims3GameplaySystems.dll is missing " + owner + "." + ", ".join(sorted(missing)))
+
+
+def require_station_contract(objects_types):
+    """Check the native Alchemy Station types that Study Spells builds on."""
+    types = {"Sims3GameplayObjects": objects_types}
+    station = "Sims3.Gameplay.Objects.Alchemy.AlchemyStation"
+    bindings = (
+        (station, "OnStartup StartLitCandlesVFX StopLitCandlesVFX FireOneShotCandleExtinguishVFX", ""),
+        (station + "/ResearchAlchemy", "Run Cleanup", "Singleton"),
+        (station + "/MixPotion", "", "Singleton"),
+    )
+    for owner, methods, fields in bindings:
+        info = find(types, owner, allow_private_nested=True)
+        if info is None:
+            raise ValueError("Sims3GameplayObjects.dll is missing " + owner)
+        missing = (set(methods.split()) - info.methods.keys()) | (set(fields.split()) - info.fields.keys())
+        if missing:
+            raise ValueError("Sims3GameplayObjects.dll is missing " + owner + "." + ", ".join(sorted(missing)))
+
+
 def check(root_dir):
     found = load(root_dir)
     if len(found) != len(ASSEMBLIES):
         return False
+    require_station_contract(found["Sims3GameplayObjects"])
     require_ui_contract(found["UI"])
     require_genie_contract(found["Sims3GameplaySystems"])
+    require_witch_contract(found["Sims3GameplaySystems"])
     for qualified, names in MEMBERS:
         entry = find(found, qualified)
         assert entry is not None and entry.flags & 7 in (PUBLIC, NESTED_PUBLIC), qualified

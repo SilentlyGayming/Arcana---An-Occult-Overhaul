@@ -18,12 +18,11 @@ from journal_layouts import (layouts, GRIMOIRE_FIRST_TAB, GRIMOIRE_FIRST_ICON,
     SORT_ASCENDING_ARROW, FRAME_MARGINS, HEADER_CELL, LIST_BODY, SCROLL_TRACK, SCROLL_THUMB as THUMB_KEY,
     SCROLL_UP_GLOW, SCROLL_DOWN_GLOW, SCROLL_THUMB_GLOW, ROW_ALTERNATE, COLLECTION_FRAME,
     SORT_DESCENDING_ARROW, SCROLL_UP_ARROW, SCROLL_DOWN_ARROW,
-    GRIMOIRE_FIRST_SEPARATOR, GRIMOIRE_FIRST_ROW, GRIMOIRE_SCROLL_TRACK,
+    GRIMOIRE_TABLE_HEADER, GRIMOIRE_FIRST_ROW, GRIMOIRE_SCROLL_TRACK,
     GRIMOIRE_SCROLL_THUMB, GRIMOIRE_SCROLL_UP, GRIMOIRE_SCROLL_DOWN,
     PORTRAIT, PORTRAIT_FRAME, PORTRAIT_BORDER, CONTENT, SURROUND, GRIMOIRE_ROWS,
     TITLE, SIM_NAME, OCCULT_RANK, STATUS_PANEL, WITCH,
-    LIST_OUTLINE, DIALOG_BUTTON, NAVY, FIRST_TAB, FOOTER_FONT, STATUS_TRACK,
-    GRIMOIRE_FIRST_TABLE_EDGE, GRIMOIRE_FIRST_TABLE_CORNER, DIVIDER, DIVIDER_FILL, TABLE_EDGE,
+    LIST_OUTLINE, SIMOLOGY_BUTTON, NAVY, FIRST_TAB, FOOTER_FONT, STATUS_TRACK,
     PERK_PULSE, RANK_GLITTER_TILES, SPARK_PARTICLES,
     ENTRY_GLYPH, HUD_BUTTON, PURCHASE_FLIGHT)
 
@@ -69,7 +68,13 @@ def check_localization():
         french_key = localization.table_key('fr-FR')
         assert french_key.instance == english_key.instance | (7 << 56)
         english_table = localization.encode_table(english())
-        assert localization.resources(directory) == [(english_key, english_table)]
+        buff_aliases = {fnv64(localization.NATIVE_BUFF_PREFIX + key): english()[key]
+                        for key in localization.NATIVE_BUFF_KEYS}
+        native_english = dict(localization.resources(directory))
+        assert list(native_english) == [english_key]
+        assert localization.read_table(native_english[english_key]) == {
+            **localization.read_table(english_table), **buff_aliases
+        }
         assert localization.encode_table(dict(reversed(list(english().items())))) == english_table
 
         partial = {title: 'Journal surnaturel', tier_cost: 'Énergie : {1} / niveau : {0}',
@@ -77,7 +82,9 @@ def check_localization():
         fr.write_text(json.dumps(partial, ensure_ascii=False), encoding='utf-8')
         packed = dict(localization.resources(directory))
         assert list(packed) == [english_key, french_key]
-        assert localization.read_table(packed[french_key]) == {fnv64(key): text for key, text in partial.items()}
+        assert localization.read_table(packed[french_key]) == {
+            **{fnv64(key): text for key, text in partial.items()}, **buff_aliases
+        }
 
         for invalid, error in (
             ('{"' + title + '": "A", "' + title + '": "B"}', 'duplicate key'),
@@ -104,6 +111,19 @@ def check_localization():
         else:
             raise AssertionError('Accepted an English format missing a runtime argument')
     print('PASS: STBL golden vector, deterministic UTF-16 encoding, partial locale and placeholder, key and collision validation')
+    import station, dbpf
+    built = dict(station.resources())
+    catalog = built[station.CATALOG_KEY]
+    assert len(catalog) == 6842, len(catalog)
+    assert struct.unpack_from('<QQ', catalog, 5598) == (fnv64(station.NAME_KEY), fnv64(station.DESCRIPTION_KEY))
+    en_table = localization.read_table(built[station.table_key('en-US')])
+    assert en_table == {fnv64(station.NAME_KEY): "Aleister's All-in-One Magic Station",
+                       fnv64(station.DESCRIPTION_KEY): en_table[fnv64(station.DESCRIPTION_KEY)]}
+    assert en_table[fnv64(station.DESCRIPTION_KEY)].startswith('Finally, the powers of the universe')
+    fr_table = localization.read_table(built[station.table_key('fr-FR')])
+    assert fr_table[fnv64(station.NAME_KEY)] == "Station d'alchimie d'Aleister"
+    assert len(built) == 21 and all(key.type == dbpf.STBL for key in built if key != station.CATALOG_KEY)
+    print('PASS: the station catalog resource points at Arcana strings; English shows the new text, other languages the original')
 
 
 def generated_rgba(png):
@@ -134,7 +154,7 @@ def main():
     check_localization()
     constants = (root_dir/'src'/'Core'/'NativeLayouts.cs').read_text()
     name = re.search(r'Journal = "(\w+)"', constants).group(1)
-    assert name.endswith('_r78'), 'Layout revision was not bumped'
+    assert name.endswith('_r81'), 'Layout revision was not bumped'
     layout = dict(layouts())[name]
     root = ET.fromstring(layout)
     counts = Counter(int(p.get('value'),16) for p in
@@ -146,7 +166,7 @@ def main():
         assert counts[GRIMOIRE_FIRST_ICON+i] == 1
         assert counts[GRIMOIRE_FIRST_CAPTION+i] == 1
         assert f'{grimoire_icon_instance(name):016x}'.encode() in layout
-    for cid in (GRIMOIRE_LIST_PANEL, GRIMOIRE_LIST_BODY, GRIMOIRE_DESC_PANEL, GRIMOIRE_DESC_BODY,
+    for cid in (GRIMOIRE_TABLE_HEADER, GRIMOIRE_LIST_PANEL, GRIMOIRE_LIST_BODY, GRIMOIRE_DESC_PANEL, GRIMOIRE_DESC_BODY,
         GRIMOIRE_DESC_NAME, GRIMOIRE_DESC_TEXT, GRIMOIRE_DESC_PROMPT, GRIMOIRE_DESC_META, GRIMOIRE_LIST_TITLE, GRIMOIRE_TIER_HEADER, GRIMOIRE_COST_HEADER,
         GRIMOIRE_SCROLL_TRACK, GRIMOIRE_SCROLL_THUMB,
         GRIMOIRE_SCROLL_UP, GRIMOIRE_SCROLL_DOWN, PORTRAIT, PORTRAIT_FRAME):
@@ -159,14 +179,11 @@ def main():
         assert layout.count(key.encode()) >= 1, f'Sprite {key} missing from layout'
     assert 0x53E00075 not in counts, 'Upper-right page label still exists'
     assert 'TabName' not in constants, 'TabName constant still present'
-    for i in range(2):
-        assert counts[GRIMOIRE_FIRST_SEPARATOR+i] == 1
-        assert counts[GRIMOIRE_FIRST_TABLE_EDGE+i] == 1
-        assert counts[GRIMOIRE_FIRST_TABLE_CORNER+i] == 1
     for i in range(GRIMOIRE_ROWS):
         for delta in range(5):
             assert counts[GRIMOIRE_FIRST_ROW+i*5+delta] == 1
-    for deleted in (0x53E000D3, 0x53E000D5, 0x53E000D6, 0x53E00144, 0x53E00145):
+    for deleted in (0x53E000D3, 0x53E000D5, 0x53E000D6, 0x53E000DD, 0x53E000E9,
+                    0x53E000EA, 0x53E000EB, 0x53E000EC, 0x53E00144, 0x53E00145):
         assert counts[deleted] == 0, f'Obsolete control {deleted:08X} still exists'
     for name in GRIMOIRE_CATEGORY_NAMES:
         assert dict(resources())[grimoire_icon_instance(name)].startswith(b'\x89PNG\r\n\x1a\n')
@@ -234,7 +251,7 @@ def main():
     print('PASS: sorting/data-source/wheel hooks present in C# source')
     print('Separate checks: compile with build_journal.py and verify rendering and input in The Sims 3.')
 def check_r63(root, root_dir, layout):
-    """r63: one window size for every page, shared content region, page-specific native frames, taller Grimoire."""
+    """One window and native upper frame on every page, with the original notches under the footer buttons."""
     import journal_layouts as jl
     src = root_dir/'src'
     window = cs_source.class_text(root_dir, 'JournalWindow')
@@ -267,14 +284,28 @@ def check_r63(root, root_dir, layout):
     assert 'windowPlaced = false;' in window.split('private void OnViewportChanged')[1].split('private static float GetFitScale')[0], 'A viewport change always places the window again'
     assert 'overviewPage.Layout();' in window and 'grimoirePage.Layout();' in window
 
-    # Page frames: both native shells are captured once, with their own slicing, and swapped without rebuilding the window.
-    assert 'private JournalFrames frames;' in window and 'frames = JournalTheme.ApplyDialog(root, tabs, grimoirePage.Tabs);' in window
-    assert theme.index('frames.CaptureSingleNotch();') < theme.index('if (StyleTwoButtonFrame(journal))') < theme.index('frames.CaptureTwoNotch();'), 'The single-notch face is captured before the two-notch donor replaces it'
-    for member in ('ScaleType', 'ScaleAmount', 'ScaleArea'):
-        assert frames.count(f'face.{member} = source.{member};') == 1 and frames.count(f'target.{member} = face.{member};') == 1, f'{member} travels with each face'
-    assert 'target[(DrawableBase.ControlStates)i] = face.Images[i];' in frames and 'journal.Invalidate();' in frames
-    assert 'Show(bool wantTwoNotch)' in frames and 'wantTwoNotch && twoNotch != null ? twoNotch : single' in frames, 'Missing two-notch artwork falls back to the single-notch frame'
-    assert 'new Dialog' not in frames and 'Resize' not in frames and 'LoadLayout' not in frames and '.Area' not in frames.replace('target.ScaleArea', '').replace('face.ScaleArea', '').replace('source.ScaleArea', '') and 'Position' not in frames, 'The swap never rebuilds, resizes or moves the window'
+    assert 'frames = JournalTheme.ApplyDialog(root);' in window and 'frames.Layout(scale);' in place
+    assert not any(image_slots(root.find('object'), "prop[@name='DialogDrawable']/object"))
+    order = child_order(root)
+    for clip_id, count in ((jl.FRAME_UPPER, 1), (jl.FRAME_LOWER_LEFT, 1), (jl.FRAME_FOOTER, 2)):
+        clip = control(root, clip_id)
+        assert order.index(CONTENT) < order.index(clip_id), 'Frame draws behind page content'
+        assert int(clip.find("prop[@name='WindowFlags']").get('value'), 16) & 0x410 == 0x410
+        assert clip.findall("prop[@name='Children']/object") == [
+            control(root, clip_id + offset) for offset in range(1, count + 1)]
+        for face in clip.findall("prop[@name='Children']/object"):
+            assert image_slots(face, "prop[@name='FillDrawable']/object")[0] == COLLECTION_FRAME
+            margins = tuple(float(p.get('value')) for p in face.findall(".//prop[@name='ScaleArea']/struct/prop"))
+            assert margins == FRAME_MARGINS
+    assert constant(frames, 'FooterWidth') > constant(window, 'CancelCenterX') + constant(window, 'CancelSize') / 2
+    assert constant(window, 'FooterCenterY') + constant(window, 'CloseSize') / 2 < constant(frames, 'FooterHeight')
+    assert constant(frames, 'FooterHeight') < constant(geometry, 'Height') - constant(geometry, 'ContentBottom')
+    assert 'lowerLeftFace.Area = NativeLayouts.Box(0f, -y, width, height);' in frames
+    assert 'singleButtonFace.Area = NativeLayouts.Box(-x, -y, width, height);' in frames
+    assert 'TwoButtonFace.Area = singleButtonFace.Area;' in frames
+    show = frames.split('internal void Show(bool wantTwoNotch)')[1]
+    assert 'wantTwoNotch && HasTwoButtonFace' in show and '.Area' not in show
+    assert 'singleButtonFace.Visible = !twoButtons;' in show and 'TwoButtonFace.Visible = twoButtons;' in show
     select = window.split('private void SelectPage(int index)')[1].split('private void OnKnowledgeChanged')[0]
     assert select.index('bool twoNotch = page == JournalPages.Perks;') < select.index('cancel.Visible = twoNotch;') < select.index('frames.Show(twoNotch);'), 'The X and the two-notch frame come from the same boolean'
     assert 'float width = WindowGeometry.Width;' in place and 'float height = WindowGeometry.Height;' in place
@@ -293,7 +324,7 @@ def check_r63(root, root_dir, layout):
     assert description >= 100 and pane_bottom + constant(grimoire, 'DescriptionGap') + description + constant(grimoire, 'BottomPad') == constant(geometry, 'ContentBottom'), 'The description panel ends at the content region'
     assert constant(grimoire, 'PaneTop') + constant(grimoire, 'PaneHeight') < constant(geometry, 'ContentBottom')
     assert 'WindowGeometry.ContentWidth - 2f * WindowGeometry.ContentInset' in grimoire and 'WindowGeometry.ContentWidth - 2f * WindowGeometry.ContentInset' in overview, 'Overview and Grimoire share one content width'
-    print('PASS: r63: one %dx%d window for every page, content region (%d,%d)-(%d,%d); single- and two-notch frames captured with their own slicing and swapped on page change with the X; Grimoire shows %d rows'
+    print('PASS: one %dx%d window for every page, content region (%d,%d)-(%d,%d); native frame and corner clips share pixel coordinates; Grimoire shows %d rows'
           % (constant(geometry, 'Width'), constant(geometry, 'Height'), constant(geometry, 'ContentLeft'), constant(geometry, 'ContentTop'),
              constant(geometry, 'ContentRight'), constant(geometry, 'ContentBottom'), rows))
 
@@ -332,7 +363,7 @@ def check_r69(root_dir, window, theme):
         offsets.append(max(abs(a - b) for a, b in zip(centers, ours)))
 
     assert jl.COLLECTION_FRAME == '163462cf3324a2a8', 'Overview and Grimoire keep the Collection Journal frame'
-    body = theme.split('private static bool StyleTwoButtonFrame(Dialog journal)')[1].split('private static void StyleCancel(')[0]
+    body = theme.split('private static bool StyleTwoButtonFrame(Window footer)')[1].split('private static void StyleCancel(')[0]
     assert 'CopyFace(target, source);' in body and 'CopyImages(target, source);' not in body, 'Image and slicing come from the same donor'
     print('PASS: r69: Perks frame is D58F144D5B0FE27A from donor 54D0A9831E5754E7 (export 1, nine-slice 0.5 on every side) with B73E807A1250DC6F and BD8616686C83937B as fallbacks, each with its own slicing; no experimental frame remains; checkmark native and X optically shifted left (max center offset %.1f)' % max(offsets))
 
@@ -343,8 +374,8 @@ def check_r70(root, root_dir, theme):
         graph = ET.fromstring((root_dir / 'references' / folder / (layout_id + '.layout')).read_bytes())
         return next(node for node in graph if node.get('cls') == 'Dialog')
 
-    def slicing(dialog, image):
-        drawable = dialog.find("prop[@name='DialogDrawable']/object")
+    def slicing(dialog, image, property_name='DialogDrawable'):
+        drawable = dialog.find(f"prop[@name='{property_name}']/object")
         keys = [value.get('key').lower() for value in drawable.findall("prop[@name='Image']/value") if value.get('key')]
         assert keys == ['2f7d0004:00000000:' + image], 'One image: ' + image
         return (drawable.find("prop[@name='ScaleType']").get('value'), drawable.find("prop[@name='ScaleFactor']").get('value'),
@@ -352,12 +383,12 @@ def check_r70(root, root_dir, theme):
 
     collection = slicing(native('CollectionJournal', '57560E847AC1F2F1'), '163462cf3324a2a8')
     perks = slicing(native('TwoButtonNative', '54D0A9831E5754E7'), 'd58f144d5b0fe27a')
-    generated = slicing(root.find('object'), '163462cf3324a2a8')
+    generated = slicing(control(root, 0x53E00021), '163462cf3324a2a8', 'FillDrawable')
     assert collection == perks == generated == ('2', '1,1', (0.5,) * 4), 'ScaleType, ScaleFactor and ScaleArea match on both native frames and the generated fallback'
 
     apply = theme.split('internal static JournalFrames ApplyDialog(')[1].split('StyleCancel(journal);')[0]
-    assert apply.count('CopyFace(DialogFrame(journal), DialogFrame(donor));') == 1 and 'CopyImages(' not in apply, 'The Collection frame takes its slicing with its artwork'
-    assert theme.count('CopyImages(') == 2 and 'if (CopyImages(target, source))' in theme.split('private static void CopyFace(')[1].split('private static bool CopyImages(')[0], 'CopyImages is only the artwork step of CopyFace'
+    assert 'frames.StyleCollection(donor);' in apply and 'CopyImages(' not in apply
+    assert theme.count('CopyImages(') == 2 and 'if (CopyImages(target, source))' in theme.split('internal static void CopyFace(')[1].split('private static bool CopyImages(')[0], 'CopyImages is only the artwork step of CopyFace'
     odd = [layout for layout in ('B73E807A1250DC6F', 'BD8616686C83937B') if slicing(native('TwoButtonNative', layout), 'd58f144d5b0fe27a') != collection]
     print('PASS: r70: Collection frame 163462CF3324A2A8 and Perks frame D58F144D5B0FE27A (donor 54D0A9831E5754E7) both ScaleType 2, ScaleFactor 1,1, ScaleArea 0.5 on every side; the generated fallback frame matches; the Collection frame is taken with CopyFace')
     print('INFO: fallback donor(s) %s slice D58F differently and are only used if the first two donors fail to load' % ', '.join(odd))
@@ -386,7 +417,7 @@ def check_r62(root, root_dir, layout):
     left, gap = constant(window, 'TabLeft'), constant(window, 'TabGap')
     widest = 3 * 137 + 2 * gap
     assert left + widest <= 896 - constant(geo, 'RightMargin') - constant(geo, 'PanelWidth') + 12, 'Three tabs end under the identity block'
-    assert 'tabLeft[i] = left;' in window and 'tabWidth[i] = width;' in window
+    assert 'Place(tabs[i], left, TabTop, width, TabHeight);' in window
 
     # Knowledge rows: Bold 13pt names and counts (the same stock style as the Sim name), icons at or below the Grimoire icon art's size.
     assert jl.OV_KNOWLEDGE_FONT == '0x062eae07' == jl.IDENTITY_FONT
@@ -464,14 +495,14 @@ def check_r57(root, root_dir, constants, counts, layout):
         assert [-94, -56, -65, -27] in native_buttons, '29-unit native cancel position'
     # The Collection background is the fallback; the two-notch donor brings its own nine-slice configuration.
     assert 'UseDonor("HUDCollectionJournalDialog", 1,' in theme
-    assert 'CopyFace(DialogFrame(journal), DialogFrame(donor));' in theme and 'CopyImages(DialogFrame(journal)' not in theme
-    assert 'if (StyleTwoButtonFrame(journal))' in theme and 'StyleCancel(journal);' in theme
+    assert 'frames.StyleCollection(donor);' in theme
+    assert 'StyleTwoButtonFrame(frames.TwoButtonFace)' in theme and 'StyleCancel(journal);' in theme
     assert '0x54D0A9831E5754E7UL' in theme and '0xB73E807A1250DC6FUL' in theme
     assert '0xBD8616686C83937BUL' in theme and 'TwoButtonExports = { 1, 1, 0x10000 }' in theme
-    body = theme.split('private static bool StyleTwoButtonFrame(Dialog journal)')[1].split('private static void StyleCancel(')[0]
+    body = theme.split('private static bool StyleTwoButtonFrame(Window footer)')[1].split('private static void StyleCancel(')[0]
     assert 'CopyFace(target, source);' in body and 'CopyImages(target, source);' not in body
-    assert 'journal.Invalidate();' in body
-    assert 'target.ScaleArea = source.ScaleArea;' in theme.split('private static void CopyFace(')[1]
+    assert 'footer.Invalidate();' in body
+    assert 'target.ScaleArea = source.ScaleArea;' in theme.split('internal static void CopyFace(')[1]
     assert 'NativeLayouts.Release(layout, false)' in body
     assert jl.COLLECTION_FRAME == '163462cf3324a2a8'
     assert jl.FRAME_MARGINS == (0.5, 0.5, 0.5, 0.5)
@@ -514,45 +545,16 @@ def check_r57(root, root_dir, constants, counts, layout):
     commit = selection.split('internal bool Commit()')[1]
     assert commit.index('if (record == null)') < commit.index('Array.Clear(staged, 0, staged.Length);')
 
-    # 2. All three main tabs now have permanent matching 9-slice bodies and transparent button faces.
-    assert ui_resources.TAB_HEIGHT == constant(window, 'TabHeight') and ui_resources.TAB_BODY_REACH == constant(window, 'TabReach')
-    assert 8 <= ui_resources.TAB_BODY_REACH <= 11, 'Open-bottom tab shells reach exactly the same amount into the content panel'
-    assert 'internal const ulong TabClearImage = 0x%016XUL;' % ui_resources.TAB_CLEAR_INSTANCE in constants.replace('0xCB3C845AFBAE189CUL', '0x%016XUL' % ui_resources.TAB_CLEAR_INSTANCE) or '%016X' % ui_resources.TAB_CLEAR_INSTANCE in constants.upper()
-    assert ui_resources.TAB_CLEAR_INSTANCE == jl.fnv64(ui_resources.TAB_CLEAR_NAME) if hasattr(jl, 'fnv64') else True
-    assert counts[jl.FIRST_TAB] == counts[jl.FIRST_TAB + 1] == counts[jl.FIRST_TAB + 2] == 1
-    tab_order = [order.index(jl.FIRST_TAB + i) for i in range(3)]
-    for i in range(3):
-        body = control(root, jl.TAB_BODY + i)
-        assert counts[jl.TAB_BODY + i] == 1, 'Each main tab owns its own tab body'
-        assert image_slots(body, "prop[@name='FillDrawable']/object")[0] == f'{ui_resources.TAB_BODY_INSTANCE:016x}'
-        assert body.find(".//prop[@name='ScaleType']").get('value') == '2'
-        assert max(tab_order) < order.index(jl.TAB_BODY + i), 'Every tab body draws behind all main tab buttons'
-    assert 'private readonly Window[] tabBodies = new Window[JournalPages.All.Length];' in window
-    assert 'tabBodies[i] = Control<Window>(NativeLayouts.TabBody + (uint)i);' in window
-    assert 'Place(body, tabLeft[i], TabTop, tabWidth[i], TabHeight + TabReach);' in window
-    assert 'body.ShadeColor = i == page ? ActiveTabShade : InactiveTabShade;' in window
-    assert 'body.Visible = show;' in window and 'tabs[i].Visible;' in window, 'Hidden page tabs have no stray shell'
-    assert 'Place(tabs[i], left, TabTop, width, TabHeight);' in window, 'Tab button bounds never move on selection'
-    assert 12 <= constant(window, 'TabLeft') - 25 <= 18 and 8 <= constant(window, 'TabGap') <= 10, 'Extra left clearance and an even gap between tabs'
-    assert 'float left = TabLeft;' in window and 'left += width + TabGap;' in window and 'JournalPages.All[i].Title, TabLeft, TabTop, 137, TabHeight' in window, 'Tabs are placed as one group, one gap apart'
-    faces = cs_source.class_text(root_dir, 'TabFaces')
-    assert 'new TabFaces(tabs, StatusReaders.StatusIcon(NativeLayouts.TabClearImage))' in window
-    assert 'face[Replaced[s]] = open != null ? open : (on ? selected : keep);' in faces, 'All main tab button faces are transparent'
-    assert 'face[DrawableBase.ControlStates.kActive] = open ?? pressed[i];' in faces, 'No opaque rectangle flashes while pressing a tab'
-    assert 'Fade' not in body.attrib.get('cls', '') and 'Slide' not in window.split('PlaceTabBodies')[1][:900], 'No sliding animation'
-    size, px = generated_rgba(ui_resources.tab_body_png())
-    assert size == (ui_resources.TAB_BODY_WIDTH, ui_resources.TAB_BODY_HEIGHT)
-    middle = ui_resources.TAB_BODY_WIDTH // 2
-    assert px[middle, 0][3] > 200 and px[middle, 0][:3] != (255, 255, 255), 'An outline along the top'
-    assert px[middle, ui_resources.TAB_BODY_HEIGHT - 1][3] < 40 or px[middle, ui_resources.TAB_BODY_HEIGHT - 1][:3] != ui_resources.TAB_BODY_OUTLINE, 'No outline along the bottom'
-    assert all(abs(a - b) > 40 for a, b in zip(px[middle, ui_resources.TAB_BODY_HEIGHT - 1][:3], ui_resources.TAB_BODY_OUTLINE)) or px[middle, ui_resources.TAB_BODY_HEIGHT - 1][3] < 40
-    assert px[0, 0][3] < 160, 'A rounded upper corner'
-    assert px[0, ui_resources.TAB_HEIGHT // 2][3] > 200, 'A side outline'
-    _, clear = generated_rgba(ui_resources.tab_clear_png())
-    assert max(pixel[3] for pixel in clear.values()) == 0, 'The tab face is fully clear'
-    for name in ('tab_body', 'TAB_BODY_INSTANCE'):
-        assert name in (root_dir/'tools'/'journal_layouts.py').read_text()
-    assert ('SupernaturalExpanded.UI.TabBody' in (root_dir/'tools'/'ui_resources.py').read_text())
+    # Both tab groups resolve the same native faces and the main tabs stay in place.
+    assert all(counts[jl.FIRST_TAB + i] == 1 for i in range(3))
+    assert all(order.index(jl.FIRST_TAB + i) < order.index(CONTENT) for i in range(3))
+    assert 'Place(tabs[i], left, TabTop, width, TabHeight);' in window
+    assert 12 <= constant(window, 'TabLeft') - 25 <= 18 and 8 <= constant(window, 'TabGap') <= 10
+    assert constant(window, 'TabTop') + constant(window, 'TabHeight') > constant(cs_source.file_text(root_dir, 'WindowGeometry'), 'ContentTop')
+    assert 'float left = TabLeft;' in window and 'left += width + TabGap;' in window
+    assert 'tabs[i].Selected = i == page;' in window and 'new TabFaces(grimoirePage.Tabs)' in window
+    assert 'new TabFaces(tabs)' not in window
+    assert 'face[Replaced[s]] = i == active ? pressed[i] : keep;' in faces
 
     # 4. Fairy and other species without a progression system: no fabricated level, no invented rank.
     read = status.split('internal static bool ReadSkill(')[1].split('// The game\'s own icon for the skill')[0]
@@ -615,7 +617,7 @@ def check_r57(root, root_dir, constants, counts, layout):
         base = jl.OV_LIST_FIRST + index * jl.OV_LIST_STRIDE + 1
         assert control(root, base).find("prop[@name='VerticalAlign']").get('value') == '1' and control(root, base + 2).find("prop[@name='VerticalAlign']").get('value') == '1', 'Names and counts are centred vertically in their row'
     assert overview.count('0f, 110f, false, true);') == 1 and overview.count('56f, 96f, false, false);') == 1 and overview.count('0f, 64f, true, false);') == 1, 'Only Knowledge fills its panel, only Attributes is compact'
-    print('PASS: r62: Cancel X has a native circular checkmark-derived face (separate original X glyph), and only Confirm commits; all three main tabs have permanently extended shells with tint-only selection; Fairy progression safe; Knowledge rows fill %.0f%% of their panel for four categories' % (400 * fit(4)[0] / usable))
+    print('PASS: r62: Cancel X has a native circular checkmark-derived face (separate original X glyph), and only Confirm commits; both tab groups use native artwork; Fairy progression safe; Knowledge rows fill %.0f%% of their panel for four categories' % (400 * fit(4)[0] / usable))
 
 
 def control(root, cid):
@@ -665,27 +667,22 @@ def constant(source, name):
 
 
 def check_phase_c(root, layout, cs, root_dir, constants):
-    # Dialog frame: fixed margins, never the stock centre slice.
-    top = root.find('object')
-    frame = top.find("prop[@name='DialogDrawable']/object")
-    area = [float(p.get('value')) for p in frame.findall("prop[@name='ScaleArea']/struct/prop")]
-    assert area == list(FRAME_MARGINS) == [0.5] * 4, 'The generated frame uses the native 0.5 slicing'
-    assert image_slots(top, "prop[@name='DialogDrawable']/object")[0] == COLLECTION_FRAME
     theme = cs_source.class_text(root_dir, 'JournalTheme')
-    assert 'CopyFace(DialogFrame(journal), DialogFrame(donor))' in theme and 'CopyFace(target, source);' in theme, 'Both frames take their artwork and native slicing from their donor together'
-    assert 'CopyImages(DialogFrame(journal)' not in theme
     # Native artwork in the Grimoire.
     for key in (HEADER_CELL, LIST_BODY, SCROLL_TRACK, THUMB_KEY, SCROLL_UP_GLOW, SCROLL_DOWN_GLOW, SCROLL_THUMB_GLOW):
         assert layout.count(key.encode()) >= 1, f'Stock sprite {key} missing'
-    assert layout.count(HEADER_CELL.encode()) == 3 + 3 and layout.count(LIST_BODY.encode()) == 2 + 5, 'Grimoire plus Overview panels'
+    assert layout.count(LIST_BODY.encode()) == 2 + 5 + 1, 'Grimoire, Overview and the status panel use the native list plate'
+    assert image_slots(control(root, STATUS_PANEL), "prop[@name='FillDrawable']/object")[0] == LIST_BODY
+    band = control(root, GRIMOIRE_TABLE_HEADER)
+    assert image_slots(band, "prop[@name='FillDrawable']/object")[0] == HEADER_CELL
+    cut = [float(p.get('value')) for p in band.findall(".//prop[@name='ScaleArea']/struct/prop")]
+    assert cut == [0.45, 0.333333343, 0.45, 0.333333343], 'Native header slice'
     for cid, images in ((GRIMOIRE_SCROLL_UP, SCROLL_UP_ARROW), (GRIMOIRE_SCROLL_DOWN, SCROLL_DOWN_ARROW)):
         slots = image_slots(control(root, cid), "prop[@name='ButtonDrawable']/object")
         assert slots[0] == images[0] and slots[3] == images[1] and slots[1] == slots[2] == '', 'Arrow slots'
     for i in range(3):
         cell = control(root, GRIMOIRE_FIRST_COLUMN_BUTTON + i)
-        assert image_slots(cell, "prop[@name='ButtonDrawable']/object")[0] == HEADER_CELL
-        cut = [float(p.get('value')) for p in cell.findall(".//prop[@name='ScaleArea']/struct/prop")]
-        assert cut == [0.45, 0.333333343, 0.45, 0.333333343], 'Header cell slice'
+        assert image_slots(cell, "prop[@name='ButtonDrawable']/object")[:4] == ['', '', HEADER_CELL, HEADER_CELL]
         assert control(root, GRIMOIRE_FIRST_SORT_ARROW + i).find(".//prop[@name='AlignmentHorizontal']").get('value') == '2'
     # Caption centering is a two-part contract: native Text.HAlign must be center,
     # AND the C# placement must span the whole column (not the area left of its sort arrow).
@@ -699,21 +696,10 @@ def check_phase_c(root, layout, cs, root_dir, constants):
     assert order.index(GRIMOIRE_DESC_PANEL) < order.index(GRIMOIRE_DESC_BODY)
     assert order.index(GRIMOIRE_FIRST_ROW) < order.index(GRIMOIRE_LIST_PANEL)
     assert order.index(GRIMOIRE_FIRST_COLUMN_BUTTON) < order.index(GRIMOIRE_LIST_PANEL)
-    assert order.index(GRIMOIRE_FIRST_SEPARATOR) < order.index(GRIMOIRE_FIRST_ROW), 'Dividers must draw over the rows'
-    for i in range(2):
-        assert order.index(GRIMOIRE_FIRST_TABLE_CORNER + i) < order.index(GRIMOIRE_FIRST_TABLE_EDGE + i), 'Corners must draw over the edge lines'
-        assert order.index(GRIMOIRE_FIRST_TABLE_CORNER + i) < order.index(GRIMOIRE_FIRST_SEPARATOR)
-        assert order.index(GRIMOIRE_FIRST_TABLE_EDGE + i) < order.index(GRIMOIRE_FIRST_COLUMN_BUTTON), 'Edge lines must draw over the header'
-        assert order.index(GRIMOIRE_FIRST_TABLE_EDGE + i) < order.index(GRIMOIRE_FIRST_ROW)
-    # Column dividers are the stock Lifetime Rewards divider (same artwork and fill); the header edge lines continue the outline.
-    assert layout.count(DIVIDER.encode()) == 2, 'Only the two Grimoire column dividers use the stock divider artwork; Life State has none'
-    for i in range(2):
-        divider = control(root, GRIMOIRE_FIRST_SEPARATOR + i)
-        assert divider.find("prop[@name='FillColor']").get('value') == DIVIDER_FILL
-        assert image_slots(divider, "prop[@name='FillDrawable']/object")[0] == DIVIDER
-        edge = control(root, GRIMOIRE_FIRST_TABLE_EDGE + i)
-        assert edge.find("prop[@name='FillColor']").get('value') == TABLE_EDGE
-        assert edge.find("prop[@name='FillDrawable']") is None
+    for i in range(3):
+        assert order.index(GRIMOIRE_FIRST_COLUMN_BUTTON + i) < order.index(GRIMOIRE_TABLE_HEADER)
+    assert order.index(GRIMOIRE_TABLE_HEADER) < order.index(GRIMOIRE_LIST_PANEL)
+    assert 'ce94bff5e22d1622' not in layout.decode(), 'The old full-height column divider is gone'
     assert order.index(GRIMOIRE_SCROLL_THUMB) < order.index(GRIMOIRE_SCROLL_TRACK)
     assert order.index(GRIMOIRE_DESC_TEXT) < order.index(GRIMOIRE_DESC_PANEL)
     fills = [control(root, GRIMOIRE_FIRST_ROW + 5 * i).find("prop[@name='FillColor']").get('value') for i in range(GRIMOIRE_ROWS)]
@@ -733,23 +719,20 @@ def check_phase_c(root, layout, cs, root_dir, constants):
     assert layout.count(LIST_OUTLINE.encode()) == 2 + 5, 'The Grimoire list and description and the five Overview panels share the stock list outline'
     for cid in (GRIMOIRE_LIST_PANEL, GRIMOIRE_DESC_PANEL):
         assert LIST_OUTLINE in ET.tostring(control(root, cid).find("prop[@name='FillDrawable']"), encoding='unicode')
-    # Rounded header corners: two generated images, one mirrored, sized as the C# constant, hiding the square corner.
-    corner_size = constant(cs, 'CornerSize')
-    assert corner_size == ui_resources.TABLE_CORNER_SIZE, 'Corner image and window size must match'
     packaged = dict(resources())
-    for instance, data in ((ui_resources.TABLE_CORNER_INSTANCE_LEFT, ui_resources.table_corner_left_png()), (ui_resources.TABLE_CORNER_INSTANCE_RIGHT, ui_resources.table_corner_right_png())):
-        assert packaged[instance] == data and data.startswith(b'\x89PNG'), 'Corner image must be packaged'
-    for i, instance in enumerate((ui_resources.TABLE_CORNER_INSTANCE_LEFT, ui_resources.TABLE_CORNER_INSTANCE_RIGHT)):
-        assert image_slots(control(root, GRIMOIRE_FIRST_TABLE_CORNER + i), "prop[@name='FillDrawable']/object")[0] == f'{instance:016x}'
-    assert ui_resources.table_corner_pixel(0, 0)[3] == 255 and ui_resources.table_corner_pixel(0, 0)[:3] == ui_resources.TABLE_CORNER_SURROUND, 'The square corner must be covered'
-    assert ui_resources.table_corner_pixel(ui_resources.TABLE_CORNER_SIZE - 1, ui_resources.TABLE_CORNER_SIZE - 1)[3] == 0, 'The header must show through the corner'
-    assert 'journal.Place(corners[0], headerX, headY, CornerSize, CornerSize);' in cs
-    assert 'journal.Place(corners[1], headerX + tableWidth - CornerSize, headY, CornerSize, CornerSize);' in cs
-    # Page tabs: navy caption in every state, and a pressed face in every checked slot (replaced at run time, see below).
+    for image in ('SupernaturalExpanded.UI.TabBody', 'SupernaturalExpanded.UI.TabClear',
+                  'SupernaturalExpanded.UI.TableCornerLeft', 'SupernaturalExpanded.UI.TableCornerRight'):
+        assert fnv64(image) not in packaged, f'The old custom face {image} is gone'
+    # The mouse-down state uses the same face as idle, including on a tab that is already checked.
     for i in range(3):
         tab = control(root, FIRST_TAB + i)
         assert [v.text for v in tab.findall("prop[@name='CaptionColors']/value")] == [NAVY] * 8, 'Tab captions must stay navy when selected'
-        assert image_slots(tab, "prop[@name='ButtonDrawable']/object")[3:] == [DIALOG_BUTTON[3]] * 5, 'A selected tab must never use the disabled face'
+        slots = image_slots(tab, "prop[@name='ButtonDrawable']/object")
+        normal, disabled, highlighted, _ = SIMOLOGY_BUTTON
+        assert slots == [normal, disabled, highlighted, normal] * 2
+    for i in range(4):
+        tab = control(root, GRIMOIRE_FIRST_TAB + i)
+        assert image_slots(tab, "prop[@name='ButtonDrawable']/object")[:4] == list(SIMOLOGY_BUTTON)
     # The header meters are the stock HUD cylindrical bar.
     check_header_bars(root, root_dir, order)
     assert FOOTER_FONT == '0x062eae0d' and layout.count(FOOTER_FONT.encode()) == 3 + 5
@@ -769,10 +752,7 @@ def check_phase_c(root, layout, cs, root_dir, constants):
     assert 'scrollTrack.Visible = visible;' not in cs and 'upArrow.Visible = visible;' not in cs, 'An empty list shows no scrollbar'
     assert 'upArrow.Enabled = scrollable &&' in cs and 'downArrow.Enabled = scrollable &&' in cs
     assert 'descriptionBody.Visible = show;' in cs and 'descriptionBody.Visible = entry' not in cs, 'The description body matches the list and is always shown'
-    assert 'PlaceSeparators' not in cs and 'hasEntries ? ' not in cs, 'Dividers must not depend on the row count'
-    assert 'journal.Place(separators[i], starts[i + 1] - 1f, headY, 1f, PaneHeight);' in cs, 'Dividers span the whole table'
-    assert 'journal.Place(edges[0], headerX, headY, 1f, HeaderHeight);' in cs
-    assert 'journal.Place(edges[1], headerX + tableWidth - 1f, headY, 1f, HeaderHeight);' in cs
+    assert 'journal.Place(tableHeader, headerX, headY, tableWidth, HeaderHeight);' in cs
     assert 'float outlineLeft = margin - OutlineInset;' in cs and 'float outlineWidth = tableWidth + 2f * OutlineInset;' in cs
     assert 'journal.Place(listPanel, outlineLeft, listTop, outlineWidth, outlineHeight);' in cs
     assert 'journal.Place(descriptionPanel, outlineLeft, descriptionTop, outlineWidth, DescriptionHeight);' in cs, 'The description is exactly as wide as the table'
@@ -782,11 +762,8 @@ def check_phase_c(root, layout, cs, root_dir, constants):
     assert 'scrollbarLeft = margin + paneWidth - ScrollWidth;' in cs, 'The scrollbar sits outside the table, as in Lifetime Rewards'
     assert 'cellsRight' not in cs
     assert 'float listTop = headY + HeaderHeight - 1f;' in cs and 'float headY = PaneTop;' in cs, 'The header band sits above the list outline, as in the stock lists'
-    assert 'NativeLayouts.GrimoireListPanel' not in theme_src.split('StyleInnerPanels(Dialog journal, WindowBase donor)')[1].split('private static void StyleClose')[0], 'The list outline is not replaced by a donor face'
-    faces_src = cs_source.class_text(root_dir, 'TabFaces')
-    assert 'new TabFaces(tabs, StatusReaders.StatusIcon(NativeLayouts.TabClearImage))' in window_src and 'new TabFaces(grimoirePage.Tabs)' in window_src, 'Page tabs draw a clear face over their own body, categories the pressed face'
-    assert 'plainFace ? original[i][0] : pressed[i]' in faces_src and 'on ? SelectedTint : Untinted' in faces_src, 'Selected page tab: plain face and tint, no pressed face'
-    assert 'pageFaces.Show(page)' in window_src and 'tabFaces.Show(index)' in cs
+    assert 'NativeLayouts.GrimoireListPanel' not in theme_src, 'The list keeps its native face'
+    assert 'tabFaces.Show(index)' in cs
     geo = cs_source.file_text(root_dir, 'WindowGeometry')
     header_top, row_center, row_pitch = constant(geo, 'PanelTop'), constant(geo, 'FirstRowCenter'), constant(geo, 'RowPitch')
     status_center = header_top + row_center + row_pitch / 2.0
@@ -1115,7 +1092,7 @@ def check_modal_and_purchase(root_dir, window, page, constants):
     assert page.count('PurchaseEffect.Fly(') == 1 and page.count('Celebrate(staged)') == 1
     assert 'MostFlights' in page and 'TryButtonCenter' in page and 'bool TryButtonCenter(out Vector2 center)' in entry
     assert 'internal static bool TryButtonCenter(out Vector2 center)' in boot
-    assert re.search(r'Journal = "\w+_r78"', constants)
+    assert re.search(r'Journal = "\w+_r81"', constants)
     print('PASS: modal begin/end follow ModalDialog (dim, focus, key map hook, BeginModal, speed lock; reverse on close), End is idempotent, no self-rejection by IsModal')
     print('PASS: one Close path (commit, one sound, hide, End, deferred dispose) with errors and window shutdown silent; large 64px moving icon only after a successful commit, with native IconZoop fallback')
 
@@ -1133,8 +1110,8 @@ def check_overview(root, root_dir, constants, counts):
     singles = [jl.OV_RANK_TITLE, jl.OV_RANK_TEXT, jl.OV_ARTWORK, jl.OV_LIFE_ICON, jl.OV_LIFE_TITLE, jl.OV_LIFE_TEXT,
                jl.OV_RANK_NUMERAL, jl.OV_LIFE_ART]
     singles += [jl.OV_FRAME + i for i in range(10)] + [jl.OV_HEADER_CELL + i for i in range(3)]
-    singles += [jl.OV_HEADER_TITLE + i for i in range(3)] + [jl.OV_HEADER_CORNER + i for i in range(6)]
-    singles += [jl.OV_HEADER_EDGE + i for i in range(6)]
+    singles += [jl.OV_HEADER_TITLE + i for i in range(3)]
+    assert all(counts[cid] == 0 for cid in range(0x53E00310, 0x53E0031C)), 'No separate corner or edge windows'
     for index, rows in enumerate(jl.OV_LIST_ROWS):
         first = jl.OV_LIST_FIRST + index * jl.OV_LIST_STRIDE
         singles += [first + r * jl.OV_ROW_CONTROLS + k for r in range(rows) for k in range(jl.OV_ROW_CONTROLS)]
@@ -1167,6 +1144,8 @@ def check_overview(root, root_dir, constants, counts):
 
     for i in range(3):
         heading = jl.OV_HEADER_TITLE + i
+        band = control(root, jl.OV_HEADER_CELL + i)
+        assert image_slots(band, "prop[@name='FillDrawable']/object")[0] == HEADER_CELL
         assert control(root, heading).find("prop[@name='HorizontalAlign']").get('value') == '1', 'Section headings are centred in their header band'
         assert layout_font(root, heading) == jl.OV_HEADING_FONT, 'Section headings are bold 15pt'
         first = jl.OV_LIST_FIRST + i * jl.OV_LIST_STRIDE
@@ -1211,8 +1190,7 @@ def check_overview(root, root_dir, constants, counts):
     chain = [last_list, order.index(jl.OV_RANK_NUMERAL),
              order.index(jl.OV_RANK_TITLE)]
     chain += [order.index(jl.OV_RANK_TEXT), order.index(jl.OV_LIFE_TEXT), order.index(jl.OV_HEADER_TITLE),
-              order.index(jl.OV_HEADER_CORNER), order.index(jl.OV_HEADER_EDGE), order.index(jl.OV_HEADER_CELL),
-              order.index(jl.OV_FRAME)]
+              order.index(jl.OV_HEADER_CELL), order.index(jl.OV_FRAME)]
     assert chain == sorted(chain) and len(set(chain)) == len(chain), 'Content must draw in front of the panels'
     assert all(order.index(jl.OV_FRAME + 2 * i) < order.index(jl.OV_FRAME + 2 * i + 1) for i in range(5)), 'Outline in front of its body'
 
@@ -1287,7 +1265,7 @@ def check_overview(root, root_dir, constants, counts):
     check_text(data, 'Arcana.Journal.Overview.Rank.Unimplemented', 'Rank progression for this life state has not been added yet.')
 
     # The window hosts the page without rebuilding it: theme, ink, layout, data refresh on Sim change and on progression, release.
-    assert window.index('JournalTheme.ApplyDialog(root, tabs, grimoirePage.Tabs);') < window.index('overviewPage.ApplyInk();')
+    assert window.index('JournalTheme.ApplyDialog(root);') < window.index('overviewPage.ApplyInk();')
     assert 'overviewPage = OverviewPage.Create(this);' in window and 'overviewPage.Layout();' in window
     assert 'overviewPage.Show(showDashboard);' in window and 'header == null ? null : header.PowerField, perkPage, grimoirePage)));' in window
     assert 'RefreshOverview();' in window.split('private void UpdateHeaderFromHud()')[1].split('private static float TabWidth')[0], 'Power changes refresh the Overview'
@@ -1418,8 +1396,10 @@ def check_knowledge(root, root_dir, jl, data, page, window):
 
 
 def check_attributes(root_dir, data):
-    """Attributes: percentages come only from registered sources, so no figure is ever invented; none is registered in a normal build."""
-    src = root_dir/'src'
+    """Attributes use registered gameplay sources and preserve their unavailable state."""
+    bootstrap = cs_source.class_text(root_dir, 'JournalBootstrap')
+    witch = cs_source.class_text(root_dir, 'WitchCastingContext')
+    gameplay = cs_source.class_text(root_dir, 'WitchSimCast')
     sources = cs_source.class_text(root_dir, 'ModifierReading') + cs_source.class_text(root_dir, 'AttributeSources')
     page = cs_source.class_text(root_dir, 'OverviewPage')
     assert 'AttributeSources.AddRows(context, data);' in data.split('class CommonOverview')[1].split('class WitchOverview')[0], 'Added for every species by the common provider'
@@ -1428,21 +1408,22 @@ def check_attributes(root_dir, data):
     assert 'string regenerationLabel = JournalText.Get(RegenerationKey);' in sources
     check_text(sources, 'Arcana.Journal.Overview.Attributes.PowerRegeneration', 'Power Regeneration')
     check_text(sources, 'Arcana.Common.UnavailableValue', '—')
-    assert 'AttributeSources.Register(' not in ''.join(p.read_text() for p in src.rglob('*.cs') if p != cs_source.file_path(root_dir, 'AttributeTestData')), 'No production code registers a made-up figure'
+    assert 'AttributeSources.Register(OccultTypes.Witch' in bootstrap and 'WitchCastingContext.ReadRegeneration' in bootstrap
+    assert 'WitchMagicRecovery.AppliedRegeneration(motive)' in witch
+    assert 'reading.Text, reading.Tip' in sources and 'power.Caption, power.Tip' in data
+    assert 'field.Tip = WitchCastingContext.PowerTooltip(field.Label, rules)' in cs_source.class_text(root_dir, 'WitchStatus')
+    assert 'rules.FatigueDrain(logicalCost, Actor.Motives.GetMin' in gameplay
+    assert 'MagicWand wand = WandForAccuracy(sim)' in witch and 'return arcanaCast.ActiveWand;' in witch
+    assert 'data.mBuffName = FizzleName;' in cs_source.class_text(root_dir, 'WitchMagicRecovery')
     test = cs_source.file_text(root_dir, 'AttributeTestData')
     assert test.startswith('#if ARCANA_GRIMOIRE_TEST') and test.rstrip().endswith('#endif'), 'The sample figures are fenced behind the test flag'
     assert '#if ARCANA_GRIMOIRE_TEST\n            AttributeTestData.Register();\n#endif' in sources.replace('\r\n', '\n')
     assert 'if (reading == null || !reading.Available)' in sources and 'continue;' in sources, 'A source with no figure adds no row'
     assert 'catch (ResetException)' in sources and 'ReportOnce("Reading "' in sources, 'One failing source cannot blank the Overview'
-    # The percentage format, run for real on the same rules as ModifierReading.Text.
-    import decimal
-    def fmt(p):
-        whole = float(decimal.Decimal(repr(p)).quantize(decimal.Decimal('1'), rounding=decimal.ROUND_HALF_UP))
-        exact = abs(p - whole) < 0.05
-        shown = whole if exact else float(decimal.Decimal(repr(p)).quantize(decimal.Decimal('0.1'), rounding=decimal.ROUND_HALF_UP))
-        return ('-' if shown < 0 else '+') + (('%d' % abs(shown)) if exact else ('%g' % abs(shown))) + '%'
-    assert [fmt(v) for v in (0.0, 15.0, -10.0, 12.5, 25.0, -0.2, 0.04)] == ['+0%', '+15%', '-10%', '+12.5%', '+25%', '-0.2%', '+0%']
-    assert 'MidpointRounding.AwayFromZero' in sources and 'CultureInfo.InvariantCulture' in sources and 'float.IsNaN(percent)' in sources
+    percent = cs_source.class_text(root_dir, 'PercentText')
+    assert 'PercentText.Format(Percent, true)' in sources
+    assert 'Math.Floor(Math.Abs(percent) * 10.0 + 0.5)' in percent
+    assert 'Math.Round(' not in sources + percent and 'float.IsNaN(percent)' in percent
     # Attributes rows shrink to fit four rows in the panel, keep the panel's size, and the pool holds enough rows.
     lst = cs_source.class_text(root_dir, 'OverviewList')
     assert 'lists[0] = new OverviewList(journal, GetListId(0), StatisticsRows, bodies[Statistics],' in page
@@ -1451,31 +1432,49 @@ def check_attributes(root_dir, data):
     assert 'else if (compact && rows.Count > (int)Math.Floor(listHeight / RowHeight + 0.001f))' in lst
     panel_rows = constant_int(page, 'UpperSlots') * constant(lst, 'RowHeight') / constant(lst, 'MinCompactRow')
     assert panel_rows >= 4.0 and constant_int(page, 'StatisticsRows') >= 4, 'Four attribute rows fit the unchanged panel without a scrollbar'
-    # Accuracy: one row directly under regeneration for casters, a dash until a casting system registers a source, one tooltip line per tier up to Legendary.
     accuracy = cs_source.file_text(root_dir, 'AccuracySources')
-    assert 'OverviewRow accuracy = AccuracySources.Row(context);' in sources and 'regenerationRow < 0 ? data.Statistics.Count : regenerationRow + 1' in sources, 'Accuracy follows the regeneration row'
-    assert 'reading == null ? unavailable : reading.OverallText' in accuracy and 'reading == null ? unavailable : reading.TierText(tier)' in accuracy, 'No source means dashes, never a figure'
-    assert 'species == OccultTypes.Witch || species == OccultTypes.Genie || species == OccultTypes.Fairy' in accuracy, 'Only the magically inclined occults show Accuracy'
-    assert 'catch (ResetException)' in accuracy and 'ReportOnce("Reading Accuracy"' in accuracy, 'One failing source cannot blank the Overview'
-    exempt = {cs_source.file_path(root_dir, 'AttributeTestData')}
-    assert 'AccuracySources.Register(' not in ''.join(p.read_text() for p in src.rglob('*.cs') if p not in exempt), 'No production code registers a made-up accuracy'
-    assert 'AccuracySources.Register(' in test, 'The sample accuracy is fenced behind the test flag'
-    for key, text in (('Attributes.Accuracy', 'Accuracy'), ('Accuracy.Tagline', 'Chance a spell succeeds, by tier.'), ('Accuracy.Line', '{0}: {1}'),
-                      ('Accuracy.Tier.1', 'Tier 1'), ('Accuracy.Tier.2', 'Tier 2'), ('Accuracy.Tier.3', 'Tier 3'),
-                      ('Accuracy.Tier.4', 'Tier 4'), ('Accuracy.Tier.5', 'Tier 5'), ('Accuracy.Tier.Legendary', 'Legendary')):
+    rules = cs_source.file_text(root_dir, 'WitchCastingRules')
+    assert 'OverviewRow accuracy = AccuracySources.Row(context);' in sources and 'regenerationRow < 0 ? data.Statistics.Count : regenerationRow + 1' in sources
+    assert 'PercentText.Format(reading.Overall, false)' in accuracy and 'reading.BaseLine, reading.Modifiers' in accuracy
+    assert 'reading == null ? null :' in accuracy
+    assert 'species == OccultTypes.Witch || species == OccultTypes.Genie || species == OccultTypes.Fairy' in accuracy
+    assert 'catch (ResetException)' in accuracy and 'ReportOnce("Reading Accuracy"' in accuracy
+    assert 'AccuracySources.Register(OccultTypes.Witch, WitchCastingContext.ReadAccuracy)' in bootstrap
+    assert 'new WitchSpell((int)rules.Rank, WitchSpellKind.Spell)' in witch
+    assert 'rules.AccuracyFor(currentRank' in witch and 'rules.Accuracy(' in gameplay
+    assert 'previewMagicHands = wand == null && HasPracticallyMagic(sim);' in witch
+    assert 'WandBonus(wand, previewMagicHands)' in witch
+    assert 'WandBonus(mWand, false)' in gameplay
+    assert 'wand is MagicHands || (wand == null && previewMagicHands)' in witch
+    assert 'return WitchCastingRules.MagicHandsAccuracyBonus;' in witch
+    check_text(witch, 'Arcana.Journal.Overview.Accuracy.MagicHands', 'Magic Hands')
+    bonus = int(constant(rules, 'MagicHandsAccuracyBonus'))
+    assert f'+{bonus}% Spell Accuracy' in english()['Arcana.Witch.Perk.PracticallyMagic.Description.1']
+    assert 'return AccuracyFor(spell, wand, emotionPenalty, lowNeeds, emptyNeeds).Total;' in rules
+    assert 'EmotionPenalty(sim)' in witch and 'WitchCastingContext.EmotionPenalty(Actor)' in gameplay
+    emotion = witch.split('internal static float EmotionPenalty(')[1].split('internal static void CountNeeds(')[0]
+    assert 'BuffCategory.Mental' not in emotion and 'instance.EffectValue >= 0' in emotion
+    assert 'buff.mBuff.SolveCommodity == need' in emotion and 'trigger.mAddBuff == buff.mBuffGuid' in emotion
+    window = cs_source.class_text(root_dir, 'JournalWindow')
+    assert 'model.SimBuffsChanged += OnBuffsChanged;' in window and 'model.SimBuffsChanged -= OnBuffsChanged;' in window
+    assert 'RefreshOverview();' in window.split('private void OnBuffsChanged(')[1].split('private void OnMagicMotiveChanged')[0]
+    assert '20% slower' in english()['Arcana.Witch.Fizzle.Description']
+    assert 'AccuracySources.Register(' not in test and 'new AccuracyReading(' not in test
+    for key, text in (('Attributes.Accuracy', 'Spell Accuracy'),
+                      ('Accuracy.Tagline', 'Determines the chance that your Sim’s spells succeed.')):
         check_text(accuracy, 'Arcana.Journal.Overview.' + key, text)
-    check_text(accuracy, 'Arcana.Common.Percent', '{0}%')
-    assert accuracy.count('"Arcana.Journal.Overview.Accuracy.Tier.') == 6, 'Tiers 1 to 5 and Legendary'
-    assert 'Math.Max(0.0, Math.Min(100.0, percent))' in accuracy and 'MidpointRounding.AwayFromZero' in accuracy and 'CultureInfo.InvariantCulture' in accuracy
-    def shown_percent(p):
-        clamped = max(0.0, min(100.0, p))
-        whole = float(decimal.Decimal(repr(clamped)).quantize(decimal.Decimal('1'), rounding=decimal.ROUND_HALF_UP))
-        exact = abs(clamped - whole) < 0.05
-        value = whole if exact else float(decimal.Decimal(repr(clamped)).quantize(decimal.Decimal('0.1'), rounding=decimal.ROUND_HALF_UP))
-        return (('%d' % value) if exact else ('%g' % value)) + '%'
-    assert [shown_percent(v) for v in (85.0, 12.5, 100.0, -3.0, 120.0, 0.04)] == ['85%', '12.5%', '100%', '0%', '100%', '0%']
-    print('PASS: Attributes: regeneration row persists as — when no gameplay modifier source exists; genuine registered percentages take its place; four rows fit unchanged panel')
-    print('PASS: Accuracy: caster-only row under regeneration, dashes without a registered source, six tooltip tiers (1-5, Legendary), clamped whole percentages')
+    check_text(witch, 'Arcana.Journal.Overview.Power.Tagline',
+               'The total pool of magic your Sim can draw from when casting.')
+    check_text(witch, 'Arcana.Journal.Overview.Regeneration.Tagline',
+               'How quickly your Sim’s Magical Power recovers over time.')
+    for key, text in (('Line', '{0}: {1}'), ('Base', 'Base Accuracy'), ('Rank', 'Rank'), ('Wand', 'Wand'),
+                      ('Mood', 'Mood'), ('Needs', 'Low Needs'), ('Limit', 'Accuracy limits')):
+        check_text(witch, 'Arcana.Journal.Overview.Accuracy.' + key, text)
+    check_text(percent, 'Arcana.Common.Percent', '{0}%')
+    check_text(witch, 'Arcana.Common.ModifierLine', '{0} {1}')
+    assert 'Accuracy.Tier.' not in accuracy + witch
+    assert 'wand.GetLocalizedName()' in witch and 'new TooltipModifier(text, value > 0f)' in witch
+    print('PASS: Attributes use native-compatible percent formatting and the current-rank Accuracy breakdown')
 
 
 def check_overview_hover(root, root_dir, jl, data, page):
@@ -1501,12 +1500,35 @@ def check_overview_hover(root, root_dir, jl, data, page):
         assert part in lst, part
     assert 'hits[i].MouseWheel += OnWheel;' in lst, 'The wheel scrolls the list over a hover window'
     assert 'hits[i].CreateTooltipCallbackFunction = TooltipFor(i);' in lst and 'hits[i].Click' not in lst and 'hits[i].MouseDown' not in lst, 'Hover only, no click action'
-    assert 'PerkTooltip.Create(tip.Title, tip.Tagline, tip.Body, null)' in lst, 'The same tooltip window as the Perks page'
+    assert 'PerkTooltip.Create(tip.Title, tip.Tagline, tip.Body, null, tip.Modifiers)' in lst, 'The same tooltip window as the Perks page'
     assert 'journal.Place(hits[i], listLeft, y, rowWidth, rowHeight);' in lst, 'The whole visible row, not just the icon, and never over the scrollbar'
     assert 'int index = hitRows[slot];' in lst and 'rows[index].Tip' in lst, 'Built from the row the pooled window shows now, so it is right after scrolling'
     assert 'hits[slot].Visible = false;' in lst and 'hits[i].Visible = visible && hitRows[i] >= 0;' in lst and 'JournalBootstrap.RunLater' in lst, 'A window that changes rows is hidden first, dropping a stale tooltip'
     assert 'hitsChanged |= UpdateHit(i, show ? index : -1);' in lst, 'Hidden with its list when the page changes'
     assert '!OverviewTip.Same(a.Tip, b.Tip)' in lst, 'Unchanged tips do not rebuild the rows'
+    tooltip = cs_source.class_text(root_dir, 'PerkTooltip')
+    tooltip_layout = ET.fromstring(dict(jl.layouts())[jl.PERK_TOOLTIP])
+    modifiers = {
+        identifier for identifier in child_order(tooltip_layout)
+        if jl.TOOLTIP_FIRST_MODIFIER <= identifier < jl.TOOLTIP_FIRST_MODIFIER + jl.TOOLTIP_MODIFIERS
+    }
+    assert len(modifiers) == 8
+    for identifier in modifiers:
+        assert control(tooltip_layout, identifier).find("prop[@name='WindowFlags']").get('value') == '0x00002012'
+    assert 'left + indent' in tooltip and 'width - indent' in tooltip
+    assert 'modifiers[i].Positive ? positive : negative' in tooltip
+    assert 'lightPanel ? DarkPositiveModifierColor : PositiveModifierColor' in tooltip
+    assert 'lightPanel ? DarkNegativeModifierColor : NegativeModifierColor' in tooltip
+    assert 'modifier.Visible = true;' in tooltip
+    accuracy_source = cs_source.class_text(root_dir, 'WitchCastingContext').split('internal static AccuracyReading ReadAccuracy')[1]
+    assert accuracy_source.count('AddPercentModifier(lines,') == len(modifiers)
+    rank_copy = cs_source.class_text(root_dir, 'PowerPage')
+    for rank in range(1, 6):
+        key = f'Arcana.Witch.Rank.Unlock.{rank}'
+        text = english()[key]
+        assert text.splitlines()[0] == ('+50 Maximum Power' if rank == 1 else '+25 Maximum Power')
+        assert all(re.match(r'^[+-]\d', line) for line in text.splitlines())
+        check_text(rank_copy, key, text)
     witch = data.split('class WitchOverview')[1]
     assert 'PerkTip(perk, bought, selection.SimName)' in witch and 'perk.Describe(bought - 1, simName)' in witch, 'The description of the rank bought, with the Sim name filled in, from Perk.Describe'
     assert 'perk.Tiers > 1 ? JournalText.Format("Arcana.Journal.Overview.Perks.OwnedRank", bought, perk.Tiers, description) : description' in witch

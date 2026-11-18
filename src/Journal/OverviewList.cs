@@ -368,7 +368,7 @@ namespace SupernaturalExpanded.Journal
             {
                 int index = hitRows[slot];
                 OverviewTip tip = index >= 0 && index < rows.Count ? rows[index].Tip : null;
-                return tip == null ? null : PerkTooltip.Create(tip.Title, tip.Tagline, tip.Body, null);
+                return tip == null ? null : PerkTooltip.Create(tip.Title, tip.Tagline, tip.Body, null, tip.Modifiers);
             };
         }
 

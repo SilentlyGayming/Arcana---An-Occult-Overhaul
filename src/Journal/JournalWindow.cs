@@ -15,13 +15,11 @@ namespace SupernaturalExpanded.Journal
         private const float IdentityTop = 31f;
         private const float IdentityLineHeight = 24f;
         private const float IdentityLineSpacing = 25f;
-        // Each main tab has an always-extended body (tools/ui_resources.py); selecting a tab only changes its tint.
         private const float TabTop = 107f;
         // The group starts clear of the frame's curved left edge, and adjacent tabs have an even gap.
         private const float TabLeft = 41f;
         private const float TabGap = 9f;
-        private const float TabHeight = 32f;
-        private const float TabReach = 11f;
+        private const float TabHeight = 43f;
         // Native circular Confirm and Cancel buttons inside the two-button dialog shell: the 56-unit Accept
         // keeps its native size; the 29-unit X is centred at the donor's native -79.5 footer coordinate.
         private const float CloseSize = 56f;
@@ -29,8 +27,6 @@ namespace SupernaturalExpanded.Journal
         private const float CloseCenterX = 41f;
         private const float CancelCenterX = 79.5f;
         private const float FooterCenterY = 41f;
-        private static readonly Color ActiveTabShade = new Color(0xFFFFFFFF);
-        private static readonly Color InactiveTabShade = new Color(0xFFD7E6F4);
         private const uint AcceptTrigger = 0x042B0000;
         private const uint CancelTrigger = 0x042B0001;
         private const uint NextTrigger = 0x042B0002;
@@ -44,8 +40,6 @@ namespace SupernaturalExpanded.Journal
         private readonly Dictionary<Button, JournalAction> actions = new Dictionary<Button, JournalAction>();
         private readonly List<Button> keyboardOrder = new List<Button>();
         private readonly Button[] tabs = new Button[JournalPages.All.Length];
-        private readonly float[] tabLeft = new float[JournalPages.All.Length];
-        private readonly float[] tabWidth = new float[JournalPages.All.Length];
 
         private Layout layout;
         private Dialog root;
@@ -58,9 +52,7 @@ namespace SupernaturalExpanded.Journal
         private Button close;
         private Button cancel;
         private JournalFrames frames;
-        private readonly Window[] tabBodies = new Window[JournalPages.All.Length];
         private Window content;
-        private TabFaces pageFaces;
         private SimIdentity identity;
         private PowerSelection selection;
         private PowerPage perkPage;
@@ -152,20 +144,14 @@ namespace SupernaturalExpanded.Journal
                 return new SimpleTextTooltip(active != null && active.PendingCount > 0 ? JournalText.Get("Arcana.Journal.Perks.Tooltip.Confirm") : JournalText.Get("Arcana.Common.Close"));
             };
             Bind(close, RequestClose);
-            for (int i = 0; i < tabBodies.Length; i++)
-            {
-                tabBodies[i] = Control<Window>(NativeLayouts.TabBody + (uint)i);
-                tabBodies[i].IgnoreMouse = true;
-            }
             perkPage = PowerPage.Create(this, WitchTree.Tree);
             grimoirePage = GrimoirePage.Create(this);
             overviewPage = OverviewPage.Create(this);
             grimoirePage.EntriesChanged += OnKnowledgeChanged;
             header = StatusHeader.Create(this);
 
-            frames = JournalTheme.ApplyDialog(root, tabs, grimoirePage.Tabs);
+            frames = JournalTheme.ApplyDialog(root);
             overviewPage.ApplyInk();
-            pageFaces = new TabFaces(tabs, StatusReaders.StatusIcon(NativeLayouts.TabClearImage));
             grimoirePage.UseFaces(new TabFaces(grimoirePage.Tabs));
             viewport = root.Parent;
             if (viewport != null)
@@ -238,6 +224,7 @@ namespace SupernaturalExpanded.Journal
             root.CenterInParent();
             float top = Math.Max(4f, (float)Math.Round(root.Area.TopLeft.y - 24f * scale));
             root.Position = new Vector2((float)Math.Round(root.Area.TopLeft.x), top);
+            frames.Layout(scale);
             // With the status panel shown, the title and name stop short of it.
             float textRight = showHeader ? HeaderLayout.PanelLeft(width) - HeaderLayout.PanelGap : width - 30f;
             Place(title, IdentityLeft, IdentityTop, textRight - IdentityLeft, IdentityLineHeight);
@@ -463,6 +450,7 @@ namespace SupernaturalExpanded.Journal
             model.OccultUpdated += OnOccultUpdated;
             model.SkillChanged += OnSkillChanged;
             model.MinuteChanged += OnMinuteChanged;
+            model.SimBuffsChanged += OnBuffsChanged;
             if (header != null)
             {
                 model.SimMotivesChanged += OnMotivesChanged;
@@ -481,6 +469,7 @@ namespace SupernaturalExpanded.Journal
                 model.OccultUpdated -= OnOccultUpdated;
                 model.SkillChanged -= OnSkillChanged;
                 model.MinuteChanged -= OnMinuteChanged;
+                model.SimBuffsChanged -= OnBuffsChanged;
                 if (header != null)
                 {
                     model.SimMotivesChanged -= OnMotivesChanged;
@@ -540,7 +529,7 @@ namespace SupernaturalExpanded.Journal
             }
             else if (changed || selection == null || selection.SimDescriptionId != next.SimDescriptionId)
             {
-                selection = new PowerSelection(WitchProgressSource.Read(next), WitchTree.Tree);
+                selection = new PowerSelection(next.SimDescriptionId, WitchProgressSource.Read(next), WitchTree.Tree);
             }
             else
             {
@@ -574,8 +563,6 @@ namespace SupernaturalExpanded.Journal
                 {
                     float width = TabWidth(JournalPages.All[i].Title);
                     Place(tabs[i], left, TabTop, width, TabHeight);
-                    tabLeft[i] = left;
-                    tabWidth[i] = width;
                     left += width + TabGap;
                 }
             }
@@ -628,6 +615,14 @@ namespace SupernaturalExpanded.Journal
             UpdateHeaderFromHud();
         }
 
+        private void OnBuffsChanged(SimInfo info)
+        {
+            if (IsOpen && !closing)
+            {
+                RefreshOverview();
+            }
+        }
+
         private void OnMagicMotiveChanged()
         {
             UpdateHeaderFromHud();
@@ -646,6 +641,10 @@ namespace SupernaturalExpanded.Journal
             {
                 UpdateHeaderFromHud();
             }
+            else if (IsOpen && page == JournalPages.Overview && selection != null)
+            {
+                RefreshOverview();
+            }
         }
 
         // Returns true when the native skill or Witch progression changes the Journal display.
@@ -657,6 +656,17 @@ namespace SupernaturalExpanded.Journal
             }
             try
             {
+                if (identity.SimDescriptionId == 0UL)
+                {
+                    SimIdentity refreshed = SimIdentity.Read(model);
+                    if (refreshed == null || refreshed.Id != identity.Id || refreshed.SimDescriptionId == 0UL)
+                    {
+                        return false;
+                    }
+                    RefreshSim(refreshed);
+                    return true;
+                }
+
                 PowerProgress progress = WitchProgressSource.Read(identity, selection);
                 if (progress == null || !selection.Update(progress))
                 {
@@ -700,25 +710,6 @@ namespace SupernaturalExpanded.Journal
         private static float TabWidth(string title)
         {
             return Math.Max(137f, 24f + 7f * title.Length);
-        }
-
-        // Three permanent tab shells reach into the content panel like the Collection Journal's; selection only brightens one.
-        private void PlaceTabBodies()
-        {
-            bool haveClearFace = pageFaces != null && pageFaces.Open;
-            for (int i = 0; i < tabBodies.Length; i++)
-            {
-                Window body = tabBodies[i];
-                bool show = haveClearFace && tabs[i].Visible;
-                body.Visible = show;
-                if (!show)
-                {
-                    continue;
-                }
-                Place(body, tabLeft[i], TabTop, tabWidth[i], TabHeight + TabReach);
-                body.ShadeColor = i == page ? ActiveTabShade : InactiveTabShade;
-                body.Invalidate();
-            }
         }
 
         // User navigation alone prompts. RefreshSim can still redraw the
@@ -841,20 +832,13 @@ namespace SupernaturalExpanded.Journal
             {
                 tabs[i].Selected = i == page;
             }
-            // Perks is the only page with staged picks to cancel, so it alone shows the X and the two-notch frame; the other pages show
-            // the single-notch frame with only the checkmark. The footer actions keep their existing behavior.
+            // Perks shows the second notch and Cancel button for staged picks.
             bool twoNotch = page == JournalPages.Perks;
             cancel.Visible = twoNotch;
             if (frames != null)
             {
                 frames.Show(twoNotch);
             }
-            if (pageFaces != null)
-            {
-                pageFaces.Show(page);
-            }
-            PlaceTabBodies();
-
             bool showDashboard = page == JournalPages.Overview;
             if (perkPage != null)
             {

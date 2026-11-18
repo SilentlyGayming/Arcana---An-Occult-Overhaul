@@ -74,6 +74,17 @@ namespace SupernaturalExpanded.Journal
             return scaled > 1e15 ? 1000000000000000L : (long)scaled;
         }
 
+        // A loaded Witch's attained native level provides a floor if saved points lag behind it.
+        internal static long ExperienceForSkill(float skillPoints, int level, int[] pointsForNextLevel)
+        {
+            long experience = ToThousandths(skillPoints);
+            if (pointsForNextLevel == null || level <= 0 || level > pointsForNextLevel.Length)
+            {
+                return experience;
+            }
+            return Math.Max(experience, (long)pointsForNextLevel[level - 1] * Milli);
+        }
+
         // Cumulative thousandths of skill points at which each rank begins, or null when the skill data is unusable.
         internal static long[] RankThresholds(int[] pointsForNextLevel, int maxLevel)
         {
@@ -190,14 +201,16 @@ namespace SupernaturalExpanded.Journal
             }
 
             Skill skill = GetSpellcastingSkill(identity.Description);
-            long experience = skill == null ? 0L : WitchProgression.ToThousandths(skill.SkillPoints);
+            long experience = ReadExperience(skill);
             float proficiency = ReadProficiency(skill);
-            if (previous != null && experience == previous.Experience && proficiency == previous.Proficiency)
+            long[] ladder = GetRankThresholds(skill);
+            RankState rank = WitchProgression.GetRankState(experience, ladder, 0);
+            if (previous != null && previous.Available && experience == previous.Experience && proficiency == previous.Proficiency
+                && rank.Rank <= (int)previous.Rank && rank.Reached <= previous.Milestones)
             {
                 return null;
             }
 
-            long[] ladder = GetRankThresholds(skill);
             WitchRecord record = WitchProgressStore.ClaimMilestones(identity.SimDescriptionId, experience, ladder);
             if (record == null)
             {
@@ -205,6 +218,12 @@ namespace SupernaturalExpanded.Journal
             }
             return PowerProgress.From(identity.SimDescriptionId, experience,
                 WitchProgression.GetRankState(experience, ladder, record.Claimed), proficiency, record, WitchTree.Tree);
+        }
+
+        private static long ReadExperience(Skill skill)
+        {
+            return skill == null ? 0L : WitchProgression.ExperienceForSkill(
+                skill.SkillPoints, skill.SkillLevel, skill.PointsForNextLevel);
         }
 
         // Give every vanilla Spellcasting level the same width. Skill.Progress
@@ -239,6 +258,16 @@ namespace SupernaturalExpanded.Journal
             return progress.Available ? progress.PowerPoints : 0;
         }
 
+        internal static WitchRecord ReadGameplay(SimDescription description, out Rank rank)
+        {
+            Skill skill = GetSpellcastingSkill(description);
+            long xp = ReadExperience(skill);
+            long[] ladder = GetRankThresholds(skill);
+            WitchRecord record = WitchProgressStore.ClaimMilestones(description.SimDescriptionId, xp, ladder);
+            rank = (Rank)WitchProgression.GetRankState(xp, ladder, record == null ? 0 : record.Claimed).Rank;
+            return record;
+        }
+
         private static Skill GetSpellcastingSkill(SimDescription description)
         {
             SkillManager skills = description.SkillManager;
@@ -250,10 +279,17 @@ namespace SupernaturalExpanded.Journal
         {
             if (thresholds == null)
             {
-                Skill reference = skill ?? SkillManager.GetStaticSkill(SkillNames.Spellcasting);
-                if (reference != null)
+                if (skill != null)
                 {
-                    thresholds = WitchProgression.RankThresholds(reference.PointsForNextLevel, reference.MaxSkillLevel);
+                    thresholds = WitchProgression.RankThresholds(skill.PointsForNextLevel, skill.MaxSkillLevel);
+                }
+                if (thresholds == null)
+                {
+                    Skill template = SkillManager.GetStaticSkill(SkillNames.Spellcasting);
+                    if (template != null && template != skill)
+                    {
+                        thresholds = WitchProgression.RankThresholds(template.PointsForNextLevel, template.MaxSkillLevel);
+                    }
                 }
             }
             return thresholds;

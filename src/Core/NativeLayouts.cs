@@ -14,9 +14,9 @@ namespace SupernaturalExpanded.Journal
 
     internal static class NativeLayouts
     {
-        internal const string Journal = "SupernaturalExpandedJournalDialog_r78";
+        internal const string Journal = "SupernaturalExpandedJournalDialog_r81";
         internal const string HudButton = "SupernaturalExpandedJournalHudButton_r16";
-        internal const string PerkTooltip = "SupernaturalExpandedPerkTooltip_r2";
+        internal const string PerkTooltip = "SupernaturalExpandedPerkTooltip_r3";
         internal const string PurchaseFlight = "SupernaturalExpandedPurchaseFlight_r1";
         internal const int RootExport = 1;
 
@@ -39,10 +39,10 @@ namespace SupernaturalExpanded.Journal
         internal const uint Close = 0x53E00009;
         internal const uint Content = 0x53E0000A;
         internal const uint Cancel = 0x53E0000D;
-        // Three equal-height, open-bottom tab bodies behind the main page labels (one for each main tab).
-        // Do not collide with FirstTab (0x53E00010..12).
-        internal const uint TabBody = 0x53E00020;
-        internal const ulong TabClearImage = 0xCB3C845AFBAE189CUL;
+        // Each clip owns a full-size frame drawable at the next ID.
+        internal const uint FrameUpper = 0x53E00020;
+        internal const uint FrameLowerLeft = 0x53E00022;
+        internal const uint FrameFooter = 0x53E00024;
         internal const uint HudGlyph = 0x53E0000B;
         // The Perk Point notification inside the HUD button: a hidden container and the two glow windows it holds.
         internal const uint PerkPulse = 0x53E000ED;
@@ -60,9 +60,7 @@ namespace SupernaturalExpanded.Journal
         internal const uint GrimoireTierHeader = 0x53E000D7;
         internal const uint GrimoireCostHeader = 0x53E000D8;
         internal const uint GrimoireFirstColumnButton = 0x53E000D9;
-        internal const uint GrimoireFirstSeparator = 0x53E000DC;
-        internal const uint GrimoireFirstTableEdge = 0x53E000E9;
-        internal const uint GrimoireFirstTableCorner = 0x53E000EB;
+        internal const uint GrimoireTableHeader = 0x53E000DC;
         internal const uint GrimoireFirstSortArrow = 0x53E000DF;
         internal const uint GrimoireFirstSortDescending = 0x53E000E2;
         // The fixed-height description panel under the list: outline, pale body, entry name and short description.
@@ -82,8 +80,6 @@ namespace SupernaturalExpanded.Journal
         internal const uint OverviewFrame = 0x53E00300;
         internal const uint OverviewHeaderCell = 0x53E0030A;
         internal const uint OverviewHeaderTitle = 0x53E0030D;
-        internal const uint OverviewHeaderCorner = 0x53E00310;
-        internal const uint OverviewHeaderEdge = 0x53E00316;
         internal const uint OverviewRankTitle = 0x53E0031C;
         internal const uint OverviewRankText = 0x53E0031D;
         internal const uint OverviewArtwork = 0x53E00320;

@@ -6,10 +6,7 @@ import zlib
 from pathlib import Path
 
 from dbpf import fnv64
-from ui_resources import (halo_resources, TAB_BODY_INSTANCE, TAB_CLEAR_INSTANCE,
-    tab_body_png, tab_clear_png, TABLE_CORNER_INSTANCE_LEFT,
-    TABLE_CORNER_INSTANCE_RIGHT, table_corner_left_png, table_corner_right_png,
-    TILE_EDGE_INSTANCE, tile_edge_png)
+from ui_resources import halo_resources, TILE_EDGE_INSTANCE, tile_edge_png
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -117,9 +114,5 @@ def resources():
             raise ValueError("Grimoire category artwork must be a PNG: " + str(source))
         result.append((grimoire_icon_instance(category), data))
     result.extend(halo_resources())
-    result.append((TAB_BODY_INSTANCE, tab_body_png()))
-    result.append((TAB_CLEAR_INSTANCE, tab_clear_png()))
-    result.append((TABLE_CORNER_INSTANCE_LEFT, table_corner_left_png()))
-    result.append((TABLE_CORNER_INSTANCE_RIGHT, table_corner_right_png()))
     result.append((TILE_EDGE_INSTANCE, tile_edge_png()))
     return result

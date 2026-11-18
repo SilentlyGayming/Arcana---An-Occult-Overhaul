@@ -19,6 +19,11 @@ namespace SupernaturalExpanded.Journal
         // At most this many icons fly to the Journal button, however many perks were bought at once.
         private const int MostFlights = 4;
         private static readonly string[] Numerals = { "I", "II", "III", "IV", "V" };
+        private static readonly string[] RankUnlocks =
+        {
+            "Arcana.Witch.Rank.Unlock.1", "Arcana.Witch.Rank.Unlock.2", "Arcana.Witch.Rank.Unlock.3",
+            "Arcana.Witch.Rank.Unlock.4", "Arcana.Witch.Rank.Unlock.5"
+        };
         private static readonly Color LitIcon = new Color(0xFFFFFFFF);
         // Half-transparent and darkened, so the icon still reads as unavailable in a skin that ignores one of the two.
         private static readonly Color FadedIcon = new Color(0x80A0A8B4);
@@ -123,8 +128,16 @@ namespace SupernaturalExpanded.Journal
 
             for (int i = 0; i < ranks.Length; i++)
             {
+                int rank = i;
                 ranks[i] = Add(journal.Button(tree.Id(PageControl.RankMarker, i), Numerals[i], barCenter - PowerLayout.RankMarker / 2f,
                     PowerLayout.RankY(ranks.Length - 1 - i), PowerLayout.RankMarker, PowerLayout.RankMarker, delegate { }));
+                if (tree == WitchTree.Tree)
+                {
+                    ranks[i].CreateTooltipCallbackFunction = delegate(Vector2 mouse, WindowBase window, ref Vector2 position)
+                    {
+                        return BuildRankTooltip(rank);
+                    };
+                }
             }
 
             for (int i = 0; i < perks; i++)
@@ -402,9 +415,10 @@ namespace SupernaturalExpanded.Journal
             for (int i = 0; i < ranks.Length; i++)
             {
                 ranks[i].Selected = selection.Available && i <= (int)selection.Rank;
-                string title = tree.RankTitle(i);
-                ranks[i].TooltipText = selection.Available && i == (int)selection.Rank
-                    ? JournalText.Format("Arcana.Journal.Perks.CurrentRank", title) : title;
+                if (tree != WitchTree.Tree)
+                {
+                    ranks[i].TooltipText = RankTooltipTitle(i);
+                }
             }
 
             if (!styled)
@@ -498,6 +512,19 @@ namespace SupernaturalExpanded.Journal
         private static Color GetFadedColor(Color color)
         {
             return new Color((color.ARGB & 0x00FFFFFF) | FadedAlpha);
+        }
+
+        private string RankTooltipTitle(int rank)
+        {
+            string title = tree.RankTitle(rank);
+            return selection != null && selection.Available && rank == (int)selection.Rank
+                ? JournalText.Format("Arcana.Journal.Perks.CurrentRank", title) : title;
+        }
+
+        private Tooltip BuildRankTooltip(int rank)
+        {
+            return PerkTooltip.Create(RankTooltipTitle(rank), JournalText.Get("Arcana.Status.Label.MagicalProficiency"),
+                JournalText.Get(RankUnlocks[rank]), null);
         }
 
         // The tile supplies its tooltip on hover, so it always reflects the current owned and staged ranks.

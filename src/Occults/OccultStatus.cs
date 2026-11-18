@@ -20,6 +20,7 @@ namespace SupernaturalExpanded.Journal
         internal float Fraction;
         internal UIImage Icon;
         internal bool Available;
+        internal OverviewTip Tip;
 
         internal void Clear()
         {
@@ -28,6 +29,7 @@ namespace SupernaturalExpanded.Journal
             Fraction = 0f;
             Icon = null;
             Available = false;
+            Tip = null;
         }
 
         internal void Set(string label, string caption, float fraction, UIImage icon)
@@ -38,6 +40,7 @@ namespace SupernaturalExpanded.Journal
                 ? 0f : (fraction > 1f ? 1f : fraction);
             Icon = icon;
             Available = true;
+            Tip = null;
         }
     }
 
@@ -283,6 +286,20 @@ namespace SupernaturalExpanded.Journal
         {
             if (StatusReaders.ReadMotive(source, CommodityKind.MagicFatigue, JournalText.Get("Arcana.Status.Label.MagicalPower"), field))
             {
+                Sim sim = source.LiveSim;
+                if (sim != null && WitchCastingLifecycle.CastingInstalled)
+                {
+                    WitchCastingRules rules = WitchCastingContext.ReadCapacityRules(sim);
+                    const CommodityKind kind = CommodityKind.MagicFatigue;
+                    Motives motives = sim.Motives;
+                    if (motives != null && motives.GetMotive(kind) != null)
+                    {
+                        field.Fraction = WitchCastingRules.PowerFraction(motives.GetValue(kind), motives.GetMin(kind), motives.GetMax(kind));
+                    }
+                    field.Caption = JournalText.Format("Arcana.Common.Ratio", (int)Math.Round(field.Fraction * rules.Capacity),
+                        (int)Math.Round(rules.Capacity));
+                    field.Tip = WitchCastingContext.PowerTooltip(field.Label, rules);
+                }
                 UIImage powerIcon = StatusReaders.StatusIcon(OccultAssetData.WitchPowerStatus);
                 if (powerIcon != null)
                 {
