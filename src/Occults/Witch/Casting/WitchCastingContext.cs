@@ -223,9 +223,9 @@ namespace SupernaturalExpanded.Journal
             return false;
         }
 
-        internal static void CountNeeds(Sim sim, out int low, out int empty)
+        internal static void CountNeeds(Sim sim, out float penalty, out int empty, List<TooltipModifier> details)
         {
-            low = 0;
+            penalty = 0f;
             empty = 0;
             Motives motives = sim.Motives;
             if (motives == null)
@@ -249,14 +249,31 @@ namespace SupernaturalExpanded.Journal
                 }
 
                 float aboveMinimum = motives.GetValue(need) - min;
-                if (aboveMinimum <= span * WitchCastingRules.LowNeedFraction)
+                float amount = WitchCastingRules.NeedPenalty(aboveMinimum / span);
+                penalty += amount;
+                if (aboveMinimum <= 0f)
                 {
-                    low++;
-                    if (aboveMinimum <= 0f)
-                    {
-                        empty++;
-                    }
+                    empty++;
                 }
+                if (amount > 0f && details != null)
+                {
+                    AddPercentModifier(details, NeedName(need), -amount);
+                }
+            }
+        }
+
+        private static string NeedName(CommodityKind need)
+        {
+            switch (need)
+            {
+                case CommodityKind.Hunger: return JournalText.Get("Arcana.Journal.Overview.Accuracy.Need.Hunger");
+                case CommodityKind.VampireThirst: return JournalText.Get("Arcana.Journal.Overview.Accuracy.Need.Thirst");
+                case CommodityKind.Bladder: return JournalText.Get("Arcana.Journal.Overview.Accuracy.Need.Bladder");
+                case CommodityKind.Energy: return JournalText.Get("Arcana.Journal.Overview.Accuracy.Need.Energy");
+                case CommodityKind.Fun: return JournalText.Get("Arcana.Journal.Overview.Accuracy.Need.Fun");
+                case CommodityKind.Social: return JournalText.Get("Arcana.Journal.Overview.Accuracy.Need.Social");
+                case CommodityKind.Hygiene: return JournalText.Get("Arcana.Journal.Overview.Accuracy.Need.Hygiene");
+                default: return JournalText.Get("Arcana.Journal.Overview.Accuracy.Needs");
             }
         }
 
@@ -310,6 +327,132 @@ namespace SupernaturalExpanded.Journal
             return new ModifierReading((regeneration.Rate - 1f) * 100f, "", tip);
         }
 
+        // The row is the ordinary spell discount range across tiers I through current rank.
+        // Tooltip totals use the same Arcana factors as DrainMotives, before native wand/moon effects.
+        internal static ModifierReading ReadSpellCost(OverviewContext context)
+        {
+            Sim sim = context.Identity.Description == null ? null : context.Identity.Description.CreatedSim;
+            if (!WitchCastingLifecycle.CastingInstalled || !IsWitch(sim))
+            {
+                return ModifierReading.None;
+            }
+
+            WitchCastingRules rules = ReadRules(sim);
+            int tier = (int)rules.Rank;
+            WitchSpell current = new WitchSpell(tier, WitchSpellKind.Spell);
+            WitchCostFactors ordinary = rules.CostFactors(current);
+            List<TooltipModifier> lines = new List<TooltipModifier>();
+            AddCostFactor(lines, JournalText.Get("Arcana.Journal.Overview.Cost.HighWitch"), ordinary.HighWitch);
+            AddCostFactor(lines, JournalText.Get("Arcana.Witch.Perk.FamiliarBond.Name"), ordinary.Familiar);
+
+            AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Spells"), rules, current);
+            AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Curses"), rules, new WitchSpell(tier, WitchSpellKind.Curse));
+            AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Rituals"), rules, new WitchSpell(tier, WitchSpellKind.Ritual));
+            AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Legendary"), rules, new WitchSpell(WitchCastingRules.Legendary, WitchSpellKind.Spell));
+
+            OverviewTip tip = new OverviewTip(JournalText.Get("Arcana.Journal.Overview.Attributes.SpellCost"),
+                JournalText.Get("Arcana.Journal.Overview.Cost.Tagline"), JournalText.Get("Arcana.Journal.Overview.Cost.Base"), lines.ToArray());
+            float minimum, maximum;
+            rules.CostRange(WitchSpellKind.Spell, out minimum, out maximum);
+            string range = FormatCostRange((maximum - 1f) * 100f, (minimum - 1f) * 100f, true);
+            return new ModifierReading((rules.CostMultiplier(current) - 1f) * 100f, "", tip, range);
+        }
+
+        private static void AddCostCategory(List<TooltipModifier> lines, string label, WitchCastingRules rules, WitchSpell spell)
+        {
+            WitchCostFactors factors = rules.CostFactors(spell);
+            bool legendary = spell.Tier == WitchCastingRules.Legendary;
+            float minimum = factors.Multiplier;
+            float maximum = minimum;
+            if (!legendary)
+            {
+                rules.CostRange(spell.Kind, out minimum, out maximum);
+            }
+            string range = FormatCostRange(minimum * 100f, maximum * 100f, false);
+            lines.Add(new TooltipModifier(JournalText.Format("Arcana.Common.ModifierLine", label, range), true, true, false, true));
+            if (!legendary && PercentText.AbsoluteTenths(minimum * 100f) != PercentText.AbsoluteTenths(maximum * 100f))
+            {
+                AddCostTierGroups(lines, rules, spell.Kind);
+            }
+            AddCostFactor(lines, JournalText.Get("Arcana.Witch.Perk.Hexweaver.Name"), factors.Hexweaver);
+            AddCostFactor(lines, JournalText.Get("Arcana.Witch.Perk.TheOldWays.Name"), factors.OldWays);
+
+            // Preview the tier-dependent factors for this category using the same
+            // gameplay rules. Legendary magic is not a lower-tier spell.
+            if (spell.Tier == WitchCastingRules.Legendary)
+            {
+                return;
+            }
+            WitchCostFactors lower = rules.CostFactors(new WitchSpell((int)Rank.Novice, spell.Kind));
+            string earlyTiers = rules.Rank == Rank.Novice
+                ? JournalText.Get("Arcana.Journal.Overview.Cost.FirstTier")
+                : JournalText.Get("Arcana.Journal.Overview.Cost.EarlyTiers");
+            AddCostFactor(lines, JournalText.Get("Arcana.Journal.Overview.Cost.Apprentice"), lower.Apprentice, earlyTiers);
+            AddCostFactor(lines, JournalText.Get("Arcana.Witch.Perk.LessonsInTheUnseenArts.Name"), lower.Lessons, earlyTiers);
+            if (lower.Eidetic != 1f && rules.Rank > Rank.Novice)
+            {
+                // Rank indices are zero based: a High Witch (4) discounts Tiers I–IV.
+                string last = OverviewProviders.GetRomanNumeral((int)rules.Rank);
+                string lowerTiers = rules.Rank == Rank.Apprentice
+                    ? JournalText.Get("Arcana.Journal.Overview.Cost.FirstTier")
+                    : JournalText.Format("Arcana.Journal.Overview.Cost.TierRange", last);
+                AddCostFactor(lines, JournalText.Get("Arcana.Witch.Perk.EideticWitchary.Name"), lower.Eidetic, lowerTiers);
+            }
+        }
+
+        private static string FormatCostRange(float first, float last, bool signed)
+        {
+            string a = PercentText.Format(first, signed);
+            string b = PercentText.Format(last, signed);
+            if (a == b) return a;
+            return signed ? JournalText.Format("Arcana.Journal.Overview.Cost.SignedRange", a, b)
+                : JournalText.Format("Arcana.Journal.Overview.Cost.Range", a, b);
+        }
+
+        // Merge contiguous tiers with equal displayed costs; no artificial tier averages.
+        private static void AddCostTierGroups(List<TooltipModifier> lines, WitchCastingRules rules, WitchSpellKind kind)
+        {
+            int start = 0;
+            string amount = PercentText.Format(rules.CostMultiplier(new WitchSpell(0, kind)) * 100f, false);
+            for (int tier = 1; tier <= (int)rules.Rank + 1; tier++)
+            {
+                string next = tier <= (int)rules.Rank
+                    ? PercentText.Format(rules.CostMultiplier(new WitchSpell(tier, kind)) * 100f, false) : null;
+                if (next == amount)
+                {
+                    continue;
+                }
+                string first = OverviewProviders.GetRomanNumeral(start + 1);
+                string last = OverviewProviders.GetRomanNumeral(tier);
+                string name = start == tier - 1
+                    ? JournalText.Format("Arcana.Journal.Overview.Cost.TierSingle", first)
+                    : JournalText.Format("Arcana.Journal.Overview.Cost.TierSpan", first, last);
+                lines.Add(new TooltipModifier(JournalText.Format("Arcana.Journal.Overview.Cost.TierTotal", name, amount), true, true));
+                start = tier;
+                amount = next;
+            }
+        }
+
+        private static void AddCostFactor(List<TooltipModifier> lines, string label, float factor)
+        {
+            AddCostFactor(lines, label, factor, null);
+        }
+
+        private static void AddCostFactor(List<TooltipModifier> lines, string label, float factor, string qualifier)
+        {
+            float percent = (factor - 1f) * 100f;
+            if (PercentText.AbsoluteTenths(percent) != 0)
+            {
+                string text = JournalText.Format("Arcana.Common.ModifierLine", label, PercentText.Format(percent, true));
+                if (!string.IsNullOrEmpty(qualifier))
+                {
+                    text = JournalText.Format("Arcana.Common.WithQualifier", text, qualifier);
+                }
+                // Lower costs are beneficial (unlike lower Accuracy).
+                lines.Add(new TooltipModifier(text, percent < 0f));
+            }
+        }
+
         internal static AccuracyReading ReadAccuracy(OverviewContext context)
         {
             Sim sim = context.Identity.Description == null ? null : context.Identity.Description.CreatedSim;
@@ -322,14 +465,15 @@ namespace SupernaturalExpanded.Journal
             MagicWand wand = WandForAccuracy(sim);
             bool previewMagicHands = wand == null && HasPracticallyMagic(sim);
             float wandBonus = WandBonus(wand, previewMagicHands);
-            int low;
+            float needPenalty;
             int empty;
-            CountNeeds(sim, out low, out empty);
+            List<TooltipModifier> needLines = new List<TooltipModifier>();
+            CountNeeds(sim, out needPenalty, out empty, needLines);
             float emotions = EmotionPenalty(sim);
             WitchSpell currentRank = new WitchSpell((int)rules.Rank, WitchSpellKind.Spell);
-            WitchAccuracy accuracy = rules.AccuracyFor(currentRank, wandBonus, emotions, low, empty);
+            WitchAccuracy accuracy = rules.AccuracyFor(currentRank, wandBonus, emotions, needPenalty, empty);
             List<TooltipModifier> lines = new List<TooltipModifier>();
-            string baseLine = JournalText.Format("Arcana.Journal.Overview.Accuracy.Line",
+            string baseLine = JournalText.Format("Arcana.Common.ModifierLine",
                 JournalText.Get("Arcana.Journal.Overview.Accuracy.Base"), PercentText.Format(WitchAccuracy.Base, false));
             string wandName = previewMagicHands || wand is MagicHands
                 ? JournalText.Get("Arcana.Journal.Overview.Accuracy.MagicHands")
@@ -338,12 +482,47 @@ namespace SupernaturalExpanded.Journal
             AddPercentModifier(lines, string.IsNullOrEmpty(wandName)
                 ? JournalText.Get("Arcana.Journal.Overview.Accuracy.Wand") : wandName, accuracy.Wand);
             AddPercentModifier(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Mood"), accuracy.Mood);
-            AddPercentModifier(lines, JournalText.Get("Arcana.Witch.Perk.DarkArts.Name"), accuracy.DarkArts);
-            AddPercentModifier(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Needs"), accuracy.Needs);
+            // Dark Arts offsets the Mood penalty, rather than granting a standalone Accuracy bonus.
+            if (PercentText.AbsoluteTenths(accuracy.DarkArts) != 0)
+            {
+                string offset = JournalText.Format("Arcana.Common.ModifierLine",
+                    JournalText.Get("Arcana.Witch.Perk.DarkArts.Name"), PercentText.Format(accuracy.DarkArts, true));
+                lines.Add(new TooltipModifier(offset, true, false, true));
+            }
+            lines.AddRange(needLines);
             AddPercentModifier(lines, JournalText.Get("Arcana.Witch.Perk.ArcaneAscendancy.Name"), accuracy.Ascendancy);
-            AddPercentModifier(lines, JournalText.Get("Arcana.Witch.Perk.ThePowerOfThree.Name"), accuracy.Coven);
-            AddPercentModifier(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Limit"), accuracy.Limit);
+            // All category totals include the shared modifiers. Coven and bounds are category-specific.
+            AddCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Spells"), accuracy.Total);
+            AddCategoryModifiers(lines, accuracy, rules.SpecialtyAccuracyBonus(currentRank));
+            int tier = (int)rules.Rank;
+            WitchSpell curseSpell = new WitchSpell(tier, WitchSpellKind.Curse);
+            WitchSpell ritualSpell = new WitchSpell(tier, WitchSpellKind.Ritual);
+            WitchSpell legendarySpell = new WitchSpell(WitchCastingRules.Legendary, WitchSpellKind.Spell);
+            WitchAccuracy curse = rules.AccuracyFor(curseSpell, wandBonus, emotions, needPenalty, empty);
+            WitchAccuracy ritual = rules.AccuracyFor(ritualSpell, wandBonus, emotions, needPenalty, empty);
+            WitchAccuracy legendary = rules.AccuracyFor(legendarySpell, wandBonus, emotions, needPenalty, empty);
+            AddCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Curses"), curse.Total);
+            AddCategoryModifiers(lines, curse, rules.SpecialtyAccuracyBonus(curseSpell));
+            AddCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Rituals"), ritual.Total);
+            AddCategoryModifiers(lines, ritual, rules.SpecialtyAccuracyBonus(ritualSpell));
+            AddCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Legendary"), legendary.Total);
+            // The capstone's configured bonus is known, but Legendary's separate total is not.
+            AddPercentModifier(lines, JournalText.Get("Arcana.Witch.Perk.TheOldWays.Name"), rules.SpecialtyAccuracyBonus(legendarySpell));
             return new AccuracyReading(accuracy.Total, baseLine, lines.ToArray());
+        }
+
+        private static void AddCategory(List<TooltipModifier> lines, string label, float value)
+        {
+            string text = JournalText.Format("Arcana.Common.ModifierLine", label,
+                float.IsNaN(value) ? JournalText.Get("Arcana.Common.UnavailableValue") : PercentText.Format(value, false));
+            lines.Add(new TooltipModifier(text, true, true, false, true));
+        }
+
+        private static void AddCategoryModifiers(List<TooltipModifier> lines, WitchAccuracy category, float specialty)
+        {
+            AddPercentModifier(lines, JournalText.Get("Arcana.Witch.Perk.TheOldWays.Name"), specialty);
+            AddPercentModifier(lines, JournalText.Get("Arcana.Witch.Perk.ThePowerOfThree.Name"), category.Coven);
+            AddPercentModifier(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Limit"), category.Limit);
         }
 
         private static void AddPercentModifier(List<TooltipModifier> lines, string label, float value)

@@ -105,7 +105,7 @@ namespace SupernaturalExpanded.Journal
             }
 
             lists[0] = new OverviewList(journal, GetListId(0), StatisticsRows, bodies[Statistics],
-                JournalText.Get("Arcana.Journal.Overview.Empty.Attributes"), 0f, 110f, false, true);
+                JournalText.Get("Arcana.Journal.Overview.Empty.Attributes"), 0f, 124f, false, true);
             lists[1] = new OverviewList(journal, GetListId(1), PerkRows, bodies[Perks],
                 JournalText.Get("Arcana.Journal.Overview.Empty.Perks"), 56f, 96f, false, false);
             lists[2] = new OverviewList(journal, GetListId(2), KnowledgeRows, bodies[Knowledge],

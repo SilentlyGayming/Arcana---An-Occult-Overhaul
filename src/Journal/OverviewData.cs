@@ -47,7 +47,9 @@ namespace SupernaturalExpanded.Journal
             }
             for (int i = 0; i < a.Modifiers.Length; i++)
             {
-                if (a.Modifiers[i].Text != b.Modifiers[i].Text || a.Modifiers[i].Positive != b.Modifiers[i].Positive)
+                if (a.Modifiers[i].Text != b.Modifiers[i].Text || a.Modifiers[i].Positive != b.Modifiers[i].Positive ||
+                    a.Modifiers[i].Neutral != b.Modifiers[i].Neutral || a.Modifiers[i].Nested != b.Modifiers[i].Nested ||
+                    a.Modifiers[i].Section != b.Modifiers[i].Section)
                 {
                     return false;
                 }
@@ -296,7 +298,7 @@ namespace SupernaturalExpanded.Journal
             {
                 string description = perk.Describe(bought - 1, simName);
                 string body = perk.Tiers > 1 ? JournalText.Format("Arcana.Journal.Overview.Perks.OwnedRank", bought, perk.Tiers, description) : description;
-                return new OverviewTip(perk.Name, perk.Tagline, body);
+                return new OverviewTip(perk.Name, perk.Tagline, body, WitchPerkBenefits.For(perk, bought - 1));
             }
         }
     }
@@ -363,6 +365,7 @@ namespace SupernaturalExpanded.Journal
         internal readonly string Condition;
         internal readonly OverviewTip Tip;
         private readonly bool available;
+        private readonly string displayText;
 
         internal ModifierReading(float percent, string condition)
             : this(percent, condition, null)
@@ -372,6 +375,12 @@ namespace SupernaturalExpanded.Journal
         internal ModifierReading(float percent, string condition, OverviewTip tip)
             : this(percent, condition, !float.IsNaN(percent) && !float.IsInfinity(percent), tip)
         {
+        }
+
+        internal ModifierReading(float percent, string condition, OverviewTip tip, string displayText)
+            : this(percent, condition, tip)
+        {
+            this.displayText = displayText;
         }
 
         private ModifierReading(float percent, string condition, bool available, OverviewTip tip)
@@ -384,7 +393,7 @@ namespace SupernaturalExpanded.Journal
 
         internal bool Available { get { return available; } }
 
-        internal string Text { get { return PercentText.Format(Percent, true); } }
+        internal string Text { get { return displayText ?? PercentText.Format(Percent, true); } }
     }
 
     internal delegate ModifierReading ModifierSource(OverviewContext context);

@@ -8,11 +8,29 @@ namespace SupernaturalExpanded.Journal
     {
         internal readonly string Text;
         internal readonly bool Positive;
+        internal readonly bool Neutral;
+        internal readonly bool Nested;
+        internal readonly bool Section;
 
-        internal TooltipModifier(string text, bool positive)
+        internal TooltipModifier(string text, bool positive) : this(text, positive, false)
+        {
+        }
+
+        internal TooltipModifier(string text, bool positive, bool neutral) : this(text, positive, neutral, false)
+        {
+        }
+
+        internal TooltipModifier(string text, bool positive, bool neutral, bool nested) : this(text, positive, neutral, nested, false)
+        {
+        }
+
+        internal TooltipModifier(string text, bool positive, bool neutral, bool nested, bool section)
         {
             Text = text;
             Positive = positive;
+            Neutral = neutral;
+            Nested = nested;
+            Section = section;
         }
     }
 
@@ -34,6 +52,7 @@ namespace SupernaturalExpanded.Journal
         private const float ConflictGap = 4f;
         private const float ModifierIndent = 14f;
         private const float ModifierGap = 2f;
+        private const float SectionGap = 5f;
 
         private const uint TitleId = 0x53E00081;
         private const uint TaglineId = 0x53E00082;
@@ -78,7 +97,7 @@ namespace SupernaturalExpanded.Journal
             {
                 foreach (TooltipModifier modifier in modifiers)
                 {
-                    text += "\n    " + modifier.Text;
+                    text += (modifier.Section ? "\n\n" : (modifier.Nested ? "\n        " : "\n    ")) + modifier.Text;
                 }
             }
             return Plain(text + (string.IsNullOrEmpty(conflict) ? "" : "\n" + conflict));
@@ -113,7 +132,14 @@ namespace SupernaturalExpanded.Journal
             float top = left;
             top += Place(name, title, left, top, width, scale) + TaglineGap * scale;
             top += Place(line, tagline, left, top, width, scale) + BodyGap * scale;
-            top += Place(body, description, left, top, width, scale);
+            if (string.IsNullOrEmpty(description))
+            {
+                body.Visible = false;
+            }
+            else
+            {
+                top += Place(body, description, left, top, width, scale);
+            }
             if (modifiers != null && modifiers.Length != 0)
             {
                 float indent = ModifierIndent * scale;
@@ -131,8 +157,13 @@ namespace SupernaturalExpanded.Journal
                     }
 
                     modifier.TextStyle = body.TextStyle;
-                    modifier.TextColor = modifiers[i].Positive ? positive : negative;
-                    top += Place(modifier, modifiers[i].Text, left + indent, top, width - indent, scale);
+                    modifier.TextColor = modifiers[i].Neutral ? ink : (modifiers[i].Positive ? positive : negative);
+                    if (modifiers[i].Section && i > 0)
+                    {
+                        top += SectionGap * scale;
+                    }
+                    float rowIndent = modifiers[i].Section ? 0f : (modifiers[i].Nested ? indent * 2f : indent);
+                    top += Place(modifier, modifiers[i].Text, left + rowIndent, top, width - rowIndent, scale);
                     modifier.Visible = true;
                 }
             }

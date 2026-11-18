@@ -616,7 +616,7 @@ def check_r57(root, root_dir, constants, counts, layout):
     for index in range(3):
         base = jl.OV_LIST_FIRST + index * jl.OV_LIST_STRIDE + 1
         assert control(root, base).find("prop[@name='VerticalAlign']").get('value') == '1' and control(root, base + 2).find("prop[@name='VerticalAlign']").get('value') == '1', 'Names and counts are centred vertically in their row'
-    assert overview.count('0f, 110f, false, true);') == 1 and overview.count('56f, 96f, false, false);') == 1 and overview.count('0f, 64f, true, false);') == 1, 'Only Knowledge fills its panel, only Attributes is compact'
+    assert overview.count('0f, 124f, false, true);') == 1 and overview.count('56f, 96f, false, false);') == 1 and overview.count('0f, 64f, true, false);') == 1, 'Only Knowledge fills its panel, only Attributes is compact'
     print('PASS: r62: Cancel X has a native circular checkmark-derived face (separate original X glyph), and only Confirm commits; both tab groups use native artwork; Fairy progression safe; Knowledge rows fill %.0f%% of their panel for four categories' % (400 * fit(4)[0] / usable))
 
 
@@ -1427,7 +1427,7 @@ def check_attributes(root_dir, data):
     # Attributes rows shrink to fit four rows in the panel, keep the panel's size, and the pool holds enough rows.
     lst = cs_source.class_text(root_dir, 'OverviewList')
     assert 'lists[0] = new OverviewList(journal, GetListId(0), StatisticsRows, bodies[Statistics],' in page
-    assert 'JournalText.Get("Arcana.Journal.Overview.Empty.Attributes"), 0f, 110f, false, true);' in page
+    assert 'JournalText.Get("Arcana.Journal.Overview.Empty.Attributes"), 0f, 124f, false, true);' in page
     check_text(page, 'Arcana.Journal.Overview.Empty.Attributes', 'No attributes to display.')
     assert 'else if (compact && rows.Count > (int)Math.Floor(listHeight / RowHeight + 0.001f))' in lst
     panel_rows = constant_int(page, 'UpperSlots') * constant(lst, 'RowHeight') / constant(lst, 'MinCompactRow')
@@ -1440,6 +1440,41 @@ def check_attributes(root_dir, data):
     assert 'species == OccultTypes.Witch || species == OccultTypes.Genie || species == OccultTypes.Fairy' in accuracy
     assert 'catch (ResetException)' in accuracy and 'ReportOnce("Reading Accuracy"' in accuracy
     assert 'AccuracySources.Register(OccultTypes.Witch, WitchCastingContext.ReadAccuracy)' in bootstrap
+    # Spell Cost is a production attribute; existing compact list fits all four rows.
+    assert 'WitchCastingContext.ReadSpellCost' in bootstrap
+    cost_body = witch.split('internal static ModifierReading ReadSpellCost')[1].split('private static void AddCostCategory')[0]
+    assert 'rules.CostMultiplier(current)' in cost_body and cost_body.count('AddCostCategory(lines,') == 4
+    assert 'rules, new WitchSpell(tier, WitchSpellKind.Curse)' in cost_body
+    assert 'rules, new WitchSpell(tier, WitchSpellKind.Ritual)' in cost_body
+    assert 'rules, new WitchSpell(WitchCastingRules.Legendary, WitchSpellKind.Spell)' in cost_body
+    assert 'return CostFactors(spell).Multiplier;' in rules
+    assert 'rules.CostRange(spell.Kind, out minimum, out maximum)' in witch and 'new TooltipModifier(text, percent < 0f)' in witch
+    category = witch.split('private static void AddCostCategory')[1].split('internal static AccuracyReading ReadAccuracy')[0]
+    assert 'Cost.LowerTiers' not in cost_body + category and 'Arcana.Journal.Overview.Cost.LowerTiers' not in english()
+    assert 'rules.CostFactors(spell)' in category and 'rules.CostFactors(new WitchSpell((int)Rank.Novice, spell.Kind))' in category
+    assert category.index('spell.Tier == WitchCastingRules.Legendary') < category.index('WitchCostFactors lower')
+    assert 'lower.Apprentice, earlyTiers' in category and 'lower.Lessons, earlyTiers' in category and 'lower.Eidetic, lowerTiers' in category
+    assert 'GetRomanNumeral((int)rules.Rank)' in category and 'JournalText.Format("Arcana.Common.WithQualifier", text, qualifier)' in category
+    check_text(category, 'Arcana.Journal.Overview.Cost.EarlyTiers', 'Tier I-II')
+    check_text(category, 'Arcana.Journal.Overview.Cost.FirstTier', 'Tier I')
+    check_text(category, 'Arcana.Journal.Overview.Cost.TierRange', 'Tier I-{0}')
+    # Worst case: two shared factors, four category headings, three lower-tier factors
+    # per non-Legendary category and one specialty per category (upper bound).
+    import journal_layouts as jl
+    assert 2 + 4 + 3 * 3 + 4 + 3 * 3 <= jl.TOOLTIP_MODIFIERS
+    assert 'rules.CostRange(WitchSpellKind.Spell, out minimum, out maximum)' in cost_body
+    assert 'AddCostTierGroups(lines, rules, spell.Kind)' in category
+    assert 'tier <= (int)rules.Rank + 1' in category and 'next == amount' in category
+    assert 'if (a == b) return a;' in category and 'JournalText.Format("Arcana.Journal.Overview.Cost.Range", a, b)' in category
+    assert english()['Arcana.Journal.Overview.Cost.Range'] == '{0} - {1}'
+    assert english()['Arcana.Witch.Benefit.Redirect'] == '{0} Chance to Redirect Spell Fizzle Effects'
+    assert all('backlash' not in value.lower() for key, value in english().items() if key.startswith('Arcana.Witch.Perk.Scapegoat.'))
+    assert english()['Arcana.Journal.Overview.Cost.SignedRange'] == '{0} to {1}'
+    assert english()['Arcana.Journal.Overview.Cost.TierSpan'] == 'Tier {0}-{1}' 
+    check_text(witch, 'Arcana.Journal.Overview.Attributes.SpellCost', 'Spell Cost')
+    check_text(witch, 'Arcana.Journal.Overview.Cost.Base', 'Base Spell Cost: 100%')
+    assert 'before wand and other casting effects' in english()['Arcana.Journal.Overview.Cost.Tagline']
+
     assert 'new WitchSpell((int)rules.Rank, WitchSpellKind.Spell)' in witch
     assert 'rules.AccuracyFor(currentRank' in witch and 'rules.Accuracy(' in gameplay
     assert 'previewMagicHands = wand == null && HasPracticallyMagic(sim);' in witch
@@ -1449,8 +1484,10 @@ def check_attributes(root_dir, data):
     assert 'return WitchCastingRules.MagicHandsAccuracyBonus;' in witch
     check_text(witch, 'Arcana.Journal.Overview.Accuracy.MagicHands', 'Magic Hands')
     bonus = int(constant(rules, 'MagicHandsAccuracyBonus'))
-    assert f'+{bonus}% Spell Accuracy' in english()['Arcana.Witch.Perk.PracticallyMagic.Description.1']
-    assert 'return AccuracyFor(spell, wand, emotionPenalty, lowNeeds, emptyNeeds).Total;' in rules
+    assert bonus == 20
+    assert 'MagicHandsAccuracyBonus' in cs_source.class_text(root_dir, 'WitchPerkBenefits')
+    assert 'Magic Hands' in english()['Arcana.Witch.Benefit.HandsAccuracy']
+    assert 'return AccuracyFor(spell, wand, emotionPenalty, needPenalty, emptyNeeds).Total;' in rules
     assert 'EmotionPenalty(sim)' in witch and 'WitchCastingContext.EmotionPenalty(Actor)' in gameplay
     emotion = witch.split('internal static float EmotionPenalty(')[1].split('internal static void CountNeeds(')[0]
     assert 'BuffCategory.Mental' not in emotion and 'instance.EffectValue >= 0' in emotion
@@ -1467,14 +1504,26 @@ def check_attributes(root_dir, data):
                'The total pool of magic your Sim can draw from when casting.')
     check_text(witch, 'Arcana.Journal.Overview.Regeneration.Tagline',
                'How quickly your Sim’s Magical Power recovers over time.')
-    for key, text in (('Line', '{0}: {1}'), ('Base', 'Base Accuracy'), ('Rank', 'Rank'), ('Wand', 'Wand'),
-                      ('Mood', 'Mood'), ('Needs', 'Low Needs'), ('Limit', 'Accuracy limits')):
+    for key, text in (('Base', 'Base Accuracy'), ('Rank', 'Rank'), ('Wand', 'Wand'),
+                      ('Mood', 'Mood'), ('Limit', 'Accuracy Limits')):
         check_text(witch, 'Arcana.Journal.Overview.Accuracy.' + key, text)
     check_text(percent, 'Arcana.Common.Percent', '{0}%')
     check_text(witch, 'Arcana.Common.ModifierLine', '{0} {1}')
     assert 'Accuracy.Tier.' not in accuracy + witch
     assert 'wand.GetLocalizedName()' in witch and 'new TooltipModifier(text, value > 0f)' in witch
-    print('PASS: Attributes use native-compatible percent formatting and the current-rank Accuracy breakdown')
+    tooltip = cs_source.class_text(root_dir, 'PerkTooltip')
+    modifier = cs_source.class_text(root_dir, 'TooltipModifier')
+    overview_tip = cs_source.class_text(root_dir, 'OverviewTip')
+    assert 'readonly bool Nested;' in modifier and 'Nested = nested;' in modifier
+    assert 'modifiers[i].Nested ? indent * 2f : indent' in tooltip
+    assert 'modifier.Nested ?' in tooltip and 'modifier.Section ?' in tooltip
+    assert 'readonly bool Section;' in modifier and 'Section = section;' in modifier
+    assert 'modifiers[i].Section ? 0f' in tooltip and 'SectionGap * scale' in tooltip
+    assert 'a.Modifiers[i].Section != b.Modifiers[i].Section' in overview_tip
+    assert 'a.Modifiers[i].Nested != b.Modifiers[i].Nested' in overview_tip
+    assert witch.index('accuracy.Mood);') < witch.index('PercentText.AbsoluteTenths(accuracy.DarkArts) != 0') < witch.index('lines.AddRange(needLines);')
+    assert 'new TooltipModifier(offset, true, false, true)' in witch
+    print('PASS: Attributes use native-compatible percent formatting and the current-rank Accuracy breakdown; Dark Arts is nested under Mood')
 
 
 def check_overview_hover(root, root_dir, jl, data, page):
@@ -1512,16 +1561,31 @@ def check_overview_hover(root, root_dir, jl, data, page):
         identifier for identifier in child_order(tooltip_layout)
         if jl.TOOLTIP_FIRST_MODIFIER <= identifier < jl.TOOLTIP_FIRST_MODIFIER + jl.TOOLTIP_MODIFIERS
     }
-    assert len(modifiers) == 8
+    assert len(modifiers) == jl.TOOLTIP_MODIFIERS == 32
     for identifier in modifiers:
         assert control(tooltip_layout, identifier).find("prop[@name='WindowFlags']").get('value') == '0x00002012'
-    assert 'left + indent' in tooltip and 'width - indent' in tooltip
+    assert 'left + rowIndent' in tooltip and 'width - rowIndent' in tooltip
     assert 'modifiers[i].Positive ? positive : negative' in tooltip
     assert 'lightPanel ? DarkPositiveModifierColor : PositiveModifierColor' in tooltip
     assert 'lightPanel ? DarkNegativeModifierColor : NegativeModifierColor' in tooltip
     assert 'modifier.Visible = true;' in tooltip
     accuracy_source = cs_source.class_text(root_dir, 'WitchCastingContext').split('internal static AccuracyReading ReadAccuracy')[1]
-    assert accuracy_source.count('AddPercentModifier(lines,') == len(modifiers)
+    # Four category headings; the shared rows sit directly below the base line.
+    # Up to six Needs, nested Dark Arts, direct modifiers and category-specific rows.
+    accuracy_body = accuracy_source.split('private static void AddCategory')[0]
+    category_modifiers = accuracy_source.split('private static void AddCategoryModifiers')[1].split('private static void AddPercentModifier')[0]
+    assert 4 + 6 + 1 + accuracy_body.count('AddPercentModifier(lines,') + 3 * category_modifiers.count('AddPercentModifier(lines,') <= len(modifiers)
+    assert accuracy_body.index('string baseLine') < accuracy_body.index('accuracy.RankBonus') < accuracy_body.index('lines.AddRange(needLines)') < accuracy_body.index('Accuracy.Spells') < accuracy_body.index('Accuracy.Curses') < accuracy_body.index('Accuracy.Rituals') < accuracy_body.index('Accuracy.Legendary')
+    assert 'new TooltipModifier(text, true, true, false, true)' in accuracy_source
+    assert 'category.Coven' in category_modifiers and 'category.Limit' in category_modifiers
+    assert 'new AccuracyReading(accuracy.Total, baseLine, lines.ToArray())' in accuracy_body
+    assert 'Accuracy.Shared' not in accuracy_body and 'Arcana.Journal.Overview.Accuracy.Shared' not in english()
+    for spell in ('currentRank', 'curseSpell', 'ritualSpell', 'legendarySpell'):
+        assert 'rules.AccuracyFor(' + spell + ', wandBonus, emotions, needPenalty, empty)' in accuracy_body
+    assert 'rules.SpecialtyAccuracyBonus(legendarySpell)' in accuracy_body
+    assert 'rules.AccuracyFor(legendarySpell' in accuracy_body
+    assert 'lines.AddRange(needLines)' in accuracy_source
+    assert 'float.IsNaN(value)' in accuracy_source and accuracy_source.count('AddCategory(lines,') == 4
     rank_copy = cs_source.class_text(root_dir, 'PowerPage')
     for rank in range(1, 6):
         key = f'Arcana.Witch.Rank.Unlock.{rank}'
@@ -1533,7 +1597,27 @@ def check_overview_hover(root, root_dir, jl, data, page):
     assert 'PerkTip(perk, bought, selection.SimName)' in witch and 'perk.Describe(bought - 1, simName)' in witch, 'The description of the rank bought, with the Sim name filled in, from Perk.Describe'
     assert 'perk.Tiers > 1 ? JournalText.Format("Arcana.Journal.Overview.Perks.OwnedRank", bought, perk.Tiers, description) : description' in witch
     check_text(witch, 'Arcana.Journal.Overview.Perks.OwnedRank', 'Rank {0} / {1}\n{2}')
-    assert 'new OverviewTip(perk.Name, perk.Tagline, body)' in witch
+    assert 'new OverviewTip(perk.Name, perk.Tagline, body, WitchPerkBenefits.For(perk, bought - 1))' in witch
+    benefits = cs_source.class_text(root_dir, 'WitchPerkBenefits')
+    perk_cases = re.findall(r'case "(\w+)":', benefits)
+    assert len(perk_cases) == len(set(perk_cases)) == 17
+    assert set(perk_cases) == set(re.findall(r'Power\("(\w+)"', cs_source.class_text(root_dir, 'WitchTree')))
+    assert 'perk.PreviewIndex(descriptionIndex) + 1' in benefits
+    assert 'WitchPerkBenefits.For(perk, selection.Tier(perk))' in cs_source.class_text(root_dir, 'PowerPage')
+    assert 'modifiers[i].Neutral ? ink' in tooltip
+    for case in re.split(r'case "\w+":', benefits)[1:]:
+        assert 0 < case.split('break;')[0].count('lines.Add(') <= jl.TOOLTIP_MODIFIERS
+    assert 'Arcana.Witch.Benefit.Planned' not in benefits and 'Arcana.Witch.Benefit.Limited' not in benefits
+    for key, text in english().items():
+        if key.startswith('Arcana.Witch.Benefit.') or key.startswith('Arcana.Witch.Rank.Unlock.'):
+            assert '(planned)' not in text and not re.search(r'\bpp\b', text)
+    selection = cs_source.class_text(root_dir, 'PowerSelection')
+    assert 'case Block.Complete: return null;' in selection
+    assert 'case Block.Points: return null;' in selection
+    assert 'Tiers I-III' in english()['Arcana.Witch.Benefit.CovenFailure']
+    rules = cs_source.class_text(root_dir, 'WitchCastingRules')
+    assert 'spell.Tier <= CovenMaximumTier && !spell.IsRitual' in rules
+    assert 'CovenMaximumTier = (int)Rank.Adept' in rules
     assert 'perk.Descriptions' not in data and 'WitchText' not in data, 'Perk text exists in one place only'
     assert 'perk.Describe(selection.Tier(perk), selection.SimName)' in cs_source.file_text(root_dir, 'PowerPage'), 'The Perks page reads the same method'
     print('PASS: Overview perks: a transparent hover window per row (whole row, wheel still scrolls, no click), the Perks page tooltip window and Perk.Describe for the rank bought, hidden and rebuilt when the row or page changes')

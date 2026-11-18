@@ -218,13 +218,13 @@ namespace SupernaturalExpanded.Journal
         private bool ResolveCast()
         {
             rules = WitchCastingContext.ReadRules(Actor);
-            int low;
+            float needPenalty;
             int empty;
-            WitchCastingContext.CountNeeds(Actor, out low, out empty);
+            WitchCastingContext.CountNeeds(Actor, out needPenalty, out empty, null);
             emotions = WitchCastingContext.EmotionPenalty(Actor);
             bool overreach = rules.Overreaches(spell.Category);
             mSpellCastingSucceeded = !overreach && RandomUtil.RandomChance(
-                rules.Accuracy(spell.Category, WitchCastingContext.WandBonus(mWand, false), emotions, low, empty));
+                rules.Accuracy(spell.Category, WitchCastingContext.WandBonus(mWand, false), emotions, needPenalty, empty));
             NativeWand.SetValue(native, mWand);
             NativeSucceeded.SetValue(native, mSpellCastingSucceeded);
             mSpellCastingEpiclyFailed = !overreach && !mSpellCastingSucceeded &&
@@ -294,7 +294,7 @@ namespace SupernaturalExpanded.Journal
                 BuffInstance applied = Target.BuffManager.GetElement(spell.TimedCurse);
                 if (applied != null && applied.TimeoutCount > 0f && (applied != prior || applied.TimeoutCount > before))
                 {
-                    applied.TimeoutCount *= 1.25f;
+                    applied.TimeoutCount *= WitchCastingRules.HexweaverDuration;
                 }
             }
             if (rules.DarkArts && emotions > 0f && spent > 0f && RandomUtil.RandomChance(WitchCastingRules.DarkArtsRefundChance))

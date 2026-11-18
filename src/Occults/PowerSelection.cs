@@ -156,8 +156,8 @@ namespace SupernaturalExpanded.Journal
             switch (Blocked(perk))
             {
                 case Block.Rank: return JournalText.Format("Arcana.Journal.Perks.Requirement.Rank", tree.RankTitle((int)perk.Rank));
-                case Block.Complete: return JournalText.Get("Arcana.Journal.Perks.Requirement.Complete");
-                case Block.Points: return JournalText.Format("Arcana.Journal.Perks.Requirement.Points", perk.Costs[Tier(perk)], tree.PointsName);
+                case Block.Complete: return null; // The upgrade indicator already shows completion.
+                case Block.Points: return null; // The tile already shows the next upgrade cost.
                 default: return null;
             }
         }

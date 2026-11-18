@@ -43,8 +43,13 @@ namespace SupernaturalExpanded.Journal
         // Previews the rank a click would buy, stopping at the last description; tier counts owned plus staged ranks.
         internal string Describe(int tier, string simName)
         {
-            int shown = Math.Min(Math.Max(tier, 0), Descriptions.Length - 1);
+            int shown = PreviewIndex(tier);
             return Descriptions[shown].Replace("{name}", simName);
+        }
+
+        internal int PreviewIndex(int tier)
+        {
+            return Math.Min(Math.Max(tier, 0), Descriptions.Length - 1);
         }
     }
 
@@ -178,7 +183,7 @@ namespace SupernaturalExpanded.Journal
                 Power("PracticallyMagic", Rank.Master, 0, 0f, JournalText.Get("Arcana.Witch.Perk.PracticallyMagic.Name"), 3),
                 Power("EideticWitchary", Rank.Master, 1, 0f, JournalText.Get("Arcana.Witch.Perk.EideticWitchary.Name"), 3, 4, 5),
                 Power("PowerShunt", Rank.Master, 2, 0f, JournalText.Get("Arcana.Witch.Perk.PowerShunt.Name"), 4),
-                // Ranks 1-3 redirect backlash 25% / 40% / 55% of the time; the tooltip does not state them.
+                // Ranks 1-3 redirect eligible backlash; shared tuning supplies the tooltip values.
                 Power("Scapegoat", Rank.Master, 3, 0f, JournalText.Get("Arcana.Witch.Perk.Scapegoat.Name"), 3, 4, 5),
 
                 Power("ArcaneAscendancy", Rank.HighWitch, 0, 0f, JournalText.Get("Arcana.Witch.Perk.ArcaneAscendancy.Name"), 6),

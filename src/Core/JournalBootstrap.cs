@@ -28,6 +28,8 @@ namespace SupernaturalExpanded.Journal
             AccuracySources.Register(OccultTypes.Witch, WitchCastingContext.ReadAccuracy);
             AttributeSources.Register(OccultTypes.Witch, JournalText.Get("Arcana.Journal.Overview.Attributes.PowerRegeneration"),
                 WitchCastingContext.ReadRegeneration);
+            AttributeSources.Register(OccultTypes.Witch, JournalText.Get("Arcana.Journal.Overview.Attributes.SpellCost"),
+                WitchCastingContext.ReadSpellCost);
             World.OnWorldLoadFinishedEventHandler += OnWorldLoaded;
             World.OnWorldLoadStartedEventHandler += OnWorldStarting;
             World.OnWorldQuitEventHandler += OnWorldExiting;

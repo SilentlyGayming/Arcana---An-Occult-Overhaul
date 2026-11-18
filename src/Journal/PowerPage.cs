@@ -549,7 +549,8 @@ namespace SupernaturalExpanded.Journal
             {
                 text += "\n" + requirement;
             }
-            return PerkTooltip.Create(perk.Name, perk.Tagline, text, ConflictLine(perk));
+            return PerkTooltip.Create(perk.Name, perk.Tagline, text, ConflictLine(perk),
+                WitchPerkBenefits.For(perk, selection.Tier(perk)));
         }
 
         // The red line: which perk this one excludes and, once that one is chosen, why this one can no longer be.

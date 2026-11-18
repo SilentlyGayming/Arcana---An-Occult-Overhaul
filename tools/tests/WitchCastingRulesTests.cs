@@ -15,11 +15,15 @@ namespace SupernaturalExpanded.Journal
         public static void Main()
         {
             Accuracy();
+            NeedsSeverity();
             PerkAccuracy();
             AccuracyBreakdown();
+            GroupedAccuracy();
             LoadedWitchRank();
             PercentRounding();
             ProgressionAndCost();
+            CostBreakdown();
+            CostRanges();
             PowerPoolConversion();
             RecoveryAndProtection();
             Console.WriteLine("PASS: " + checks + " deterministic Witch casting and progression checks");
@@ -34,9 +38,9 @@ namespace SupernaturalExpanded.Journal
                 Equal(50f + wand, novice.Accuracy(TierOne, wand, 0f, 0, 0), "wand bonus");
             }
             Equal(0f, novice.Accuracy(TierTwo, 25f, 0f, 0, 0), "overreach");
-            Equal(40f, novice.Accuracy(TierOne, 0f, 0f, 1, 0), "low Need");
+            Equal(40f, novice.Accuracy(TierOne, 0f, 0f, 10f, 0), "low Need");
             Equal(20f, novice.Accuracy(TierOne, 0f, 60f, 0, 0), "emotions cap");
-            Equal(5f, novice.Accuracy(TierOne, 0f, 30f, 3, 0), "floor");
+            Equal(5f, novice.Accuracy(TierOne, 0f, 30f, 30f, 0), "floor");
             True(float.IsNaN(novice.Accuracy(Legendary, 0f, 0f, 0, 0)), "Legendary special");
             WitchCastingRules master = new WitchCastingRules(Rank.Master);
             Equal(65f, master.Accuracy(TierFour, 0f, 0f, 0, 0), "rank bonus");
@@ -45,21 +49,51 @@ namespace SupernaturalExpanded.Journal
             Equal(85f, hands.Total, "Magic Hands chance at Master rank");
             Equal(85f, master.Accuracy(TierTwo, 0f, 0f, 0, 0), "tier bonus");
             Equal(95f, master.Accuracy(TierTwo, 20f, 0f, 0, 0), "ceiling");
-            Equal(15f, master.Accuracy(TierTwo, 20f, 0f, 1, 1), "one empty Need");
-            Equal(5f, master.Accuracy(TierTwo, 20f, 0f, 2, 2), "two empty Needs");
+            Equal(15f, master.Accuracy(TierTwo, 20f, 0f, 10f, 1), "one empty Need");
+            Equal(5f, master.Accuracy(TierTwo, 20f, 0f, 20f, 2), "two empty Needs");
+        }
+
+        private static void NeedsSeverity()
+        {
+            Equal(0f, WitchCastingRules.NeedPenalty(0.36f), "healthy Need");
+            Equal(10f, WitchCastingRules.NeedPenalty(0.35f), "low Need boundary");
+            Equal(10f, WitchCastingRules.NeedPenalty(0.21f), "low Need");
+            Equal(25f, WitchCastingRules.NeedPenalty(0.20f), "very low Need boundary");
+            Equal(25f, WitchCastingRules.NeedPenalty(0.06f), "very low Need");
+            Equal(35f, WitchCastingRules.NeedPenalty(0.05f), "critical Need boundary");
+            Equal(35f, WitchCastingRules.NeedPenalty(0f), "empty Need");
+            WitchCastingRules high = new WitchCastingRules(Rank.HighWitch);
+            high.DarkArts = true;
+            Equal(40f, high.Accuracy(TierFive, 20f, 30f, 35f, 0), "critical Hunger screenshot example");
+            high.OldWays = true;
+            Equal(55f, high.Accuracy(new WitchSpell(4, WitchSpellKind.Curse), 20f, 30f, 35f, 0), "curse specialty");
+            Equal(55f, high.Accuracy(new WitchSpell(4, WitchSpellKind.Ritual), 20f, 30f, 35f, 0), "ritual specialty");
+            Equal(15f, high.Accuracy(TierFive, 20f, 30f, 35f, 1), "empty Need cap");
+            Equal(5f, high.Accuracy(TierFive, 20f, 30f, 70f, 2), "two empty Needs cap");
+            high.OldWays = false;
+            high.Ascendancy = true;
+            Equal(50f, high.Accuracy(TierFive, 20f, 30f, 35f, 0), "Ascendancy with critical Hunger");
+            Equal(10f, high.GeneralAccuracyBonus, "general capstone modifier available to future Legendary resolver");
         }
 
         private static void PerkAccuracy()
         {
             WitchCastingRules adept = new WitchCastingRules(Rank.Adept);
-            Equal(30f, adept.Accuracy(TierThree, 0f, 20f, 1, 0), "unbought Dark Arts");
+            Equal(30f, adept.Accuracy(TierThree, 0f, 20f, 10f, 0), "unbought Dark Arts");
             adept.DarkArts = true;
-            Equal(40f, adept.Accuracy(TierThree, 0f, 20f, 1, 0), "Dark Arts halves emotions only");
+            Equal(40f, adept.Accuracy(TierThree, 0f, 20f, 10f, 0), "Dark Arts halves emotions only");
             adept.InCoven = true;
             Equal(82f, adept.Accuracy(TierThree, 20f, 0f, 0, 0), "relative coven failure reduction");
             Equal(80f, adept.Accuracy(new WitchSpell(2, WitchSpellKind.Ritual), 20f, 0f, 0, 0), "no coven ritual bonus");
             Equal(0f, adept.Accuracy(TierFour, 25f, 0f, 0, 0), "coven overreach");
-            Equal(15f, adept.Accuracy(TierThree, 25f, 0f, 1, 1), "coven empty Need cap");
+            Equal(15f, adept.Accuracy(TierThree, 25f, 0f, 10f, 1), "coven empty Need cap");
+            WitchCastingRules covenHigh = new WitchCastingRules(Rank.HighWitch);
+            covenHigh.InCoven = true;
+            Equal(91f, covenHigh.Accuracy(TierThree, 0f, 0f, 0, 0), "coven tier III");
+            Equal(91f, covenHigh.Accuracy(new WitchSpell(2, WitchSpellKind.Curse), 0f, 0f, 0, 0), "coven tier III curse");
+            Equal(80f, covenHigh.Accuracy(TierFour, 0f, 0f, 0, 0), "no coven tier IV bonus");
+            Equal(70f, covenHigh.Accuracy(TierFive, 0f, 0f, 0, 0), "no coven tier V bonus");
+            Equal(90f, covenHigh.Accuracy(new WitchSpell(2, WitchSpellKind.Ritual), 0f, 0f, 0, 0), "no coven tier III ritual bonus");
 
             WitchCastingRules high = new WitchCastingRules(Rank.HighWitch);
             high.Ascendancy = true;
@@ -68,7 +102,14 @@ namespace SupernaturalExpanded.Journal
             high.Ascendancy = false;
             high.OldWays = true;
             Equal(70f, high.Accuracy(TierFive, 0f, 0f, 0, 0), "Old Ways category gate");
-            Equal(80f, high.Accuracy(new WitchSpell(4, WitchSpellKind.Curse | WitchSpellKind.Ritual), 0f, 0f, 0, 0), "Old Ways applies once");
+            Equal(85f, high.Accuracy(new WitchSpell(4, WitchSpellKind.Curse | WitchSpellKind.Ritual), 0f, 0f, 0, 0), "Old Ways applies once");
+            Equal(15f, high.SpecialtyAccuracyBonus(Legendary), "Legendary specialist modifier available");
+            high.Ascendancy = true;
+            Equal(0f, high.SpecialtyAccuracyBonus(Legendary), "Conflicting capstones do not double-apply");
+            high.Ascendancy = false;
+            True(float.IsNaN(high.Accuracy(Legendary, 0f, 0f, 0, 0)), "Legendary success still separate");
+            Equal(95f, high.Accuracy(new WitchSpell(4, WitchSpellKind.Curse), 25f, 0f, 0, 0), "Old Ways respects cap");
+            Equal(15f, high.Accuracy(new WitchSpell(4, WitchSpellKind.Curse), 25f, 0f, 10f, 1), "Old Ways respects empty Need");
             Equal(0.85f, high.RefundFraction(new WitchSpell(2, WitchSpellKind.Curse)), "curse refund");
             Equal(0.70f, high.RefundFraction(TierThree), "ordinary refund");
         }
@@ -87,14 +128,55 @@ namespace SupernaturalExpanded.Journal
             high.Ascendancy = true;
             high.DarkArts = true;
             high.InCoven = true;
-            accuracy = high.AccuracyFor(TierFive, 25f, 20f, 1, 1);
+            accuracy = high.AccuracyFor(TierFive, 25f, 20f, 10f, 1);
             Equal(10f, accuracy.Ascendancy, "Ascendancy breakdown");
             Equal(10f, accuracy.DarkArts, "Dark Arts breakdown");
             Equal(-10f, accuracy.Needs, "Needs breakdown");
-            Equal(1.5f, accuracy.Coven, "coven breakdown");
+            Equal(0f, accuracy.Coven, "no coven breakdown at Tier V");
             Equal(15f, accuracy.Total, "empty Need still caps current-rank accuracy");
             Equal(accuracy.Total, WitchAccuracy.Base + accuracy.RankBonus + accuracy.Wand + accuracy.Mood + accuracy.Needs
                 + accuracy.DarkArts + accuracy.Ascendancy + accuracy.Coven + accuracy.Limit, "listed modifiers sum to the total");
+        }
+
+        private static void GroupedAccuracy()
+        {
+            WitchCastingRules high = new WitchCastingRules(Rank.HighWitch);
+            high.DarkArts = true;
+            high.OldWays = true;
+            WitchSpell curse = new WitchSpell(4, WitchSpellKind.Curse);
+            WitchSpell ritual = new WitchSpell(4, WitchSpellKind.Ritual);
+            WitchAccuracy baseline = high.AccuracyFor(TierFive, 20f, 30f, 25f, 0);
+            Equal(50f, baseline.Total, "grouped spells example");
+            Equal(65f, high.Accuracy(curse, 20f, 30f, 25f, 0), "grouped curses example");
+            Equal(65f, high.Accuracy(ritual, 20f, 30f, 25f, 0), "grouped rituals example");
+            foreach (WitchSpell spell in new[] { curse, ritual })
+            {
+                foreach (int empty in new[] { 0, 1, 2 })
+                {
+                    WitchAccuracy a = high.AccuracyFor(TierFive, 25f, 0f, 35f * empty, empty);
+                    WitchAccuracy b = high.AccuracyFor(spell, 25f, 0f, 35f * empty, empty);
+                    Equal(b.Total, a.Total + high.SpecialtyAccuracyBonus(spell) + b.Coven - a.Coven + b.Limit - a.Limit,
+                        "category adjustments reconcile with total, including caps");
+                }
+            }
+            WitchCastingRules adept = new WitchCastingRules(Rank.Adept);
+            adept.InCoven = true;
+            WitchSpell adeptRitual = new WitchSpell(2, WitchSpellKind.Ritual);
+            WitchAccuracy regular = adept.AccuracyFor(TierThree, 20f, 0f, 0f, 0);
+            WitchAccuracy ritualReading = adept.AccuracyFor(adeptRitual, 20f, 0f, 0f, 0);
+            Equal(ritualReading.Total, regular.Total + ritualReading.Coven - regular.Coven + ritualReading.Limit - regular.Limit,
+                "ritual category accounts for absent coven bonus");
+            foreach (WitchSpell spell in new[] { TierFive, curse, ritual, Legendary })
+            {
+                WitchAccuracy reading = high.AccuracyFor(spell, 20f, 30f, 35f, 1);
+                Equal(-30f, reading.Mood, "all categories use emotional penalty");
+                Equal(15f, reading.DarkArts, "all categories use Dark Arts mood offset");
+                Equal(-35f, reading.Needs, "all categories use Needs penalty");
+                Equal(15f, reading.Ceiling, "all categories expose empty Need ceiling");
+                if (spell.Tier != WitchCastingRules.Legendary)
+                    Equal(15f, reading.Total, "implemented category enforces empty Need cap");
+            }
+            True(float.IsNaN(high.Accuracy(Legendary, 20f, 30f, 25f, 0)), "no invented Legendary total");
         }
 
         private static void LoadedWitchRank()
@@ -143,7 +225,65 @@ namespace SupernaturalExpanded.Journal
             Equal(0.95f * 0.75f * 0.95f * 0.85f * 0.75f * 0.70f,
                 high.CostMultiplier(new WitchSpell(1, WitchSpellKind.Curse)), "compatible discounts");
             Equal(0.95f * 0.85f * 0.75f,
-                high.CostMultiplier(new WitchSpell(4, WitchSpellKind.Ritual)), "Old Ways Tier V ritual once");
+                high.CostMultiplier(new WitchSpell(4, WitchSpellKind.Ritual)), "Old Ways ritual once");
+            Equal(0.95f * 0.85f, high.CostMultiplier(TierFive), "ordinary Tier V no specialty discount");
+            Equal(0.95f * 0.85f * 0.75f, high.CostMultiplier(Legendary), "Legendary ritual discount once");
+            Equal(0.95f * 0.85f * 0.75f, high.CostMultiplier(new WitchSpell(5, WitchSpellKind.Spell)), "Legendary ordinary discount");
+        }
+
+        private static void CostBreakdown()
+        {
+            // Compare the shared factors to the pre-breakdown rules across every rank,
+            // spell category, tier, upgrade and combination of discount perks.
+            for (int rank = 0; rank <= (int)Rank.HighWitch; rank++)
+            for (int tier = 0; tier <= WitchCastingRules.Legendary; tier++)
+            for (int kind = 0; kind < 4; kind++)
+            for (int perks = 0; perks < 32; perks++)
+            for (int eidetic = 0; eidetic <= 3; eidetic++)
+            {
+                WitchCastingRules rules = new WitchCastingRules((Rank)rank);
+                rules.Lessons = (perks & 1) != 0;
+                rules.Familiar = (perks & 2) != 0;
+                rules.Hexweaver = (perks & 4) != 0;
+                rules.OldWays = (perks & 8) != 0;
+                rules.Ascendancy = (perks & 16) != 0;
+                rules.Eidetic = eidetic;
+                WitchSpell spell = new WitchSpell(tier, (WitchSpellKind)kind);
+                float expected = 1f;
+                if (tier <= 1 && rank >= 1) expected *= 0.95f;
+                if (tier <= 1 && rules.Lessons) expected *= 0.75f;
+                if (rank == 4) expected *= 0.95f;
+                if (rules.Familiar) expected *= 0.85f;
+                if (rules.Hexweaver && spell.IsCurse) expected *= 0.75f;
+                if (rules.OldWays && !rules.Ascendancy && (spell.IsRitual || tier == 5)) expected *= 0.75f;
+                if (tier < rank && eidetic > 0) expected *= 1f - (eidetic == 1 ? 0.07f : eidetic == 2 ? 0.15f : 0.30f);
+                Equal(expected, rules.CostMultiplier(spell), "cost breakdown preserves original cost");
+                Equal(expected, rules.CostFactors(spell).Multiplier, "tooltip factors match cast");
+            }
+        }
+
+        private static void CostRanges()
+        {
+            WitchCastingRules high = new WitchCastingRules(Rank.HighWitch);
+            high.Lessons = true;
+            high.Eidetic = 1;
+            high.Hexweaver = true;
+            float minimum, maximum;
+            high.CostRange(WitchSpellKind.Spell, out minimum, out maximum);
+            Equal(0.95f * 0.95f * 0.75f * 0.93f, minimum, "ordinary lowest-tier cost");
+            Equal(0.95f, maximum, "ordinary current-rank cost");
+            high.CostRange(WitchSpellKind.Curse, out minimum, out maximum);
+            Equal(0.95f * 0.95f * 0.75f * 0.75f * 0.93f, minimum, "curse lowest-tier cost");
+            Equal(0.95f * 0.75f, maximum, "curse current-rank cost");
+            high.OldWays = true;
+            high.CostRange(WitchSpellKind.Ritual, out minimum, out maximum);
+            Equal(0.95f * 0.95f * 0.75f * 0.75f * 0.93f, minimum, "ritual lowest-tier cost");
+            Equal(0.95f * 0.75f, maximum, "ritual current-rank cost");
+            WitchCastingRules novice = new WitchCastingRules(Rank.Novice);
+            novice.Lessons = true;
+            novice.CostRange(WitchSpellKind.Spell, out minimum, out maximum);
+            Equal(0.75f, minimum, "novice cost");
+            Equal(minimum, maximum, "single-tier range collapses");
         }
 
         private static void PowerPoolConversion()
@@ -190,6 +330,11 @@ namespace SupernaturalExpanded.Journal
             apprenticeWithHour.WitchingHour = true;
             Equal(1f, apprenticeWithHour.RegenerationFactors(false, true, true).Rate, "opposing effects can cancel");
             Equal(40f, WitchCastingRules.FamiliarProtection, "Familiar Bond protection");
+            for (int upgrade = 1; upgrade <= 3; upgrade++)
+            {
+                Equal(0.05f * upgrade, WitchCastingRules.RestBonus(upgrade), "Rest tooltip and gameplay total");
+                Equal(new[] { 0.07f, 0.15f, 0.30f }[upgrade - 1], WitchCastingRules.EideticDiscount(upgrade), "Eidetic tooltip and gameplay total");
+            }
             float[] chances = { 0f, 25f, 40f, 55f };
             for (int i = 0; i < chances.Length; i++)
             {

@@ -109,7 +109,7 @@ TOOLTIP_TAGLINE = 0x53E00082
 TOOLTIP_BODY = 0x53E00083
 TOOLTIP_CONFLICT = 0x53E00084
 TOOLTIP_FIRST_MODIFIER = 0x53E00085
-TOOLTIP_MODIFIERS = 8
+TOOLTIP_MODIFIERS = 32
 CONFLICT_RED = "0xffd03030"
 TAGLINE_BLUE = "0xff2d8cd8"
 
@@ -934,7 +934,7 @@ def perk_tooltip():
         label(TOOLTIP_BODY, top=True, area="10,52,330,110"),
         label(TOOLTIP_CONFLICT, color=CONFLICT_RED, top=True, area="10,112,330,128"),
     ]
-    # Accuracy shows up to eight signed rows. Other tooltips leave every row hidden.
+    # Accuracy groups may show six Needs, shared modifiers, four headers, and category adjustments. Unused rows stay hidden.
     texts.extend(label(TOOLTIP_FIRST_MODIFIER + i, top=True, flags="0x00002012")
                  for i in range(TOOLTIP_MODIFIERS))
     for text in texts:
