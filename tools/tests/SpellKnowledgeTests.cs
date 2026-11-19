@@ -56,10 +56,27 @@ internal static class SpellKnowledgeTests
         Check(!SpellCatalog.Discoverable(SpellCatalog.Find("good_luck"), 4, true), "Known spell reentered research");
         Check(!SpellCatalog.Discoverable(SpellCatalog.Find("love"), 1, false), "Higher-tier spell entered research");
         Check(SpellCatalog.Discoverable(SpellCatalog.Find("love"), 2, false), "Rank did not unlock research eligibility");
-        SpellEntry legendary = new SpellEntry("future_legendary", 5, SpellCategory.Ritual, SpellLearning.Study, "", -1);
+        SpellEntry legendary = new SpellEntry("future_legendary", 5, SpellCategory.Ritual, SpellLearning.Study, "", -1, 0f);
         Check(!SpellCatalog.Discoverable(legendary, 99, false), "Legendary entered ordinary study");
         foreach (SpellEntry entry in SpellCatalog.Entries)
             if (entry.Learning != SpellLearning.Study) Check(!SpellCatalog.Discoverable(entry, 4, false), "Non-study policy leaked");
+
+        string[] costIds = { "fire_blast", "ice_blast", "upgrade", "good_luck", "charm_bladder", "charm_hunger", "charm_hygiene", "love",
+            "sunlight", "toadification", "haunting", "curse_bladder", "curse_hunger", "curse_hygiene", "pestilence", "conversion",
+            "restoration", "reanimation" };
+        float[] costs = { 12f, 16f, 30f, 30f, 30f, 34f, 30f, 48f, 72f, 52f, 62f, 36f, 40f, 36f, 88f, 45f, 100f, 110f };
+        for (int i = 0; i < costIds.Length; i++)
+            Check(SpellCatalog.Find(costIds[i]).Cost == costs[i], "Fixed base cost changed: " + costIds[i]);
+        Check(SpellCatalog.ConjureAppleCost == 6f, "Conjure Apple fixed cost changed");
+        int enabled = 0;
+        foreach (SpellEntry entry in SpellCatalog.Entries)
+        {
+            if (entry.Learning == SpellLearning.NativeDisabled) continue;
+            enabled++;
+            Check(entry.Cost > 0f, "Enabled entry has no cost: " + entry.Id);
+            Check(entry.Cost * 1.3f <= 50f + 25f * entry.Tier, "Cost does not fit the intended rank's pool with modifiers: " + entry.Id);
+        }
+        Check(enabled == costIds.Length, "An enabled entry has no fixed cost assertion");
 
         float next = 30f;
         Check(!SpellKnowledgeRecord.ResearchDue(29.9f, ref next, 30f), "Research rolled early");

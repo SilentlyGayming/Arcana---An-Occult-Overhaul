@@ -296,54 +296,46 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    internal static class SpellPowerQuote
+    internal sealed class SpellPowerQuote
     {
-        private const BindingFlags StaticFields = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-        private static readonly FieldInfo Lunar = typeof(MagicWand).GetField("kMoonPhaseMotiveDrainMultiplier", StaticFields);
-        private static readonly FieldInfo Hands = typeof(MagicHands).GetField("kMotiveDrainMultiplier", StaticFields);
-        private static readonly FieldInfo Familiar = typeof(MagicWand).GetField("kFamiliarMotiveMultiplier", StaticFields);
-        private static readonly Dictionary<string, FieldInfo> Costs = new Dictionary<string, FieldInfo>();
+        private readonly bool witch;
+        private readonly WitchCastingRules rules;
+        private readonly float wandDrain;
+        private readonly float handsDrain;
+        private readonly float situational;
 
-        internal static float For(Sim actor, SpellEntry entry)
+        internal SpellPowerQuote(Sim actor)
         {
-            // Quotes an entry's Magical Power cost the way its actual casting path charges it.
-            return Quote(actor, entry, SpellKnowledgeGates.UsesArcanaCasting(entry.NativeClass));
+            // Reads the caster's rules, wand and situational multipliers once so a whole Grimoire refresh shares them.
+            witch = WitchCastingContext.IsWitch(actor);
+            if (!witch)
+            {
+                return;
+            }
+            rules = WitchCastingContext.ReadRules(actor);
+            MagicWand wand = WitchCastingContext.EquippedWand(actor);
+            wandDrain = wand == null ? 1f : wand.MotiveDrainMultiplier;
+            handsDrain = wand == null && WitchCastingContext.HasPracticallyMagic(actor) ? WitchCastingContext.HandsDrain : wandDrain;
+            situational = WitchCastingContext.SituationalDrain(actor);
         }
 
-        internal static float NativeVariant(Sim actor, SpellEntry entry) { return Quote(actor, entry, false); }
-
-        private static float Quote(Sim actor, SpellEntry entry, bool arcanaCast)
+        internal float For(SpellEntry entry)
         {
-            // Converts native costs to Arcana power and applies wand, moon and familiar multipliers.
-            FieldInfo cost;
-            if (!Costs.TryGetValue(entry.NativeClass, out cost))
-            {
-                Type type = typeof(MagicWand).GetNestedType(entry.NativeClass, BindingFlags.Public | BindingFlags.NonPublic);
-                cost = type == null ? null : type.GetField("kMotiveDrain", StaticFields);
-                Costs[entry.NativeClass] = cost;
-            }
-            if (cost == null) throw new InvalidOperationException("Missing spell cost: " + entry.NativeClass);
-            float result = (float)cost.GetValue(null);
-            if (!WitchCastingContext.IsWitch(actor)) return result;
-            WitchCastingRules rules = WitchCastingContext.ReadRules(actor);
-            if (arcanaCast)
-            {
-                result *= rules.CostMultiplier(new WitchSpell(entry.Tier, WitchSpell.KindOf(entry.Category)));
-            }
-            else
-            {
-                float span = actor.Motives.GetMax(CommodityKind.MagicFatigue) - actor.Motives.GetMin(CommodityKind.MagicFatigue);
-                result = span > 0f ? result * rules.Capacity / span : result;
-            }
-            MagicWand wand = WitchCastingContext.EquippedWand(actor);
-            result *= wand != null ? wand.MotiveDrainMultiplier : WitchCastingContext.HasPracticallyMagic(actor)
-                && arcanaCast ? (float)Hands.GetValue(null) : 1f;
-            float[] lunar = (float[])Lunar.GetValue(null);
-            int phase = (int)World.GetLunarPhase();
-            if (lunar != null && phase >= 0 && phase < lunar.Length) result *= lunar[phase];
-            if (actor.BuffManager != null && actor.BuffManager.HasElement(Sims3.Gameplay.ActorSystems.BuffNames.AnimalFamiliar))
-                result *= (float)Familiar.GetValue(null);
-            return result;
+            // Quotes the Magical Power the entry's actual casting path spends, after every modifier.
+            bool hands = SpellKnowledgeGates.UsesArcanaCasting(entry.NativeClass);
+            return Quote(entry, hands ? handsDrain : wandDrain);
+        }
+
+        internal float NativeVariant(SpellEntry entry)
+        {
+            // Quotes the entry's native target variants, which always need a real wand.
+            return Quote(entry, wandDrain);
+        }
+
+        private float Quote(SpellEntry entry, float drain)
+        {
+            if (!witch) return entry.Cost;
+            return rules.FinalCost(entry.Cost, WitchSpell.For(entry), drain * situational);
         }
     }
 }

@@ -42,6 +42,7 @@ namespace SupernaturalExpanded.Journal
 
             WitchMagicRecovery.RegisterFizzle();
             SpellKnowledgeGates.Prepare();
+            WitchNativeCosts.Start();
 
             instantiated = EventTracker.AddListener(EventTypeId.kSimInstantiated, OnInstantiated);
             practiced = EventTracker.AddListener(EventTypeId.kPracticedSpellcasting, OnPractice);
@@ -77,6 +78,7 @@ namespace SupernaturalExpanded.Journal
                 recovery = AlarmHandle.kInvalidHandle;
             }
             WitchMagicRecovery.RestoreAll();
+            WitchNativeCosts.Stop();
             practice.Clear();
         }
 

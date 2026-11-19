@@ -21,25 +21,10 @@ namespace SupernaturalExpanded.Journal
                 bool evil = actor.TraitManager != null && actor.TraitManager.HasElement(TraitNames.Evil);
                 entries.Add(new GrimoireEntry(AppleId,
                     JournalText.Get(evil ? "Arcana.Ability.ConjurePoisonedApple.Name" : "Arcana.Ability.ConjureApple.Name"),
-                    "I", 0, AppleCost(actor), JournalText.Get(evil
+                    "I", 0, SpellCatalog.ConjureAppleCost, JournalText.Get(evil
                         ? "Arcana.Ability.ConjurePoisonedApple.Description" : "Arcana.Ability.ConjureApple.Description")));
             }
             return entries;
-        }
-
-        private static float AppleCost(Sim actor)
-        {
-            // Reads Conjure Apple's power cost from its native commodity output, which wand and perk discounts do not affect.
-            InteractionObjectPair pair = new InteractionObjectPair((InteractionDefinition)TraitFunctions.ConjureApple.Singleton, actor);
-            if (pair.Tuning == null || pair.Tuning.mTradeoff == null)
-                throw new InvalidOperationException("Conjure Apple power tuning is unavailable.");
-            foreach (CommodityChange output in pair.Tuning.mTradeoff.mOutputs)
-            {
-                if (output.Commodity != CommodityKind.MagicFatigue) continue;
-                float span = actor.Motives.GetMax(CommodityKind.MagicFatigue) - actor.Motives.GetMin(CommodityKind.MagicFatigue);
-                return span > 0f ? Math.Abs(output.mActualValue) * WitchCastingContext.ReadCapacityRules(actor).Capacity / span : 0f;
-            }
-            throw new InvalidOperationException("Conjure Apple has no native power output.");
         }
     }
 }

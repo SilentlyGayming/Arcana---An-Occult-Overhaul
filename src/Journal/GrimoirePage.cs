@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Sims3.Gameplay.Actors;
+using Sims3.Gameplay.Autonomy;
 using Sims3.SimIFace;
 using Sims3.UI;
 
@@ -78,6 +80,8 @@ namespace SupernaturalExpanded.Journal
         private static readonly Color InactiveTabColor = new Color(0xFFA5C6E6);
         private static readonly Color TextColor = new Color(0xFF0B246E);
         private static readonly Color MutedColor = new Color(0xFF5F78A3);
+        private static readonly Color AffordableColor = new Color(0xFF28763C);
+        private static readonly Color UnaffordableColor = new Color(0xFFB32C35);
         private const uint EvenRowFill = 0x00000000;
         private const uint OddRowFill = 0x70D2EBF7;
         private const uint HoverRowFill = 0xFFD2EBF7;
@@ -95,6 +99,7 @@ namespace SupernaturalExpanded.Journal
         private readonly Window descriptionBody;
         private readonly Text descriptionName;
         private readonly Text descriptionMeta;
+        private readonly Text descriptionCost;
         private readonly Text descriptionPrompt;
         private readonly Text descriptionText;
         private readonly Button[] sortButtons = new Button[3];
@@ -130,6 +135,8 @@ namespace SupernaturalExpanded.Journal
         private float rowsTop;
         private float rowsWidth;
         private int hoverRow = -1;
+        private bool hasAvailablePower;
+        private float availablePower;
 
         internal event EventHandler EntriesChanged;
 
@@ -197,6 +204,9 @@ namespace SupernaturalExpanded.Journal
             descriptionMeta = journal.Label(NativeLayouts.GrimoireDescriptionMeta, "", 0, 0, 100, 18);
             descriptionMeta.IgnoreMouse = true;
             descriptionMeta.TextColor = MutedColor;
+            descriptionCost = journal.Label(NativeLayouts.GrimoireDescriptionCost, "", 0, 0, 100, 18);
+            descriptionCost.IgnoreMouse = true;
+            descriptionCost.TextColor = MutedColor;
             descriptionPrompt = journal.Label(NativeLayouts.GrimoireDescriptionPrompt, "", 0, 0, 100, 22);
             descriptionPrompt.IgnoreMouse = true;
             descriptionPrompt.TextColor = MutedColor;
@@ -309,6 +319,7 @@ namespace SupernaturalExpanded.Journal
             if (index < 0 || index >= CategoryCount) return false;
             List<GrimoireEntry> snapshot = incoming == null ? null : new List<GrimoireEntry>(incoming);
             List<GrimoireEntry> target = entries[index];
+            if (SameEntries(target, snapshot)) return false;
             target.Clear();
             if (snapshot != null)
             {
@@ -324,6 +335,20 @@ namespace SupernaturalExpanded.Journal
             if (selectedIds[index] != null && !HasEntryWithId(sorted[index], selectedIds[index]))
                 selectedIds[index] = null;
             if (index == category) RefreshRows();
+            return true;
+        }
+
+        private static bool SameEntries(List<GrimoireEntry> current, List<GrimoireEntry> incoming)
+        {
+            // Returns whether a refresh would show exactly what the category already shows.
+            int count = incoming == null ? 0 : incoming.Count;
+            if (current.Count != count) return false;
+            for (int i = 0; i < count; i++)
+            {
+                GrimoireEntry a = current[i], b = incoming[i];
+                if (b == null || a.Id != b.Id || a.Name != b.Name || a.TierName != b.TierName || a.TierOrder != b.TierOrder
+                    || a.EnergyCost != b.EnergyCost || a.Description != b.Description) return false;
+            }
             return true;
         }
 
@@ -407,6 +432,7 @@ namespace SupernaturalExpanded.Journal
 
         private void RefreshRows()
         {
+            ReadAvailablePower();
             List<GrimoireEntry> items = sorted[category];
             int first = Math.Max(0, Math.Min(scrollRow[category], Math.Max(0, items.Count - VisibleRows)));
             scrollRow[category] = first;
@@ -428,6 +454,7 @@ namespace SupernaturalExpanded.Journal
                 rowNames[i].Caption = entry.Name;
                 rowTiers[i].Caption = entry.TierName;
                 rowCosts[i].Caption = entry.EnergyCost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                rowCosts[i].TextColor = ColorForCost(entry);
                 rowButtons[i].Selected = entry.Id == selectedIds[category];
                 PaintRow(i);
             }
@@ -465,22 +492,55 @@ namespace SupernaturalExpanded.Journal
             int position = visible ? FindId(sorted[category], selectedIds[category]) : -1;
             GrimoireEntry entry = position < 0 ? null : sorted[category][position];
             descriptionName.Caption = entry == null ? String.Empty : entry.Name;
-            descriptionMeta.Caption = entry == null ? String.Empty : DescribeEntry(entry);
+            descriptionMeta.Caption = entry == null || String.IsNullOrEmpty(entry.TierName) ? String.Empty
+                : JournalText.Format("Arcana.Journal.Grimoire.Details.Tier", entry.TierName);
+            descriptionCost.Caption = entry == null ? String.Empty : JournalText.Format("Arcana.Journal.Grimoire.Details.Cost",
+                entry.EnergyCost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            descriptionCost.TextColor = entry == null ? MutedColor : ColorForCost(entry);
             descriptionText.Caption = entry == null ? String.Empty : ShortenDescription(entry.Description);
             bool hint = visible && entry == null;
             descriptionPrompt.Caption = sorted[category].Count == 0 ? EmptyPrompts[category] : SelectPrompts[category];
             descriptionPrompt.Visible = hint;
             descriptionName.Visible = visible && entry != null;
-            descriptionMeta.Visible = visible && entry != null;
+            descriptionMeta.Visible = visible && entry != null && !String.IsNullOrEmpty(entry.TierName);
+            descriptionCost.Visible = visible && entry != null;
             descriptionText.Visible = visible && entry != null;
         }
 
-        private static string DescribeEntry(GrimoireEntry entry)
+        internal void RefreshAffordability()
         {
-            string cost = entry.EnergyCost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-            return String.IsNullOrEmpty(entry.TierName)
-                ? JournalText.Format("Arcana.Journal.Grimoire.Details.Cost", cost)
-                : JournalText.Format("Arcana.Journal.Grimoire.Details.TierAndCost", entry.TierName, cost);
+            // Updates energy-cost colors when the selected Sim's available Magical Power changes.
+            if (!visible) return;
+            ReadAvailablePower();
+            List<GrimoireEntry> items = sorted[category];
+            for (int i = 0; i < VisibleRows; i++)
+            {
+                int index = scrollRow[category] + i;
+                if (index >= items.Count) break;
+                rowCosts[i].TextColor = ColorForCost(items[index]);
+            }
+            RefreshDescription();
+        }
+
+        private void ReadAvailablePower()
+        {
+            // Reads the selected Witch's remaining power in the same units as the displayed energy costs.
+            hasAvailablePower = false;
+            Sim actor = journal.CurrentActor;
+            if (!WitchCastingContext.IsWitch(actor) || actor.Motives == null) return;
+            float minimum = actor.Motives.GetMin(CommodityKind.MagicFatigue);
+            float maximum = actor.Motives.GetMax(CommodityKind.MagicFatigue);
+            WitchCastingRules rules = WitchCastingContext.ReadRules(actor);
+            availablePower = rules.Capacity * WitchCastingRules.PowerFraction(
+                actor.Motives.GetValue(CommodityKind.MagicFatigue), minimum, maximum);
+            hasAvailablePower = true;
+        }
+
+        private Color ColorForCost(GrimoireEntry entry)
+        {
+            // Colors affordable costs green and unaffordable costs red while leaving unavailable readings neutral.
+            if (!hasAvailablePower) return TextColor;
+            return entry.EnergyCost <= availablePower + 0.005f ? AffordableColor : UnaffordableColor;
         }
 
         private static string ShortenDescription(string text)
@@ -663,6 +723,7 @@ namespace SupernaturalExpanded.Journal
             descriptionName.Visible = show;
             descriptionText.Visible = show;
             descriptionMeta.Visible = false;
+            descriptionCost.Visible = false;
             descriptionPrompt.Visible = false;
             for (int i = 0; i < 3; i++)
             {
@@ -742,7 +803,8 @@ namespace SupernaturalExpanded.Journal
             journal.Place(descriptionPanel, outlineLeft, descriptionTop, outlineWidth, DescriptionHeight);
             journal.Place(descriptionBody, outlineLeft + 1f, descriptionTop + 1f, outlineWidth - 2f, DescriptionHeight - 2f);
             journal.Place(descriptionName, margin + 14f, descriptionTop + 8f, tableWidth - 28f, 22f);
-            journal.Place(descriptionMeta, margin + 14f, descriptionTop + 32f, tableWidth - 28f, 18f);
+            journal.Place(descriptionMeta, margin + 14f, descriptionTop + 32f, 84f, 18f);
+            journal.Place(descriptionCost, margin + 98f, descriptionTop + 32f, tableWidth - 112f, 18f);
             journal.Place(descriptionText, margin + 14f, descriptionTop + 56f, tableWidth - 28f, DescriptionHeight - 64f);
             journal.Place(descriptionPrompt, margin + 14f, descriptionTop, tableWidth - 28f, DescriptionHeight);
             RefreshRows();

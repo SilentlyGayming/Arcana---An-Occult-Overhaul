@@ -36,26 +36,27 @@ python tools\verify_grimoire.py
 
 | Folder | Contents |
 | --- | --- |
-| `src/Core` | Startup, world lifecycle and native layout IDs |
-| `src/Journal`, `src/UI` | The Supernatural Journal pages, styling and Simology entry |
+| `src/Core` | Startup, world lifecycle, the bootstrap tuning XML and native layout IDs |
+| `src/Journal`, `src/UI` | The Supernatural Journal pages, the Grimoire, styling and the Simology entry |
+| `src/Localization` | String lookup and percentage formatting |
+| `src/Magic` | The spell catalog with fixed costs, spell knowledge, Study Spells at Aleister's station and cheats |
 | `src/Occults` | Shared occult status, meter and perk trees |
-| `src/Occults/Witch/Casting` | Spell Accuracy, Magical Power, costs, backfires, regeneration and Magical Fizzle |
-| `src/Occults/Witch/Progression` | Witch ranks, milestones and saved perk purchases |
-| `src/Station` | Study Spells at Aleister's station |
-| `src/Localization` | English strings and the station's name in every language |
-| `src/Tuning` | The bootstrap tuning XML |
+| `src/Occults/Witch` | Witch ranks, milestones, perks, saved progress, abilities and Grimoire cost quotes |
+| `src/Occults/Witch/Casting` | Spell Accuracy, Magical Power, cost corrections for native spells, backfires, regeneration and Magical Fizzle |
 | `assets` | Icons, the vampire bite-mark replacement and the station's catalog resource |
 | `tools` | Build, packaging and verification scripts; `tools/tests` holds the C# formula checks |
 
 ## Witch gameplay
 
-Accuracy, power pools, costs and recovery are tuned in `src/Occults/Witch/Casting/WitchCastingRules.cs`. Good Luck Charm, Ice Blast, Love Charm, Haunting Curse, Sunlight Charm and Pestilence Curse cast through Arcana and use those rules; other spells, rituals and object casts keep the game's own paths.
+Every spell, charm, curse, ritual and Conjure Apple has a fixed Magical Power cost in `src/Magic/SpellCatalog.cs`. It does not grow with the Witch's power pool. The cost actually spent is that base cost × rank and perk discounts × wand, moon and familiar multipliers, and the Grimoire shows the same number.
+
+Accuracy, power pools, discounts and recovery are tuned in `src/Occults/Witch/Casting/WitchCastingRules.cs`. Good Luck Charm, Ice Blast, Love Charm, Haunting Curse, Sunlight Charm and Pestilence Curse cast through Arcana. Other spells, rituals and object casts keep the game's own interactions; `WitchNativeCosts.cs` corrects their Magical Power drain to the fixed cost when the game drains it.
 
 ## Aleister's All-in-One Magic Station
 
 The station keeps its price, model, recolours, catalog placement and alchemy. Arcana ships the game's catalog resource for it under the same key with its name and description pointing at Arcana's strings (`assets/Catalog/AlchemyStation`). That file is the game's resource from `DeltaBuild_p15.package` with only the two string hashes at offsets 5598 and 5606 replaced. English shows the new name and description; other languages keep the game's text. Nothing is read from the game for this.
 
-Witches get Study Spells next to Research Alchemy. It raises Spellcasting and does not teach spells; the pace is `SpellStudy.SkillPointsPerSimMinute` in `src/Station/SpellStudy.cs`.
+Witches get Study Spells next to Research Alchemy. It raises Spellcasting and does not teach spells; the pace is `SpellStudy.SkillPointsPerSimMinute` in `src/Magic/StudySpells.cs`.
 
 ## Installing
 

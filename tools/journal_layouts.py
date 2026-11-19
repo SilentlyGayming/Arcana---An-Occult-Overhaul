@@ -56,6 +56,7 @@ GRIMOIRE_DESC_NAME = 0x53E000E7
 GRIMOIRE_DESC_TEXT = 0x53E000E8
 GRIMOIRE_DESC_PROMPT = 0x53E000F0
 GRIMOIRE_DESC_META = 0x53E000F1
+GRIMOIRE_DESC_COST = 0x53E000F2
 GRIMOIRE_FIRST_ROW = 0x53E00100
 GRIMOIRE_ROWS = 12
 GRIMOIRE_SCROLL_TRACK = 0x53E00140
@@ -693,6 +694,8 @@ def grimoire_controls():
         label(GRIMOIRE_DESC_NAME, font="0x062eae07", color=NAVY,
               align=0, flags="0x00002003"),
         label(GRIMOIRE_DESC_META, font="0x062eae06", color=OV_MUTED,
+              align=0, flags="0x00002003"),
+        label(GRIMOIRE_DESC_COST, font="0x062eae06", color=OV_MUTED,
               align=0, flags="0x00002003"),
         label(GRIMOIRE_DESC_PROMPT, font=OV_NOTE_FONT, color=OV_MUTED,
               align=1, flags="0x00002003"),

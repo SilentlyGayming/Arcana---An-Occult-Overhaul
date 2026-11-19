@@ -26,6 +26,11 @@ namespace SupernaturalExpanded.Journal
         internal bool IsRitual { get { return (Kind & WitchSpellKind.Ritual) != 0; } }
         internal bool IsCharm { get { return (Kind & WitchSpellKind.Charm) != 0; } }
 
+        internal static WitchSpell For(SpellEntry entry)
+        {
+            return new WitchSpell(entry.Tier, KindOf(entry.Category));
+        }
+
         internal static WitchSpellKind KindOf(SpellCategory category)
         {
             // Maps a Grimoire category to its casting kind explicitly so tab order never decides casting behavior.
@@ -273,6 +278,19 @@ namespace SupernaturalExpanded.Journal
         internal float CostMultiplier(WitchSpell spell)
         {
             return CostFactors(spell).Multiplier;
+        }
+
+        internal float FinalCost(float baseCost, WitchSpell spell, float drainMultiplier)
+        {
+            // Returns the Magical Power a cast spends: fixed base cost, rank and perk factors, then wand, moon and familiar multipliers.
+            return baseCost * CostMultiplier(spell) * drainMultiplier;
+        }
+
+        internal float NativeCorrection(float baseCost, WitchSpell spell, float nativeDrain, float drainMultiplier,
+            float nativeMinimum, float nativeMaximum)
+        {
+            // Returns the fatigue change that turns a native wand drain into exactly the final fixed cost.
+            return FatigueDrain(FinalCost(baseCost, spell, drainMultiplier), nativeMinimum, nativeMaximum) - nativeDrain * drainMultiplier;
         }
 
         internal void CostRange(WitchSpellKind kind, out float minimum, out float maximum)

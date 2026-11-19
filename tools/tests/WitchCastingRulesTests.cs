@@ -27,6 +27,7 @@ namespace SupernaturalExpanded.Journal
             PowerPoolConversion();
             RecoveryAndProtection();
             CharmClassification();
+            FixedCosts();
             Console.WriteLine("PASS: " + checks + " deterministic Witch casting and progression checks");
         }
 
@@ -411,6 +412,57 @@ namespace SupernaturalExpanded.Journal
             Equal(WitchCastingRules.OldWaysAccuracyBonus, oldWays.SpecialtyAccuracyBonus(new WitchSpell(4, WitchSpellKind.Curse)), "The Old Ways lost its curse accuracy");
             Equal(0.75f, oldWays.CostFactors(new WitchSpell(4, WitchSpellKind.Ritual)).OldWays, "The Old Ways lost its ritual discount");
             Equal(0.75f, oldWays.CostFactors(new WitchSpell(5, WitchSpellKind.Charm)).OldWays, "The Old Ways lost its Legendary discount");
+        }
+
+        private static void FixedCosts()
+        {
+            // Checks that fixed costs ignore capacity and that native drain plus the correction equals the Grimoire cost exactly once.
+            foreach (SpellEntry entry in SpellCatalog.Entries)
+            {
+                if (entry.Learning == SpellLearning.NativeDisabled) continue;
+                WitchSpell spell = WitchSpell.For(entry);
+                for (int rank = 0; rank <= (int)Rank.HighWitch; rank++)
+                for (int ascendancy = 0; ascendancy < 2; ascendancy++)
+                {
+                    WitchCastingRules rules = new WitchCastingRules((Rank)rank);
+                    rules.Ascendancy = ascendancy == 1;
+                    float multiplier = rules.CostMultiplier(spell);
+                    Equal(entry.Cost * multiplier, rules.FinalCost(entry.Cost, spell, 1f), "final cost is base times perks: " + entry.Id);
+                    Equal(entry.Cost * multiplier * 1.3f, rules.FinalCost(entry.Cost, spell, 1.3f), "wand and moon multiply the final cost");
+                    float final = rules.FinalCost(entry.Cost, spell, 1.15f);
+                    float drain = rules.FatigueDrain(final, -100f, 100f);
+                    Equal(final, drain / 200f * rules.Capacity, "power drained equals the quoted cost: " + entry.Id);
+                    foreach (float native in new[] { 0f, 10f, 25f, 60f })
+                    {
+                        float correction = rules.NativeCorrection(entry.Cost, spell, native, 1.15f, -100f, 100f);
+                        Equal(drain, native * 1.15f + correction, "native drain is corrected, not doubled: " + entry.Id);
+                    }
+                }
+            }
+            SpellEntry conversion = SpellCatalog.Find("conversion");
+            for (int rank = 0; rank <= (int)Rank.HighWitch; rank++)
+            {
+                WitchCastingRules rules = new WitchCastingRules((Rank)rank);
+                Equal(45f * rules.CostMultiplier(WitchSpell.For(conversion)), rules.FinalCost(conversion.Cost, WitchSpell.For(conversion), 1f),
+                    "Conversion stays 45 before modifiers at every rank");
+            }
+            WitchCastingRules novice = new WitchCastingRules(Rank.Novice);
+            Equal(45f, novice.FinalCost(conversion.Cost, WitchSpell.For(conversion), 1f), "Novice Conversion costs exactly 45");
+            WitchCastingRules high = new WitchCastingRules(Rank.HighWitch);
+            high.Lessons = true;
+            high.Familiar = true;
+            Equal(30f * 0.95f * 0.95f * 0.75f * 0.85f, high.FinalCost(30f, WitchSpell.For(SpellCatalog.Find("good_luck")), 1f),
+                "discounts apply to the fixed cost");
+            Equal(110f * 0.95f * 0.85f, high.FinalCost(110f, WitchSpell.For(SpellCatalog.Find("reanimation")), 1f),
+                "Tier V ritual skips lower-tier discounts");
+            Equal(FullDrain(high, 30f, WitchSpell.For(SpellCatalog.Find("upgrade"))),
+                high.NativeCorrection(30f, WitchSpell.For(SpellCatalog.Find("upgrade")), 0f, 1f, -100f, 100f),
+                "Magically Upgrade receives its whole cost from the correction");
+        }
+
+        private static float FullDrain(WitchCastingRules rules, float cost, WitchSpell spell)
+        {
+            return rules.FatigueDrain(rules.FinalCost(cost, spell, 1f), -100f, 100f);
         }
 
         private static void Equal(float expected, float actual, string check)

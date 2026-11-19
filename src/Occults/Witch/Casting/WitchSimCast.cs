@@ -279,7 +279,7 @@ namespace SupernaturalExpanded.Journal
         {
             // Drains the Arcana power cost through the wand's native efficiency, moon and familiar modifiers.
             float before = Actor.Motives.GetValue(CommodityKind.MagicFatigue);
-            float logicalCost = (float)spell.NativeCost.GetValue(null) * rules.CostMultiplier(spell.Category);
+            float logicalCost = rules.FinalCost(spell.BaseCost, spell.Category, 1f);
             float drain = rules.FatigueDrain(logicalCost, Actor.Motives.GetMin(CommodityKind.MagicFatigue),
                 Actor.Motives.GetMax(CommodityKind.MagicFatigue));
             mWand.DrainMotive(Actor, CommodityKind.MagicFatigue, -drain);

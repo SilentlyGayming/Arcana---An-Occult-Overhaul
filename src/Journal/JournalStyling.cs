@@ -94,7 +94,7 @@ namespace SupernaturalExpanded.Journal
             }
             Text empty = NativeLayouts.Find<Text>(journal, NativeLayouts.GrimoireEmptyList);
             if (empty != null) empty.TextColor = new Color(0xFF0B246E);
-            uint[] mutedIds = { NativeLayouts.GrimoireDescriptionMeta, NativeLayouts.GrimoireDescriptionPrompt };
+            uint[] mutedIds = { NativeLayouts.GrimoireDescriptionMeta, NativeLayouts.GrimoireDescriptionCost, NativeLayouts.GrimoireDescriptionPrompt };
             foreach (uint id in mutedIds)
             {
                 Text note = NativeLayouts.Find<Text>(journal, id);

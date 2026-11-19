@@ -29,7 +29,7 @@
   "Arcana.Journal.Grimoire.Column.Name": "Name",
   "Arcana.Journal.Grimoire.Column.Tier": "Tier",
   "Arcana.Journal.Grimoire.Details.Cost": "Energy Cost: {0}",
-  "Arcana.Journal.Grimoire.Details.TierAndCost": "Tier: {0}     Energy Cost: {1}",
+  "Arcana.Journal.Grimoire.Details.Tier": "Tier: {0}",
   "Arcana.Journal.Grimoire.EmptyDetails.Abilities": "Ability details will appear here.",
   "Arcana.Journal.Grimoire.EmptyDetails.Charms": "Charm details will appear here.",
   "Arcana.Journal.Grimoire.EmptyDetails.Curses": "Curse details will appear here.",

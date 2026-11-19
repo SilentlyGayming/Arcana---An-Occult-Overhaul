@@ -105,16 +105,16 @@ namespace SupernaturalExpanded.Journal
         internal static string Name(SpellEntry entry) { return JournalText.Get("Arcana.Spell." + entry.Id + ".Name"); }
         internal static string Description(SpellEntry entry) { return JournalText.Get("Arcana.Spell." + entry.Id + ".Description"); }
 
-        private static string Describe(Sim actor, SpellEntry entry)
+        private static string Describe(SpellPowerQuote quote, SpellEntry entry, float cost)
         {
-            // Returns an entry's Grimoire description with the cost of its other targets.
+            // Returns an entry's Grimoire description, adding its other targets' cost only when it differs.
             string description = Description(entry);
-            if (!WitchCastingContext.IsWitch(actor)) return description;
             string key = entry.Id == "ice_blast" ? "Arcana.Spell.IceOtherTargets"
                 : entry.Id == "sunlight" ? "Arcana.Spell.SunlightOtherTargets" : null;
             if (key == null) return description;
-            return description + "\n\n" + JournalText.Format(key,
-                SpellPowerQuote.NativeVariant(actor, entry).ToString("0.##", CultureInfo.CurrentCulture));
+            float variant = quote.NativeVariant(entry);
+            if (Math.Abs(variant - cost) < 0.005f) return description;
+            return description + "\n\n" + JournalText.Format(key, variant.ToString("0.##", CultureInfo.CurrentCulture));
         }
 
         internal static void Populate(GrimoirePage page, SimIdentity identity)
@@ -127,12 +127,14 @@ namespace SupernaturalExpanded.Journal
             for (int i = 0; i < categories.Length; i++) categories[i] = new List<GrimoireEntry>();
             try
             {
+                SpellPowerQuote quote = new SpellPowerQuote(actor);
                 foreach (SpellEntry entry in SpellCatalog.Entries)
                 {
                     if (data == null || !data.Knows(entry.Id) || entry.Learning == SpellLearning.NativeDisabled
                         || entry.Category == SpellCategory.Ability) continue;
+                    float cost = quote.For(entry);
                     categories[(int)entry.Category].Add(new GrimoireEntry(entry.Id, Name(entry), TierNames[entry.Tier], entry.Tier,
-                        SpellPowerQuote.For(actor, entry), Describe(actor, entry)));
+                        cost, Describe(quote, entry, cost)));
                 }
                 categories[(int)SpellCategory.Ability] = WitchAbilities.Entries(identity);
             }

@@ -19,7 +19,7 @@ namespace SupernaturalExpanded.Journal
         internal readonly MagicWand.SpellType Id;
         internal readonly BuffNames Backfire;
         internal readonly BuffNames TimedCurse;
-        internal readonly FieldInfo NativeCost;
+        internal readonly float BaseCost;
         internal readonly MethodInfo NativeSuccess;
         internal readonly MethodInfo NativeFailure;
         internal readonly MethodInfo NativeEpicAllowed;
@@ -42,11 +42,11 @@ namespace SupernaturalExpanded.Journal
             SpellEntry entry = SpellCatalog.Find(id);
             if (entry == null) throw new InvalidOperationException("Missing spell catalog entry: " + id);
             Stock = stock;
-            Category = new WitchSpell(entry.Tier, WitchSpell.KindOf(entry.Category));
+            Category = WitchSpell.For(entry);
+            BaseCost = entry.Cost;
             Type type = template.GetType();
             Backfire = backfire;
             TimedCurse = timedCurse;
-            NativeCost = type.GetField("kMotiveDrain", BindingFlags.Static | BindingFlags.NonPublic);
             NativeSuccessVisual = type.GetMethod("ShowSuccessVfx", Methods);
             NativeSuccess = type.GetMethod("OnSpellSuccess", Methods);
             NativeFailure = type.GetMethod("OnSpellEpicFailure", Methods);

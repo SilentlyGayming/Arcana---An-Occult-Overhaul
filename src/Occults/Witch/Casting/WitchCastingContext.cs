@@ -17,7 +17,11 @@ namespace SupernaturalExpanded.Journal
     internal static class WitchCastingContext
     {
         internal const float NearbyRadius = 10f;
+        private const BindingFlags StaticFields = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly Dictionary<Type, FieldInfo> nativeWandFields = new Dictionary<Type, FieldInfo>();
+        private static readonly FieldInfo LunarDrain = typeof(MagicWand).GetField("kMoonPhaseMotiveDrainMultiplier", StaticFields);
+        private static readonly FieldInfo FamiliarDrain = typeof(MagicWand).GetField("kFamiliarMotiveMultiplier", StaticFields);
+        private static readonly FieldInfo HandsDrainField = typeof(MagicHands).GetField("kMotiveDrainMultiplier", StaticFields);
 
         private static readonly CommodityKind[] Needs =
         {
@@ -132,36 +136,58 @@ namespace SupernaturalExpanded.Journal
             {
                 return arcanaCast.ActiveWand;
             }
-            if (interaction != null && arcanaCast == null)
+            MagicWand wand = arcanaCast == null ? NativeWand(interaction) : null;
+            return wand ?? EquippedWand(sim);
+        }
+
+        internal static MagicWand NativeWand(InteractionInstance interaction)
+        {
+            // Returns the wand a native MagicWand interaction stored for its cast, or null.
+            if (interaction == null)
             {
-                Type type = interaction.GetType();
-                FieldInfo field;
-                if (!nativeWandFields.TryGetValue(type, out field))
-                {
-                    for (Type owner = type; owner != null; owner = owner.BaseType)
-                    {
-                        if (owner.DeclaringType == typeof(MagicWand))
-                        {
-                            field = owner.GetField("mWand", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-                            if (field != null && field.FieldType == typeof(MagicWand))
-                            {
-                                break;
-                            }
-                            field = null;
-                        }
-                    }
-                    nativeWandFields.Add(type, field);
-                }
-                if (field != null)
-                {
-                    MagicWand wand = field.GetValue(interaction) as MagicWand;
-                    if (wand != null)
-                    {
-                        return wand;
-                    }
-                }
+                return null;
             }
-            return EquippedWand(sim);
+            Type type = interaction.GetType();
+            FieldInfo field;
+            if (!nativeWandFields.TryGetValue(type, out field))
+            {
+                for (Type owner = type; owner != null; owner = owner.BaseType)
+                {
+                    if (owner.DeclaringType == typeof(MagicWand))
+                    {
+                        field = owner.GetField("mWand", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                        if (field != null && field.FieldType == typeof(MagicWand))
+                        {
+                            break;
+                        }
+                        field = null;
+                    }
+                }
+                nativeWandFields.Add(type, field);
+            }
+            return field == null ? null : field.GetValue(interaction) as MagicWand;
+        }
+
+        internal static float SituationalDrain(Sim sim)
+        {
+            // Returns the moon phase and familiar multipliers MagicWand.DrainMotive applies to every wand drain.
+            float result = 1f;
+            float[] lunar = (float[])LunarDrain.GetValue(null);
+            int phase = (int)World.GetLunarPhase();
+            if (lunar != null && phase >= 0 && phase < lunar.Length)
+            {
+                result *= lunar[phase];
+            }
+            if (sim.BuffManager != null && sim.BuffManager.HasElement(BuffNames.AnimalFamiliar))
+            {
+                result *= (float)FamiliarDrain.GetValue(null);
+            }
+            return result;
+        }
+
+        internal static float HandsDrain
+        {
+            get { return (float)HandsDrainField.GetValue(null); }
         }
 
         internal static float WandBonus(MagicWand wand, bool previewMagicHands)

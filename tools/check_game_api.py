@@ -264,6 +264,21 @@ def require_witch_contract(gameplay_types):
         ("Sims3.Gameplay.Interactions.InteractionInstance", "", "mSkillMultipliers"),
         ("Sims3.Gameplay.Autonomy.MotiveTuning", "", "mBuffTriggers mMotiveDecayCurve"),
     ]
+    bindings += [
+        (wand, "DrainMotive get_MotiveDrainMultiplier", "kMoonPhaseMotiveDrainMultiplier kFamiliarMotiveMultiplier"),
+        ("Sims3.Gameplay.Objects.Alchemy.MagicHands", "", "kMotiveDrainMultiplier"),
+        ("Sims3.Gameplay.ActorSystems.TraitFunctions/ConjureApple", "", "Singleton"),
+        ("Sims3.Gameplay.Autonomy.InteractionTuning", "", "mTradeoff"),
+        ("Sims3.Gameplay.Autonomy.Tradeoff", "", "mOutputs"),
+        ("Sims3.Gameplay.Autonomy.CommodityChange", "get_Commodity", "mActualValue"),
+        ("Sims3.Gameplay.Interactions.InteractionInstance", "", "InteractionObjectPair"),
+        ("Sims3.Gameplay.Actors.Sim", "", "SoloInteractions"),
+        ("Sims3.Gameplay.UI.HudModel", "FlashMagicMotiveBar", "MagicMotiveChanged"),
+    ]
+    for native in NATIVE_DRAINS:
+        bindings.append((wand + "/" + native, "", "Singleton"))
+    for native in set(NATIVE_DRAINS.values()):
+        bindings.append((wand + "/" + native, "", "kMotiveDrain"))
     for spell in ("GoodLuckCharm", "LoveCharm", "IceBlast", "SunlightCharm", "PestilenceCurse", "HauntingCurse"):
         bindings.append((wand + "/Cast" + spell,
                          "get_TypeOfSpell get_JazzStateName get_SuccessVfxName get_EpicFailVfxName get_HitVfxName "
@@ -275,6 +290,42 @@ def require_witch_contract(gameplay_types):
         missing = (set(methods.split()) - info.methods.keys()) | (set(fields.split()) - info.fields.keys())
         if missing:
             raise ValueError("Sims3GameplaySystems.dll is missing " + owner + "." + ", ".join(sorted(missing)))
+
+
+NATIVE_DRAINS = {
+    "CastFireBlast": "CastFireBlast", "CastFireBlastTerrain": "CastFireBlast", "CastFireBlastOnStatue": "CastFireBlast",
+    "CastIceBlastTerrain": "CastIceBlast", "CastIceBlastPlumbing": "CastIceBlast", "CastSunlightCharmOnStatue": "CastSunlightCharm",
+    "CastToadify": "CastToadify", "CastMotiveCharm": "CastMotiveCharm", "CastMotiveCurse": "CastMotiveCurse",
+    "CastConvert": "CastConvert", "CastRestoration": "CastRestoration", "CastReanimate": "CastReanimate",
+}
+MAGIC_FATIGUE = 17774820
+
+
+def require_native_cost_contract(root_dir):
+    # Checks in the game's IL that native spells drain their kMotiveDrain through MagicWand.DrainMotive, which raises MagicMotiveChanged.
+    import il_reader
+    module = il_reader.Module(root_dir / ".deps" / "Sims3" / "Sims3GameplaySystems.dll")
+    names = {name: index for index, name in module.typedefs().items()}
+    wand = "Sims3.Gameplay.Objects.Alchemy.MagicWand"
+
+    def body(owner, method):
+        for index, name in module.methods_of(names[owner]):
+            if name == method:
+                return module.il(index)
+        raise ValueError(f"Sims3GameplaySystems.dll is missing {owner}.{method}")
+
+    for native, source in NATIVE_DRAINS.items():
+        code = "\n".join(body(wand + "/" + native, "DrainMotives"))
+        if (f"ldsfld {wand}/{source}::kMotiveDrain" not in code or f"ldc.i4 {MAGIC_FATIGUE}" not in code
+                or f"callvirt {wand}::DrainMotive" not in code):
+            raise ValueError(f"{native}.DrainMotives no longer drains {source}.kMotiveDrain through MagicWand.DrainMotive")
+    upgrade = "\n".join(body(wand + "/MagicallyUpgrade", "Run"))
+    if f"ldc.i4 {MAGIC_FATIGUE}" in upgrade or f"callvirt {wand}::DrainMotive" not in upgrade:
+        raise ValueError("Magically Upgrade changed how it drains motives")
+    drain = "\n".join(body(wand, "DrainMotive"))
+    flash = "\n".join(body("Sims3.Gameplay.UI.HudModel", "FlashMagicMotiveBar"))
+    if "Sims3.Gameplay.UI.HudModel::FlashMagicMotiveBar" not in drain or "OccultUpdatedCallback::Invoke" not in flash:
+        raise ValueError("MagicWand.DrainMotive no longer raises HudModel.MagicMotiveChanged synchronously")
 
 
 def require_station_contract(objects_types):
@@ -303,6 +354,7 @@ def check(root_dir):
     require_ui_contract(found["UI"])
     require_genie_contract(found["Sims3GameplaySystems"])
     require_witch_contract(found["Sims3GameplaySystems"])
+    require_native_cost_contract(root_dir)
     for qualified, names in MEMBERS:
         entry = find(found, qualified)
         assert entry is not None and entry.flags & 7 in (PUBLIC, NESTED_PUBLIC), qualified

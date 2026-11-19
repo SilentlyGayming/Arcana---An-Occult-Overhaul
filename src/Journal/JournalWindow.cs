@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Sims3.Gameplay.Actors;
 using Sims3.SimIFace;
 using Sims3.UI.Hud;
 using Sims3.UI;
@@ -90,6 +91,7 @@ namespace SupernaturalExpanded.Journal
         internal bool IsOpen { get { return !disposed && !gone && root != null && !root.Disposed; } }
         private bool Covered { get { return modal != null && modal.Covered; } }
         internal WindowBase RootWindow { get { return root; } }
+        internal Sim CurrentActor { get { return identity == null || identity.Description == null ? null : identity.Description.CreatedSim; } }
         internal float LayoutScale { get { return scale; } }
 
         internal void Open(SimIdentity selected)
@@ -609,6 +611,7 @@ namespace SupernaturalExpanded.Journal
             if (IsOpen && !closing)
             {
                 RefreshOverview();
+                RefreshGrimoireCosts();
             }
         }
 
@@ -694,6 +697,18 @@ namespace SupernaturalExpanded.Journal
                 UpdateLayout();
             }
             RefreshOverview();
+            RefreshGrimoireCosts();
+        }
+
+        private void RefreshGrimoireCosts()
+        {
+            // Recomputes the shown Grimoire costs and their affordability colors when power, perks or conditions change.
+            if (grimoirePage == null || page != JournalPages.Grimoire || identity == null)
+            {
+                return;
+            }
+            SpellKnowledge.Populate(grimoirePage, identity);
+            grimoirePage.RefreshAffordability();
         }
 
         private static float TabWidth(string title)

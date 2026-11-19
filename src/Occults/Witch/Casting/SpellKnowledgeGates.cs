@@ -67,6 +67,9 @@ namespace SupernaturalExpanded.Journal
                 if (singleton == null) throw new InvalidOperationException("Missing native spell singleton: " + name);
                 originals.Add(new KeyValuePair<FieldInfo, InteractionDefinition>(singleton, (InteractionDefinition)singleton.GetValue(null)));
             }
+            FieldInfo apple = typeof(TraitFunctions.ConjureApple).GetField("Singleton", StaticFields);
+            if (apple == null) throw new InvalidOperationException("Missing native Conjure Apple singleton.");
+            originals.Add(new KeyValuePair<FieldInfo, InteractionDefinition>(apple, (InteractionDefinition)apple.GetValue(null)));
             try
             {
                 foreach (KeyValuePair<FieldInfo, InteractionDefinition> original in originals)
@@ -88,8 +91,9 @@ namespace SupernaturalExpanded.Journal
 
         internal static InteractionDefinition Wrap(InteractionDefinition native)
         {
-            // Wraps a native spell definition in a knowledge gate, keeping its fire-usable marker.
-            if (native is KnowledgeSpellDefinition) return native;
+            // Wraps a native spell in a knowledge gate, keeping its fire-usable marker, and Conjure Apple in its fixed-cost wrapper.
+            if (native is KnowledgeSpellDefinition || native is InnateAbilityDefinition) return native;
+            if (native.GetType().DeclaringType == typeof(TraitFunctions.ConjureApple)) return new InnateAbilityDefinition(native);
             return native is IUsableDuringFire ? new FireKnowledgeSpellDefinition(native) : new KnowledgeSpellDefinition(native);
         }
 
@@ -100,6 +104,7 @@ namespace SupernaturalExpanded.Journal
             Replace(target.Interactions);
             if (target.ItemComp != null) Replace(target.ItemComp.InteractionsInventory);
             Sim sim = target as Sim;
+            if (sim != null) Replace(sim.SoloInteractions);
             SpellKnowledge.EnsureStarting(sim);
             if (WitchCastingContext.IsWitch(sim) && sim.InteractionQueue != null)
             {
@@ -292,5 +297,55 @@ namespace SupernaturalExpanded.Journal
     internal sealed class FireKnowledgeSpellDefinition : KnowledgeSpellDefinition, IUsableDuringFire
     {
         internal FireKnowledgeSpellDefinition(InteractionDefinition native) : base(native) { }
+    }
+
+    [Persistable]
+    internal sealed class InnateAbilityDefinition : InteractionDefinition, IHasTraitIcon, IOverridesVisualType
+    {
+        internal InteractionDefinition Native;
+        internal InnateAbilityDefinition(InteractionDefinition native) { Native = native; }
+        public InteractionVisualTypes GetVisualType { get { return ((IOverridesVisualType)Native).GetVisualType; } }
+        public ResourceKey GetTraitIcon(Sim sim, GameObject target) { return ((IHasTraitIcon)Native).GetTraitIcon(sim, target); }
+        public string[] GetPath(bool female) { return Native.GetPath(female); }
+        public string GetInteractionName(IActor actor, IGameObject target, InteractionObjectPair pair)
+        { return Native.GetInteractionName(actor, target, new InteractionObjectPair(Native, target)); }
+        public string GetInteractionName(ref InteractionInstanceParameters parameters)
+        { InteractionInstanceParameters original = parameters.CloneForNewInteraction(Native); return Native.GetInteractionName(ref original); }
+        public InteractionTestResult Test(ref InteractionInstanceParameters parameters, ref GreyedOutTooltipCallback tooltip)
+        { InteractionInstanceParameters original = parameters.CloneForNewInteraction(Native); return Native.Test(ref original, ref tooltip); }
+        public void AddInteractions(InteractionObjectPair pair, IActor actor, List<InteractionObjectPair> results)
+        {
+            // Lists the native ability under this wrapper so the fixed cost applies wherever the menu creates it.
+            List<InteractionObjectPair> expanded = new List<InteractionObjectPair>();
+            Native.AddInteractions(new InteractionObjectPair(Native, pair.Target), actor, expanded);
+            foreach (InteractionObjectPair item in expanded)
+                results.Add(new KnowledgePair(SpellKnowledgeGates.Wrap(item.InteractionDefinition), item.Target, item.Tuning));
+        }
+        public InteractionInstance CreateInstanceFromParameters(ref InteractionInstanceParameters parameters)
+        {
+            // Creates the native ability with its own tuning copy that charges the fixed Magical Power cost.
+            InteractionInstanceParameters original = parameters.CloneForNewInteraction(Native);
+            original.SetInteractionObjectPair(new KnowledgePair(Native, parameters.Target, new InteractionObjectPair(Native, parameters.Target).Tuning));
+            InteractionInstance instance = Native.CreateInstanceFromParameters(ref original);
+            WitchNativeCosts.UseFixedAppleCost(instance, parameters.Actor as Sim);
+            return instance;
+        }
+        public InteractionInstance CreateInstance(IGameObject target, IActor actor, InteractionPriority priority, bool autonomous, bool cancellable)
+        {
+            InteractionInstanceParameters parameters = new InteractionInstanceParameters(new InteractionObjectPair(Native, target), actor, priority, autonomous, cancellable);
+            return CreateInstanceFromParameters(ref parameters);
+        }
+        public InteractionInstance CreateInstanceWithCallbacks(IGameObject target, IActor actor, InteractionPriority priority, bool autonomous,
+            bool cancellable, Callback started, Callback completed, Callback failed)
+        {
+            // Creates the native ability with callbacks and the fixed Magical Power cost.
+            InteractionInstance instance = Native.CreateInstanceWithCallbacks(target, actor, priority, autonomous, cancellable, started, completed, failed);
+            WitchNativeCosts.UseFixedAppleCost(instance, actor as Sim);
+            return instance;
+        }
+        public void PopulatePieMenuPicker(ref InteractionInstanceParameters parameters, out List<ObjectPicker.TabInfo> tabs,
+            out List<ObjectPicker.HeaderInfo> headers, out int selectable)
+        { InteractionInstanceParameters original = parameters.CloneForNewInteraction(Native); Native.PopulatePieMenuPicker(ref original, out tabs, out headers, out selectable); }
+        public MenuItem.ObjectPickerTitleDelegate GetPickerTitleDelegate() { return Native.GetPickerTitleDelegate(); }
     }
 }

@@ -50,7 +50,7 @@ def check_localization():
     assert localization.encode_table(unicode_catalog) == expected
     assert localization.read_table(expected) == {0xE037B3A881BE38AC: 'é🌙'}
     title = 'Arcana.Journal.Title'
-    tier_cost = 'Arcana.Journal.Grimoire.Details.TierAndCost'
+    tier_cost = 'Arcana.Journal.Grimoire.Details.Tier'
     rest = 'Arcana.Witch.Perk.RestForTheWicked.Description.1'
     with TemporaryDirectory() as temporary:
         directory = Path(temporary)
@@ -72,7 +72,7 @@ def check_localization():
         }
         assert localization.encode_table(dict(reversed(list(english().items())))) == english_table
 
-        partial = {title: 'Journal surnaturel', tier_cost: 'Énergie : {1} / niveau : {0}',
+        partial = {title: 'Journal surnaturel', tier_cost: 'Niveau : {0}',
                    rest: '{name} retrouve son énergie en dormant.'}
         fr.write_text(json.dumps(partial, ensure_ascii=False), encoding='utf-8')
         packed = dict(localization.resources(directory))
@@ -86,7 +86,7 @@ def check_localization():
             (json.dumps({title: 'A', 'Arcana.Journal.title': 'B'}), 'FNV64 collision'),
             (json.dumps({title: '   '}), 'nonempty text'),
             (json.dumps({'Arcana.Unknown.Key': 'B'}), 'unrecognized key'),
-            (json.dumps({tier_cost: 'Énergie : {0}'}), 'requires placeholders'),
+            (json.dumps({tier_cost: 'Énergie : {1}'}), 'numbered placeholders'),
             (json.dumps({title: '{0:X}'}), 'unsupported placeholder'),
             (json.dumps({rest: '{Name}'}), 'requires placeholders'),
         ):
@@ -98,7 +98,7 @@ def check_localization():
             else:
                 raise AssertionError(f'Accepted invalid localization data: {invalid}')
         fr.unlink()
-        en.write_text(json.dumps(dict(english(), **{tier_cost: 'Tier: {0}'})), encoding='utf-8')
+        en.write_text(json.dumps(dict(english(), **{tier_cost: 'Tier: {0} {1}'})), encoding='utf-8')
         try:
             localization.catalogs(directory)
         except ValueError as caught:
@@ -245,6 +245,7 @@ def main():
     check_r63(root, root_dir, layout)
     check_r72(root, root_dir, layout)
     check_charms(root_dir)
+    check_fixed_costs(root_dir)
     print('PASS: every 0x53E control constant exists in a packaged layout; no index-based donor lookup')
     print('PASS: no reflection in GrimoirePage; typed wheel/cursor/capture calls present')
     print('PASS: sample entries compile only with --grimoire-test, which build.bat does not pass')
@@ -1791,20 +1792,23 @@ def check_r72(root, root_dir, layout):
         check_text(grimoire, prefix + 'EmptyList.' + category, f'No {category.lower()} to display.')
         check_text(grimoire, prefix + 'Select.' + category, f'Select {phrase} to view its details.')
         check_text(grimoire, prefix + 'EmptyDetails.' + category, f'{empty_details} details will appear here.')
-    for name in ('GrimoireDescriptionPrompt', 'GrimoireDescriptionMeta'):
+    for name in ('GrimoireDescriptionPrompt', 'GrimoireDescriptionMeta', 'GrimoireDescriptionCost'):
         assert f'NativeLayouts.{name}' in grimoire and f'NativeLayouts.{name}' in theme, name
         assert f'internal const uint {name} =' in natives
     assert control(root, jl.GRIMOIRE_DESC_PROMPT).find("prop[@name='HorizontalAlign']").get('value') == '1', 'The hint is centered'
     assert control(root, jl.GRIMOIRE_DESC_PROMPT).find("prop[@name='TextColor']").get('value') == '0xff5f78a3', 'The hint is muted'
     assert control(root, jl.GRIMOIRE_DESC_META).find("prop[@name='TextColor']").get('value') == '0xff5f78a3'
     assert 'descriptionPrompt.Visible = hint;' in grimoire and 'bool hint = visible && entry == null;' in grimoire
-    assert 'descriptionMeta.Visible = visible && entry != null;' in grimoire and 'descriptionName.Visible = visible && entry != null;' in grimoire
-    assert 'JournalText.Format("Arcana.Journal.Grimoire.Details.TierAndCost", entry.TierName, cost)' in grimoire
-    assert 'JournalText.Format("Arcana.Journal.Grimoire.Details.Cost", cost)' in grimoire
-    check_text(grimoire, 'Arcana.Journal.Grimoire.Details.TierAndCost', 'Tier: {0}     Energy Cost: {1}')
+    assert 'descriptionMeta.Visible = visible && entry != null && !String.IsNullOrEmpty(entry.TierName);' in grimoire and 'descriptionName.Visible = visible && entry != null;' in grimoire
+    assert 'JournalText.Format("Arcana.Journal.Grimoire.Details.Tier", entry.TierName)' in grimoire
+    assert 'JournalText.Format("Arcana.Journal.Grimoire.Details.Cost",' in grimoire
+    check_text(grimoire, 'Arcana.Journal.Grimoire.Details.Tier', 'Tier: {0}')
     check_text(grimoire, 'Arcana.Journal.Grimoire.Details.Cost', 'Energy Cost: {0}')
     assert 'sorted[category].Count == 0 ? EmptyPrompts[category] : SelectPrompts[category]' in grimoire, 'An empty category does not repeat the list message'
-    assert 'journal.Place(descriptionMeta,' in grimoire and 'journal.Place(descriptionPrompt,' in grimoire
+    assert 'journal.Place(descriptionMeta,' in grimoire and 'journal.Place(descriptionCost,' in grimoire and 'journal.Place(descriptionPrompt,' in grimoire
+    assert 'rowCosts[i].TextColor = ColorForCost(entry);' in grimoire
+    assert 'descriptionCost.TextColor = entry == null ? MutedColor : ColorForCost(entry);' in grimoire
+    assert 'grimoirePage.RefreshAffordability();' in window
     witch_tree = cs_source.class_code(root_dir, 'WitchTree')
     assert witch_tree.count('.Conflict = ') == 2 and 'perks[15].Conflict = perks[16];' in witch_tree, 'The two High Witch perks are the only specializations'
     assert witch_tree.count('.Face = ') == 2 and 'perks[15].Face = 0xFF7A45E0;' in witch_tree and 'perks[16].Face = 0xFF2E9E4F;' in witch_tree
@@ -1912,6 +1916,37 @@ def catalog_entries(root_dir):
     return entries
 
 
+def check_fixed_costs(root_dir):
+    catalog = cs_source.file_code(root_dir, 'SpellCatalog')
+    expected = {'good_luck': 30, 'love': 48, 'sunlight': 72, 'pestilence': 88, 'fire_blast': 12, 'ice_blast': 16, 'toadification': 52,
+                'haunting': 62, 'upgrade': 30, 'conversion': 45, 'restoration': 100, 'reanimation': 110}
+    for spell_id, cost in expected.items():
+        assert re.search(rf'Add\(entries, "{spell_id}", .*?, {cost}f\);', catalog), f'{spell_id} must cost {cost}'
+    assert 'internal const float ConjureAppleCost = 6f;' in catalog
+    assert re.search(r'charmCosts = \{\s*30f, 34f, 0f, 30f, 0f, 0f\s*\}', catalog) and re.search(r'curseCosts = \{\s*36f, 40f, 0f, 36f, 0f, 0f\s*\}', catalog)
+    rules = cs_source.file_code(root_dir, 'WitchCastingRules')
+    assert 'return baseCost * CostMultiplier(spell) * drainMultiplier;' in rules
+    assert 'FatigueDrain(FinalCost(baseCost, spell, drainMultiplier), nativeMinimum, nativeMaximum) - nativeDrain * drainMultiplier' in rules
+    quote = cs_source.class_code(root_dir, 'SpellPowerQuote')
+    assert 'rules.FinalCost(entry.Cost, WitchSpell.For(entry), drain * situational)' in quote and 'Capacity' not in quote
+    cast = cs_source.file_code(root_dir, 'WitchSimCast')
+    assert 'rules.FinalCost(spell.BaseCost, spell.Category, 1f)' in cast and 'kMotiveDrain' not in cast
+    assert 'NativeCost' not in cs_source.file_code(root_dir, 'TargetSpell')
+    native = cs_source.file_code(root_dir, 'WitchNativeCosts')
+    assert 'MagicMotiveChanged += OnWandDrain' in native and 'MagicMotiveChanged -= OnWandDrain' in native
+    assert 'rules.NativeCorrection(entry.Cost, WitchSpell.For(entry), NativeDrain(entry), multiplier' in native
+    assert 'SpellCatalog.ConjureAppleCost' in native and 'SpellCatalog.ConjureAppleCost' in cs_source.file_code(root_dir, 'WitchAbilities')
+    lifecycle = cs_source.file_code(root_dir, 'WitchCastingLifecycle')
+    assert 'WitchNativeCosts.Start();' in lifecycle and 'WitchNativeCosts.Stop();' in lifecycle
+    window = cs_source.file_code(root_dir, 'JournalWindow')
+    assert window.count('RefreshGrimoireCosts();') >= 2
+    for path in (root_dir / 'src').rglob('*.cs'):
+        text = path.read_text(encoding='utf-8')
+        uses = text.count('Capacity * ') - text.count('availablePower = rules.Capacity * WitchCastingRules.PowerFraction(')
+        assert uses == 0 or path.stem == 'WitchCastingRules', f'{path.name}: capacity-scaled cost'
+    print('PASS: fixed base costs in one catalog; Grimoire quote, Arcana cast, native correction and Conjure Apple share FinalCost; Grimoire refreshes on HUD and moodlet changes')
+
+
 def check_charms(root_dir):
     # Checks Charms classification, casting kinds, Grimoire population, counters and the five-tab row.
     entries = catalog_entries(root_dir)
@@ -1964,10 +1999,11 @@ def check_charms(root_dir):
         text = path.read_text(encoding='utf-8')
         assert '(WitchSpellKind)' not in text and '(SpellCategory)' not in text, f'{path.name}: numeric category cast'
     target = cs_source.file_code(root_dir, 'TargetSpell')
-    assert 'Category = new WitchSpell(entry.Tier, WitchSpell.KindOf(entry.Category));' in target and 'WitchSpellKind.' not in target
+    assert 'Category = WitchSpell.For(entry);' in target and 'BaseCost = entry.Cost;' in target and 'WitchSpellKind.' not in target
+    assert 'return new WitchSpell(entry.Tier, KindOf(entry.Category));' in rules
     for spell_id in ('good_luck', 'love', 'sunlight', 'pestilence', 'ice_blast', 'haunting'):
         assert f'new TargetSpell("{spell_id}",' in target, spell_id
-    assert 'WitchSpell.KindOf(entry.Category)' in cs_source.file_code(root_dir, 'SpellPowerQuote')
+    assert 'WitchSpell.For(entry)' in cs_source.file_code(root_dir, 'SpellPowerQuote')
     assert 'return spell.Tier >= 0 && spell.Tier <= CovenMaximumTier && !spell.IsRitual;' in rules and 'InCoven && CovenEligible(spell)' in rules
 
     page = cs_source.file_code(root_dir, 'GrimoirePage')

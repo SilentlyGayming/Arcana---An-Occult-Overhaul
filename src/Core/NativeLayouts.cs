@@ -62,6 +62,7 @@ namespace SupernaturalExpanded.Journal
         internal const uint GrimoireDescriptionText = 0x53E000E8;
         internal const uint GrimoireDescriptionPrompt = 0x53E000F0;
         internal const uint GrimoireDescriptionMeta = 0x53E000F1;
+        internal const uint GrimoireDescriptionCost = 0x53E000F2;
         internal const uint GrimoireFirstRow = 0x53E00100;
         internal const uint GrimoireScrollTrack = 0x53E00140;
         internal const uint GrimoireScrollThumb = 0x53E00141;
