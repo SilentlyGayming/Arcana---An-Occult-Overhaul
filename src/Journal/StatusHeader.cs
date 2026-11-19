@@ -1,16 +1,13 @@
 using System;
 using System.Collections.Generic;
 using Sims3.SimIFace;
-using Sims3.UI;
 using Sims3.UI.Hud;
+using Sims3.UI;
 
 namespace SupernaturalExpanded.Journal
 {
-    // The Skill & Power panel in the journal header; the figures come from the selected Sim's OccultStatusProvider, and humans get no panel.
     internal sealed class StatusHeader
     {
-        // Both bars use the occult accent shared with the HUD meter; their values and fills are tracked independently.
-
         private sealed class Row
         {
             internal readonly StatusField Field = new StatusField();
@@ -20,8 +17,6 @@ namespace SupernaturalExpanded.Journal
             internal UIImage ShownIcon;
             internal Text Label;
             internal Text Value;
-            // The stock HUD meter bar: a tinted capsule for the track, the same capsule tinted with the occult colour for the fill,
-            // and the glass overlay in front of both.
             internal Window Gloss, Fill, FillClip, Track;
             internal BarSparkles Sparkles;
             internal bool Shown;
@@ -38,9 +33,9 @@ namespace SupernaturalExpanded.Journal
         private int shape = -1;
         private bool visible = true;
 
-        // Returns null when the installed layout predates the header, so the rest of the journal still works.
         internal static StatusHeader Create(JournalWindow journal)
         {
+            // Creates the status header, or returns null when the installed layout predates it.
             return journal.HasControl(NativeLayouts.StatusPanel) ? new StatusHeader(journal) : null;
         }
 
@@ -54,9 +49,9 @@ namespace SupernaturalExpanded.Journal
             Show(false);
         }
 
-        // The first six IDs are icon, label, value, glass overlay, fill and track; the power row adds a clip and its stock HUD sparkle sprites.
         private void Bind(Row row, uint first)
         {
+            // Binds a header row's icon, label, value, glass, fill and track controls.
             row.Icon = journal.Control<Window>(first);
             row.IconImage = row.Icon.Drawable as ImageDrawable;
             row.DefaultIcon = row.IconImage == null ? null : row.IconImage.Image;
@@ -80,12 +75,11 @@ namespace SupernaturalExpanded.Journal
         }
 
         internal bool Visible { get { return visible; } }
-        // The power row as the header last read it, so the Overview shows the same figure; null while the header shows none.
         internal StatusField PowerField { get { return visible && power.Field.Available ? power.Field : null; } }
 
-        // Cheap enough for motive ticks: the controls only change when a value does.
         internal void Refresh(SimIdentity identity, IHudModel model, PowerSelection selection)
         {
+            // Refreshes the header, changing controls only when a value changes.
             OccultTypes primary = identity == null ? OccultTypes.None : OccultAssetData.Primary(identity.Occults);
             provider = OccultStatusProvider.For(primary);
             if (provider == null)
@@ -146,9 +140,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Places the panel for a journal of the given width; JournalWindow.Resize then calls RefreshBars so the fills follow their tracks.
         internal void Layout(float windowWidth)
         {
+            // Places the header panel for a journal of the given width.
             width = windowWidth;
             if (!visible)
             {
@@ -182,8 +176,6 @@ namespace SupernaturalExpanded.Journal
             journal.Place(row.Track, x, y, HeaderLayout.BarWidth, HeaderLayout.BarHeight);
             journal.Place(row.Gloss, x, y, HeaderLayout.BarWidth, HeaderLayout.BarHeight);
 
-            // The Journal scales control rectangles manually. Match the
-            // native nine-slice caps to that scale as well for all three layers.
             SetSliceScale(row.Track, journal.LayoutScale);
             SetSliceScale(row.Fill, journal.LayoutScale);
             SetSliceScale(row.Gloss, journal.LayoutScale);
@@ -198,9 +190,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Sizes each fill inside its (already scaled) track, so call it after the placements have been scaled.
         internal void RefreshBars()
         {
+            // Sizes each fill inside its (already scaled) track, so call it after the placements have been scaled.
             FillBar(progress);
             FillBar(power);
         }
@@ -301,7 +293,6 @@ namespace SupernaturalExpanded.Journal
             {
                 control.Visible = show;
             }
-            // Every control now has the panel's visibility, so Apply can hide the rows that have nothing to show.
             progress.Shown = show;
             power.Shown = show;
             if (!show)

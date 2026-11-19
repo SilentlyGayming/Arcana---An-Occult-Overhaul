@@ -5,7 +5,6 @@ using Sims3.UI;
 
 namespace SupernaturalExpanded.Journal
 {
-    // UI-only contract. Future spell providers supply stable IDs; nothing here grants or casts magic.
     internal sealed class GrimoireEntry
     {
         internal readonly string Id;
@@ -34,55 +33,51 @@ namespace SupernaturalExpanded.Journal
 
     internal sealed class GrimoirePage
     {
-        private const int CategoryCount = 4;
-        // Keep in sync with GRIMOIRE_ROWS in tools/journal_layouts.py.
+        internal const int CategoryCount = (int)SpellCategory.Ability + 1;
         internal const int VisibleRows = 12;
         private const float IconSize = 26f;
         private const float IconGap = 8f;
         private const float HeaderHeight = 29f;
         private const float RowHeight = 30f;
-        // The stock scrollbar is 15 wide and its arrows are square.
         private const float ScrollWidth = 15f;
         private const float ScrollArrowHeight = 15f;
-        // As in the stock lists, the scrollbar sits outside the table, in its own strip at the right of the pane.
         private const float ScrollGap = 6f;
-        // The stock list outline draws its line inside its own area; widening it by this much puts the line on the header's edges.
         private const float OutlineInset = 3f;
-        // The outline's bottom edge sits just under the last row.
         private const float OutlineBottomExtra = 2f;
-        // Room kept at the right of a header cell for its sort arrow.
         private const float ArrowGutter = 21f;
-        // The category buttons start level with the Overview's first panels, near the top of the content region.
         private const float TabTop = WindowGeometry.ContentTop + 14f;
         private const float PaneTop = TabTop + 54f;
-        // The list is its header, the visible rows and the outline's bottom edge; the description takes the rest of the content region.
         private const float PaneHeight = HeaderHeight + VisibleRows * RowHeight + 3f;
         private const float DescriptionGap = 8f;
         private const float BottomPad = 12f;
         private const float DescriptionHeight = WindowGeometry.ContentBottom - BottomPad - (PaneTop + PaneHeight + DescriptionGap);
         private const int MaxDescriptionLength = 240;
-        // The stock table scrolls one row for each wheel notch.
         private const int WheelRows = 1;
-        private static readonly string[] Categories = { JournalText.Get("Arcana.Journal.Grimoire.Category.Spells"), JournalText.Get("Arcana.Journal.Grimoire.Category.Curses"), JournalText.Get("Arcana.Journal.Grimoire.Category.Rituals"), JournalText.Get("Arcana.Journal.Grimoire.Category.Abilities") };
+        private static readonly string[] Categories = {
+            JournalText.Get("Arcana.Journal.Grimoire.Category.Spells"), JournalText.Get("Arcana.Journal.Grimoire.Category.Charms"),
+            JournalText.Get("Arcana.Journal.Grimoire.Category.Curses"), JournalText.Get("Arcana.Journal.Grimoire.Category.Rituals"),
+            JournalText.Get("Arcana.Journal.Grimoire.Category.Abilities")
+        };
         private static readonly string[] EmptyMessages = {
-            JournalText.Get("Arcana.Journal.Grimoire.EmptyList.Spells"), JournalText.Get("Arcana.Journal.Grimoire.EmptyList.Curses"),
-            JournalText.Get("Arcana.Journal.Grimoire.EmptyList.Rituals"), JournalText.Get("Arcana.Journal.Grimoire.EmptyList.Abilities")
+            JournalText.Get("Arcana.Journal.Grimoire.EmptyList.Spells"), JournalText.Get("Arcana.Journal.Grimoire.EmptyList.Charms"),
+            JournalText.Get("Arcana.Journal.Grimoire.EmptyList.Curses"), JournalText.Get("Arcana.Journal.Grimoire.EmptyList.Rituals"),
+            JournalText.Get("Arcana.Journal.Grimoire.EmptyList.Abilities")
         };
         private static readonly string[] SelectPrompts = {
-            JournalText.Get("Arcana.Journal.Grimoire.Select.Spells"), JournalText.Get("Arcana.Journal.Grimoire.Select.Curses"),
-            JournalText.Get("Arcana.Journal.Grimoire.Select.Rituals"), JournalText.Get("Arcana.Journal.Grimoire.Select.Abilities")
+            JournalText.Get("Arcana.Journal.Grimoire.Select.Spells"), JournalText.Get("Arcana.Journal.Grimoire.Select.Charms"),
+            JournalText.Get("Arcana.Journal.Grimoire.Select.Curses"), JournalText.Get("Arcana.Journal.Grimoire.Select.Rituals"),
+            JournalText.Get("Arcana.Journal.Grimoire.Select.Abilities")
         };
         private static readonly string[] EmptyPrompts = {
-            JournalText.Get("Arcana.Journal.Grimoire.EmptyDetails.Spells"), JournalText.Get("Arcana.Journal.Grimoire.EmptyDetails.Curses"),
-            JournalText.Get("Arcana.Journal.Grimoire.EmptyDetails.Rituals"), JournalText.Get("Arcana.Journal.Grimoire.EmptyDetails.Abilities")
+            JournalText.Get("Arcana.Journal.Grimoire.EmptyDetails.Spells"), JournalText.Get("Arcana.Journal.Grimoire.EmptyDetails.Charms"),
+            JournalText.Get("Arcana.Journal.Grimoire.EmptyDetails.Curses"), JournalText.Get("Arcana.Journal.Grimoire.EmptyDetails.Rituals"),
+            JournalText.Get("Arcana.Journal.Grimoire.EmptyDetails.Abilities")
         };
-        private static readonly float[] CaptionWidths = { 49f, 53f, 56f, 65f };
-        // The pressed face is already dark, so the selected tint only lightens it enough to keep the navy caption readable.
+        private static readonly float[] CaptionWidths = { 49f, 60f, 53f, 56f, 65f };
         private static readonly Color ActiveTabColor = new Color(0xFFBBC6E2);
         private static readonly Color InactiveTabColor = new Color(0xFFA5C6E6);
         private static readonly Color TextColor = new Color(0xFF0B246E);
         private static readonly Color MutedColor = new Color(0xFF5F78A3);
-        // Even rows show the list body; odd rows and the hover use the stock alternate row colour (0xFFD2EBF7).
         private const uint EvenRowFill = 0x00000000;
         private const uint OddRowFill = 0x70D2EBF7;
         private const uint HoverRowFill = 0xFFD2EBF7;
@@ -136,20 +131,19 @@ namespace SupernaturalExpanded.Journal
         private float rowsWidth;
         private int hoverRow = -1;
 
-        // Raised when a category's entries are replaced, so other pages that count them can refresh.
         internal event EventHandler EntriesChanged;
 
         internal Button[] Tabs { get { return tabs; } }
 
-        // The Grimoire lists only what the Sim has unlocked, so a category's count is the number of entries it holds.
         internal int GetEntryCount(int index)
         {
+            // Returns how many unlocked entries a category holds.
             return index < 0 || index >= CategoryCount ? 0 : entries[index].Count;
         }
 
-        // The artwork on a category's tab, or null if it is not loaded.
         internal UIImage GetCategoryIcon(int index)
         {
+            // Returns the artwork on a category's tab, or null if it is not loaded.
             if (index < 0 || index >= CategoryCount)
             {
                 return null;
@@ -158,9 +152,9 @@ namespace SupernaturalExpanded.Journal
             return drawable == null ? null : drawable.Image;
         }
 
-        // Called once the category buttons have their themed faces.
         internal void UseFaces(TabFaces faces)
         {
+            // Applies the themed category button faces once they are available.
             tabFaces = faces;
             tabFaces.Show(category);
         }
@@ -179,7 +173,7 @@ namespace SupernaturalExpanded.Journal
                 entries[i] = new List<GrimoireEntry>();
                 sorted[i] = new List<GrimoireEntry>();
                 tabs[i] = journal.Button(NativeLayouts.GrimoireFirstTab + (uint)i, "",
-                    48f + i * 202f, 199f, 194f, 39f, delegate { Select(index); });
+                    0f, 0f, 100f, 39f, delegate { Select(index); });
                 icons[i] = journal.Control<Window>(NativeLayouts.GrimoireFirstIcon + (uint)i);
                 icons[i].IgnoreMouse = true;
                 captions[i] = journal.Label(NativeLayouts.GrimoireFirstCaption + (uint)i,
@@ -234,8 +228,6 @@ namespace SupernaturalExpanded.Journal
                 rowBackgrounds[i].IgnoreMouse = true;
                 rowButtons[i] = journal.Button(id + 1, "", 0, 0, 100, RowHeight,
                     delegate { SelectRow(row); });
-                // The Journal has no mouse-enter or mouse-leave events, so a row is hovered while the pointer moves over it
-                // and the root window clears it once the pointer is elsewhere.
                 rowButtons[i].MouseMove += delegate(WindowBase sender, UIMouseEventArgs args)
                 {
                     SetHover(row);
@@ -254,7 +246,7 @@ namespace SupernaturalExpanded.Journal
             scrollTrack = journal.Control<Window>(NativeLayouts.GrimoireScrollTrack);
             scrollTrack.IgnoreMouse = false;
             scrollThumb = journal.Button(NativeLayouts.GrimoireScrollThumb, "", 0, 0, ScrollWidth, 28,
-                delegate { /* Thumb is dragged, not clicked. */ });
+                delegate {  });
             upArrow = journal.Button(NativeLayouts.GrimoireScrollUp, "", 0, 0, ScrollWidth, ScrollArrowHeight,
                 delegate { ScrollBy(-1); });
             downArrow = journal.Button(NativeLayouts.GrimoireScrollDown, "", 0, 0, ScrollWidth, ScrollArrowHeight,
@@ -264,8 +256,6 @@ namespace SupernaturalExpanded.Journal
             emptyMessage.TextColor = TextColor;
             emptyMessage.IgnoreMouse = true;
 
-            // The thumb takes the mouse capture while it is dragged, so its move and release
-            // events arrive even when the pointer is outside the Journal.
             listPanel.MouseWheel += OnWheel;
             scrollTrack.MouseWheel += OnWheel;
             scrollThumb.MouseWheel += OnWheel;
@@ -298,11 +288,25 @@ namespace SupernaturalExpanded.Journal
             Select(0);
         }
 
-        // The future knowledge registry supplies the collection; this never changes gameplay.
         internal void SetEntries(int index, IEnumerable<GrimoireEntry> incoming)
         {
-            if (index < 0 || index >= CategoryCount) return;
-            // Snapshot first so callers can refresh from their existing collection.
+            // Replaces a category's entries and notifies the pages that count them.
+            if (!Replace(index, incoming)) return;
+            if (EntriesChanged != null) EntriesChanged(this, EventArgs.Empty);
+        }
+
+        internal void SetAllEntries(List<GrimoireEntry>[] incoming)
+        {
+            // Replaces every category's entries and notifies the pages that count them once.
+            bool changed = false;
+            for (int i = 0; i < CategoryCount && i < incoming.Length; i++) changed |= Replace(i, incoming[i]);
+            if (changed && EntriesChanged != null) EntriesChanged(this, EventArgs.Empty);
+        }
+
+        private bool Replace(int index, IEnumerable<GrimoireEntry> incoming)
+        {
+            // Copies the incoming entries without duplicate IDs, then re-sorts and refreshes the visible category.
+            if (index < 0 || index >= CategoryCount) return false;
             List<GrimoireEntry> snapshot = incoming == null ? null : new List<GrimoireEntry>(incoming);
             List<GrimoireEntry> target = entries[index];
             target.Clear();
@@ -320,7 +324,7 @@ namespace SupernaturalExpanded.Journal
             if (selectedIds[index] != null && !HasEntryWithId(sorted[index], selectedIds[index]))
                 selectedIds[index] = null;
             if (index == category) RefreshRows();
-            if (EntriesChanged != null) EntriesChanged(this, EventArgs.Empty);
+            return true;
         }
 
         internal void ClearEntries(int index) { SetEntries(index, null); }
@@ -376,7 +380,6 @@ namespace SupernaturalExpanded.Journal
             result.AddRange(original);
             int column = sortColumn[index];
             bool reverse = descending[index];
-            // Stable tie ordering: source sequence, not mutable UI row index.
             Dictionary<string, int> order = new Dictionary<string, int>(StringComparer.Ordinal);
             for (int i = 0; i < original.Count; i++) order[original[i].Id] = i;
             result.Sort(delegate(GrimoireEntry a, GrimoireEntry b)
@@ -456,15 +459,14 @@ namespace SupernaturalExpanded.Journal
             PaintRow(slot);
         }
 
-        // The panel always shows the selected entry of the current category, or nothing, so it cannot go stale.
         private void RefreshDescription()
         {
+            // Shows the selected entry of the current category, or a hint when nothing is selected.
             int position = visible ? FindId(sorted[category], selectedIds[category]) : -1;
             GrimoireEntry entry = position < 0 ? null : sorted[category][position];
             descriptionName.Caption = entry == null ? String.Empty : entry.Name;
             descriptionMeta.Caption = entry == null ? String.Empty : DescribeEntry(entry);
             descriptionText.Caption = entry == null ? String.Empty : ShortenDescription(entry.Description);
-            // With nothing selected the panel holds one centered hint, so it never looks like missing data.
             bool hint = visible && entry == null;
             descriptionPrompt.Caption = sorted[category].Count == 0 ? EmptyPrompts[category] : SelectPrompts[category];
             descriptionPrompt.Visible = hint;
@@ -519,8 +521,6 @@ namespace SupernaturalExpanded.Journal
         {
             int max = GetMaxScroll();
             bool scrollable = visible && max > 0;
-            // The strip is always reserved so the columns never resize, but its track, arrows and thumb appear only
-            // when the list is longer than its rows, so an empty or short list has nothing to scroll or drag.
             scrollTrack.Visible = scrollable;
             upArrow.Visible = scrollable;
             downArrow.Visible = scrollable;
@@ -540,9 +540,9 @@ namespace SupernaturalExpanded.Journal
             journal.Place(scrollThumb, scrollbarLeft, GetThumbTop(max), ScrollWidth, scrollbarThumbSize);
         }
 
-        // The stock arrow art has no disabled image, so a disabled arrow is dimmed with its shade colour.
         private static void Tint(Button arrow, bool enabled)
         {
+            // Dims a disabled arrow with its shade colour because the stock art has no disabled image.
             Color shade = enabled ? ArrowEnabled : ArrowDisabled;
             if (arrow.ShadeColor.ARGB == shade.ARGB) return;
             arrow.ShadeColor = shade;
@@ -553,7 +553,6 @@ namespace SupernaturalExpanded.Journal
         {
             int delta = args.MouseWheelDelta;
             if (!visible || dragging || delta == 0) return;
-            // A positive delta is the wheel turning up, which is how the stock table reads it too.
             ScrollBy(delta > 0 ? -WheelRows : WheelRows);
             args.Handled = true;
         }
@@ -572,7 +571,6 @@ namespace SupernaturalExpanded.Journal
         {
             float y;
             if (!visible || dragging || GetMaxScroll() == 0 || !TryGetCursorY(out y)) return;
-            // Page scroll on either side of the thumb.
             ScrollBy(y < GetThumbTop(GetMaxScroll()) ? -VisibleRows : VisibleRows);
             args.Handled = true;
         }
@@ -581,7 +579,6 @@ namespace SupernaturalExpanded.Journal
         {
             float y;
             if (!dragging) return;
-            // A drag whose capture was taken away (focus loss, for example) ends here instead of following the pointer.
             if (!visible || UIManager.GetCaptureTarget(InputContext.kICMouse) != scrollThumb)
             {
                 dragging = false;
@@ -612,9 +609,9 @@ namespace SupernaturalExpanded.Journal
                 UIManager.ReleaseCapture(InputContext.kICMouse, scrollThumb);
         }
 
-        // Lets the Journal drop an active drag before the window goes away.
         internal void Release()
         {
+            // Drops an active drag before the window goes away.
             EndDrag();
         }
 
@@ -629,9 +626,9 @@ namespace SupernaturalExpanded.Journal
                 scrollbarTravel * scrollRow[category] / (float)Math.Max(1, max);
         }
 
-        // The cursor's position in layout units from the top left of the Journal, whatever its scale or position.
         private bool TryGetCursor(out float x, out float y)
         {
+            // Reads the cursor position in layout units from the Journal's top left, whatever its scale.
             x = 0f;
             y = 0f;
             WindowBase root = journal.RootWindow;
@@ -680,9 +677,8 @@ namespace SupernaturalExpanded.Journal
         {
             const float margin = WindowGeometry.ContentLeft + WindowGeometry.ContentInset;
             const float gap = 8f;
-            // The pane sits inside the shared content region, the same distance from both sides.
             float paneWidth = WindowGeometry.ContentWidth - 2f * WindowGeometry.ContentInset;
-            float tabWidth = (paneWidth - 3f * gap) / CategoryCount;
+            float tabWidth = (paneWidth - (CategoryCount - 1) * gap) / CategoryCount;
             for (int i = 0; i < CategoryCount; i++)
             {
                 float x = margin + i * (tabWidth + gap);
@@ -693,7 +689,6 @@ namespace SupernaturalExpanded.Journal
                 journal.Place(captions[i], groupX + IconSize + IconGap,
                     TabTop, CaptionWidths[i], 39f);
             }
-            // The shared header overlaps the top of the list outline by one unit.
             float headY = PaneTop;
             float listTop = headY + HeaderHeight - 1f;
             float tableWidth = paneWidth - ScrollWidth - ScrollGap;
@@ -703,7 +698,6 @@ namespace SupernaturalExpanded.Journal
             journal.Place(listPanel, outlineLeft, listTop, outlineWidth, outlineHeight);
             journal.Place(listBody, outlineLeft + 1f, listTop, outlineWidth - 2f, outlineHeight - 1f);
 
-            // Sort targets and row text use the same columns. The scrollbar sits beyond the right edge of the table.
             float headerX = margin;
             journal.Place(tableHeader, headerX, headY, tableWidth, HeaderHeight);
             scrollbarLeft = margin + paneWidth - ScrollWidth;
@@ -717,9 +711,7 @@ namespace SupernaturalExpanded.Journal
             {
                 float cellWidth = widths[i];
                 journal.Place(sortButtons[i], starts[i], headY, cellWidth, HeaderHeight);
-                // Header captions are centered in the full cell width; the sort arrows are right-aligned separately.
                 journal.Place(headers[i], starts[i], headY, cellWidth, HeaderHeight);
-                // As in the stock column header, the arrow is right-aligned in its cell with a 3 unit margin.
                 journal.Place(sortArrows[i], starts[i], headY, cellWidth - 3f, HeaderHeight);
                 journal.Place(sortArrowsDown[i], starts[i], headY, cellWidth - 3f, HeaderHeight);
             }
@@ -746,7 +738,6 @@ namespace SupernaturalExpanded.Journal
                 rowsY + (VisibleRows * RowHeight - 40f) / 2f,
                 nameWidth - 10f, 40f);
 
-            // The description panel has a fixed height, so selecting an entry never changes the Journal's size.
             float descriptionTop = PaneTop + PaneHeight + DescriptionGap;
             journal.Place(descriptionPanel, outlineLeft, descriptionTop, outlineWidth, DescriptionHeight);
             journal.Place(descriptionBody, outlineLeft + 1f, descriptionTop + 1f, outlineWidth - 2f, DescriptionHeight - 2f);

@@ -1,6 +1,6 @@
+using System;
 using Sims3.SimIFace;
 using Sims3.UI;
-using System;
 
 namespace SupernaturalExpanded.Journal
 {
@@ -34,7 +34,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // The perk tooltip (title, blue tagline, description, red conflict line) in the mod's own layout, sized like the stock SimpleTextTooltip: each Text is fitted to its wrapped height and the window is sized around them.
     internal sealed class PerkTooltip : Tooltip
     {
         private const uint TaglineColor = 0xFF2D8CD8;
@@ -44,7 +43,6 @@ namespace SupernaturalExpanded.Journal
         private const uint DarkPositiveModifierColor = 0xFF1D7038;
         private const uint DarkNegativeModifierColor = 0xFFAA273C;
 
-        // In UI units, before the UI scale; the stock tooltips wrap at 180, which is too narrow for these descriptions.
         private const float TextWidth = 320f;
         private const float Padding = 10f;
         private const float TaglineGap = 2f;
@@ -65,9 +63,9 @@ namespace SupernaturalExpanded.Journal
         {
         }
 
-        // Never shows a half-built tooltip: a failure falls back to the stock plain one, which is always readable.
         internal static Tooltip Create(string title, string tagline, string description, string conflict)
         {
+            // Builds the perk tooltip, falling back to the stock plain tooltip on failure.
             return Create(title, tagline, description, conflict, null);
         }
 
@@ -103,9 +101,9 @@ namespace SupernaturalExpanded.Journal
             return Plain(text + (string.IsNullOrEmpty(conflict) ? "" : "\n" + conflict));
         }
 
-        // Returns false when the layout did not load with the text controls in use.
         private bool Fill(string title, string tagline, string description, string conflict, TooltipModifier[] modifiers)
         {
+            // Fills the tooltip controls and returns false when the layout lacks them.
             Window root = TooltipWindow as Window;
             if (root == null)
             {
@@ -182,9 +180,9 @@ namespace SupernaturalExpanded.Journal
             return true;
         }
 
-        // Sets the caption, fits the Text's height to its wrapped text at the given width, and returns that height.
         private float Place(Text text, string caption, float left, float top, float width, float scale)
         {
+            // Sets the caption, fits the Text's height to its wrapped text at the given width, and returns that height.
             text.Caption = caption;
             text.Area = new Rect(left, top, left + width, top + 10f);
             text.AutoSize(true);
@@ -197,17 +195,17 @@ namespace SupernaturalExpanded.Journal
             return height;
         }
 
-        // Only used if AutoSize does not report a usable height: a rough line count from the text length.
         private static float Estimate(string caption, float width, float scale)
         {
+            // Estimates a text height from its length when AutoSize reports none.
             float perLine = Math.Max(1f, width / (6.5f * scale));
             int lines = Math.Max(1, (int)Math.Ceiling(caption.Length / perLine));
             return lines * 16f * scale;
         }
 
-        // The stock plain tooltip, at the same width where the game allows it.
         private static Tooltip Plain(string text)
         {
+            // Builds the stock plain tooltip at the same width where the game allows it.
             try
             {
                 return new SimpleTextTooltip(text, false, "SimpleTextTooltip", 1, (int)(TextWidth * NativeLayouts.UIScale()));
@@ -251,8 +249,6 @@ namespace SupernaturalExpanded.Journal
         No
     }
 
-    // Reuse the game's two-button layout, focus, keyboard navigation and modal
-    // teardown. TwoButtonDialog.Show merges Escape and No into the same bool.
     internal sealed class PerkPurchaseDialog : TwoButtonDialog
     {
         private const uint DismissID = uint.MaxValue;
@@ -367,10 +363,8 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // The feedback for staging a perk: the sparkle burst, plus one sound for clicks that come close together.
     internal sealed class PerkFeedback
     {
-        // Clicks closer together than this share one sound.
         private const int SoundGapMilliseconds = 120;
 
         private readonly SparkleBurst sparkles;

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Sims3.Gameplay;
 using Sims3.Gameplay.CAS;
+using Sims3.Gameplay;
 using Sims3.SimIFace;
-using Sims3.UI;
 using Sims3.UI.Hud;
+using Sims3.UI;
 
 namespace SupernaturalExpanded.Journal
 {
@@ -17,7 +17,6 @@ namespace SupernaturalExpanded.Journal
         private static readonly FieldInfo BarField = typeof(SimDisplay).GetField(BarName, NativeReflection.Instance);
         private static readonly FieldInfo FillControlField = typeof(SimDisplay).GetField(FillControlName, NativeReflection.Instance);
         private static readonly FieldInfo FillReferenceField = typeof(SimDisplay).GetField(FillReferenceName, NativeReflection.Instance);
-        // Meter icons shared with the journal header: the embedded occult icons by type, and the game's own magic-meter icon once it has been seen on the HUD.
         private static readonly Dictionary<OccultTypes, UIImage> icons = new Dictionary<OccultTypes, UIImage>();
         private static UIImage nativeIcon;
         private static bool hudReplaced;
@@ -251,9 +250,9 @@ namespace SupernaturalExpanded.Journal
             return icons == 0 && images == 1 ? image : null;
         }
 
-        // The image the HUD meter shows for `type`: the mod's embedded icon where it replaces one, otherwise the game's own; null when neither can be found.
         internal static UIImage MeterIcon(OccultTypes type)
         {
+            // Returns the image the HUD meter shows for an occult, or null when none is found.
             if (type == OccultTypes.None)
             {
                 return null;
@@ -279,7 +278,6 @@ namespace SupernaturalExpanded.Journal
 
             if (nativeIcon == null && !hudReplaced)
             {
-                // The HUD has not been re-skinned for the current Sim, so the meter still carries the game's icon.
                 SimDisplay display = NativeUi.GetSimDisplay();
                 WindowBase bar = display == null ? null : ReadWindow(display, BarField, BarName);
                 Window found = bar == null || bar.Disposed ? null : FindIcon(bar);
@@ -409,7 +407,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // Per-Sim energy for the HUD meter; not saved with the game yet.
     internal sealed class OccultEnergy
     {
         internal const float Max = 100f;

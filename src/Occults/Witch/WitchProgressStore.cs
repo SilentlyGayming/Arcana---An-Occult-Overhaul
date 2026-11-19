@@ -4,7 +4,6 @@ using Sims3.SimIFace;
 
 namespace SupernaturalExpanded.Journal
 {
-    // One Witch's saved progression: claimed milestones, lifetime and spendable Perk Points, and perk ranks by key hash.
     internal sealed class WitchRecord
     {
         private const int Version = 1;
@@ -53,9 +52,9 @@ namespace SupernaturalExpanded.Journal
             return data;
         }
 
-        // The claimed milestones are authoritative: lifetime points are recomputed from them and the balance is clamped.
         internal static WitchRecord Decode(List<int> data, out bool newer)
         {
+            // Decodes saved progress, recomputing lifetime points from the claimed milestones.
             newer = false;
             if (data == null || data.Count < HeaderSize || data[0] < 1)
             {
@@ -80,7 +79,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // Per-Sim records keyed by SimDescriptionId. Only primitives are saved, so a save never depends on a type from this mod.
     internal static class WitchProgressStore
     {
         [PersistableStatic]
@@ -116,9 +114,9 @@ namespace SupernaturalExpanded.Journal
             return Load(simId, out newer);
         }
 
-        // Awards every milestone the experience has reached and the Sim has not yet claimed; each is awarded once per Sim.
         internal static WitchRecord ClaimMilestones(ulong simId, long xpMilli, long[] thresholds)
         {
+            // Awards every milestone the experience has reached and the Sim has not yet claimed; each is awarded once per Sim.
             if (simId == 0UL)
             {
                 return null;
@@ -156,9 +154,9 @@ namespace SupernaturalExpanded.Journal
             return record;
         }
 
-        // Applies new perk ranks and deducts their cost in one step, or changes nothing and returns null.
         internal static WitchRecord Purchase(ulong simId, OccultTree tree, Dictionary<string, int> newTiers)
         {
+            // Applies new perk ranks and deducts their cost in one step, or changes nothing and returns null.
             bool newer;
             WitchRecord record = Load(simId, out newer);
             if (record == null)

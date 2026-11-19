@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Sims3.SimIFace;
-using Sims3.UI;
 using Sims3.UI.Hud;
+using Sims3.UI;
 
 [assembly: Tunable]
 [assembly: PersistableStatic]
-[assembly: AssemblyVersion("0.8.8.0")]
+[assembly: AssemblyVersion("0.9.0.0")]
+[assembly: AssemblyFileVersion("0.9.2.0")]
 
 namespace SupernaturalExpanded.Journal
 {
@@ -15,6 +16,10 @@ namespace SupernaturalExpanded.Journal
     {
         [Tunable]
         public static bool kInstantiator = false;
+
+        [Tunable] public static float kStudyExperienceFraction = 0.40f;
+        [Tunable] public static float kStudyResearchIntervalMinutes = 30f;
+        [Tunable] public static float kStudyDiscoveryChancePercent = 25f;
 
         private static SimologyEntry entry;
         private static OccultMeter meter;
@@ -25,11 +30,11 @@ namespace SupernaturalExpanded.Journal
 
         static JournalBootstrap()
         {
-            AccuracySources.Register(OccultTypes.Witch, WitchCastingContext.ReadAccuracy);
+            AccuracySources.Register(OccultTypes.Witch, WitchAttributes.ReadAccuracy);
             AttributeSources.Register(OccultTypes.Witch, JournalText.Get("Arcana.Journal.Overview.Attributes.PowerRegeneration"),
-                WitchCastingContext.ReadRegeneration);
+                WitchAttributes.ReadRegeneration);
             AttributeSources.Register(OccultTypes.Witch, JournalText.Get("Arcana.Journal.Overview.Attributes.SpellCost"),
-                WitchCastingContext.ReadSpellCost);
+                WitchAttributes.ReadSpellCost);
             World.OnWorldLoadFinishedEventHandler += OnWorldLoaded;
             World.OnWorldLoadStartedEventHandler += OnWorldStarting;
             World.OnWorldQuitEventHandler += OnWorldExiting;
@@ -40,6 +45,7 @@ namespace SupernaturalExpanded.Journal
             OnWorldExiting(sender, args);
             try
             {
+                SpellKnowledgeGates.Prepare();
                 WitchCastingLifecycle.Prepare();
             }
             catch (ResetException)
@@ -48,7 +54,7 @@ namespace SupernaturalExpanded.Journal
             }
             catch (Exception error)
             {
-                ReportOnce("Registering Witch recovery moodlets", error);
+                ReportOnce("Preparing Spell Knowledge and Witch recovery", error);
             }
         }
 
@@ -56,6 +62,7 @@ namespace SupernaturalExpanded.Journal
         {
             OnWorldExiting(sender, args);
             worldReady = true;
+            ArcanaCheats.Start();
             entry = new SimologyEntry();
             entry.Refresh();
             meter = new OccultMeter();
@@ -92,6 +99,7 @@ namespace SupernaturalExpanded.Journal
         {
             worldReady = false;
             generation++;
+            ArcanaCheats.Stop();
             WitchCastingLifecycle.Stop();
             SpellStudyStations.Stop();
             UiAnimationClock.Shutdown();
@@ -230,9 +238,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // For fallbacks that can fire on every hover or click: the first failure of each operation is written, later ones are not.
         internal static void ReportOnce(string operation, Exception error)
         {
+            // Reports only the first failure of each operation, for fallbacks that can fire on every hover or click.
             if (reportedOperations.ContainsKey(operation))
             {
                 return;

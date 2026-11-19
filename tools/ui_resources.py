@@ -1,9 +1,12 @@
-"""Generate the Journal and HUD PNG sprites that have no stock artwork."""
 import math
 import struct
 import zlib
+from pathlib import Path
 
 from dbpf import fnv64
+
+ROOT = Path(__file__).resolve().parent.parent
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
 def rgba_png(width, height, pixel_at):
@@ -20,7 +23,6 @@ def rgba_png(width, height, pixel_at):
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b"")
 
 
-# HUD perk-point pulse.
 HALO_FACE_WIDTH = 29
 HALO_FACE_HEIGHT = 24
 HALO_PAD = 1.6
@@ -31,8 +33,7 @@ HALO_INSTANCE = fnv64("SupernaturalExpanded.UI.PerkHalo.r75")
 
 
 def halo_pixel(x, y):
-    # Signed distance to a rounded rectangle. The core sits on the perimeter;
-    # the outer falloff is wider than the inner one, with a clear button center.
+    # Returns a halo pixel from its signed distance to a rounded rectangle.
     radius = 4.0
     dx = abs((x + .5) / HALO_WIDTH - .5) * (HALO_FACE_WIDTH + 2 * HALO_PAD) - HALO_FACE_WIDTH / 2 + radius
     dy = abs((y + .5) / HALO_HEIGHT - .5) * (HALO_FACE_HEIGHT + 2 * HALO_PAD) - HALO_FACE_HEIGHT / 2 + radius
@@ -49,7 +50,6 @@ def halo_resources():
     return [(HALO_INSTANCE, rgba_png(HALO_WIDTH, HALO_HEIGHT, halo_pixel))]
 
 
-# Five-point perk-selection star across its twelve angles.
 STAR_INSTANCE = fnv64("SupernaturalExpanded.UI.PerkSelectionStarSpin.r75")
 STAR_FRAMES = 12
 STAR_SIZE = 32
@@ -80,7 +80,6 @@ def star_resources():
     return [(STAR_INSTANCE + frame, star_png(frame)) for frame in range(STAR_FRAMES)]
 
 
-# Seamless rank glitter and its independent endpoint glint.
 GLITTER_BODY_INSTANCE = fnv64("SupernaturalExpanded.UI.RankGlitter.Body.r75")
 GLITTER_TIP_INSTANCE = fnv64("SupernaturalExpanded.UI.RankGlitter.Tip.r75")
 GLITTER_WIDTH, GLITTER_PERIOD = 36, 180
@@ -122,8 +121,6 @@ def glitter_resources():
             (GLITTER_TIP_INSTANCE, rgba_png(GLITTER_WIDTH, GLITTER_WIDTH, glitter_tip))]
 
 
-# The stock mask comes from the game's Sim thumbnails. The optional custom mask
-# uses white opaque pixels inside and dark transparent pixels outside.
 MASK_SOURCE = "stock"
 MASK_STOCK_KEY = "69e704d5dd095e39"
 MASK_SIZE = 64
@@ -133,11 +130,11 @@ _MASK_SAMPLES = 8
 
 
 def portrait_mask_key():
-    return MASK_STOCK_KEY if MASK_SOURCE == "stock" else f"{fnv64(CUSTOM_NAME):016x}"
+    return MASK_STOCK_KEY if MASK_SOURCE == "stock" else f"{fnv64(MASK_CUSTOM_NAME):016x}"
 
 
 def _mask_coverage(x, y):
-    """Fraction of the pixel at (x, y) that lies inside the rounded rectangle."""
+    # Returns the fraction of a pixel inside the rounded rectangle.
     inside = 0
     for sy in range(_MASK_SAMPLES):
         for sx in range(_MASK_SAMPLES):
@@ -160,20 +157,15 @@ def portrait_mask_png():
 
 
 def portrait_mask_resources():
-    """Package resources needed by the chosen source; the stock mask needs none."""
+    # Returns the mask resources the chosen source needs.
     return [] if MASK_SOURCE == "stock" else [(fnv64(MASK_CUSTOM_NAME), portrait_mask_png())]
 
 
-# Specialization perks get a coloured outline just inside their tile's border, with a short soft glow inside it. The image is
-# white, so each perk's window shade is the colour. It is transparent in the middle and draws above the tile's plates, so the
-# outline runs unbroken around the tile, and the glow stops short of the icon.
 TILE_EDGE_NAME = "SupernaturalExpanded.UI.PerkTileEdge.r2"
 TILE_EDGE_INSTANCE = fnv64(TILE_EDGE_NAME)
-# Journal units; match PowerLayout.TileSize and PowerLayout.CellHeight.
 TILE_EDGE_WIDTH, TILE_EDGE_HEIGHT = 84, 90
 TILE_EDGE_DENSITY = 2
 TILE_EDGE_RADIUS = 6.0
-# The outline starts this far inside the tile's own border so it never covers it.
 TILE_EDGE_INSET = 1.0
 TILE_EDGE_RING = 2.5
 TILE_EDGE_GLOW = 5.0
@@ -182,11 +174,10 @@ TILE_EDGE_DEPTH = TILE_EDGE_RING + TILE_EDGE_GLOW
 
 
 def tile_edge_alpha(x, y):
-    """Alpha (0 to 1) at a point in journal units: a solid ring, then a glow fading inwards."""
+    # Returns the edge alpha at a point: a solid ring, then an inward glow.
     cx = min(max(x, TILE_EDGE_RADIUS), TILE_EDGE_WIDTH - TILE_EDGE_RADIUS)
     cy = min(max(y, TILE_EDGE_RADIUS), TILE_EDGE_HEIGHT - TILE_EDGE_RADIUS)
     corner = math.hypot(x - cx, y - cy)
-    # Distance inside the rounded rectangle's outline, from the corner arc or the nearest straight side.
     if corner > 0:
         depth = TILE_EDGE_RADIUS - corner
     else:
@@ -203,9 +194,35 @@ def tile_edge_png():
     width, height = TILE_EDGE_WIDTH * TILE_EDGE_DENSITY, TILE_EDGE_HEIGHT * TILE_EDGE_DENSITY
 
     def pixel(column, row):
-        # Four samples per pixel keep the ring's edges and the rounded corners smooth.
+        # Averages four samples so the ring's edges and corners stay smooth.
         alpha = sum(tile_edge_alpha((column + ox) / TILE_EDGE_DENSITY, (row + oy) / TILE_EDGE_DENSITY)
                     for ox in (.25, .75) for oy in (.25, .75)) / 4
         return (255, 255, 255, round(255 * alpha))
 
     return rgba_png(width, height, pixel)
+
+
+GRIMOIRE_CATEGORY_NAMES = ("Spells", "Charms", "Curses", "Rituals", "Abilities")
+GRIMOIRE_ICON_DIR = ROOT / "assets" / "UI" / "Icons" / "Interface" / "Grimoire"
+
+
+def grimoire_icon_instance(category):
+    if category not in GRIMOIRE_CATEGORY_NAMES:
+        raise ValueError("Unknown Grimoire category: " + str(category))
+    return fnv64("SupernaturalExpanded.UI.Grimoire.Category." + category)
+
+
+def grimoire_resources():
+    result = []
+    for category in GRIMOIRE_CATEGORY_NAMES:
+        source = GRIMOIRE_ICON_DIR / (category + ".png")
+        data = source.read_bytes()
+        if not data.startswith(PNG_SIGNATURE):
+            raise ValueError("Grimoire category artwork must be a PNG: " + str(source))
+        result.append((grimoire_icon_instance(category), data))
+    return result
+
+
+def resources():
+    return (grimoire_resources() + halo_resources() + [(TILE_EDGE_INSTANCE, tile_edge_png())]
+            + portrait_mask_resources() + star_resources() + glitter_resources())

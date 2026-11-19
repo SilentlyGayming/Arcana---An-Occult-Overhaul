@@ -1,10 +1,3 @@
-"""Lists the controls, comments and image keys of stock layouts extracted from a Sims 3 UI package.
-
-Usage: python3 inspect_ui_layouts.py <extracted-directory> <layout-name-substring> [--class Scrollbar]
-
-The extracted directory is only read. Image files are not part of a layout dump, so this
-shows which sprite a control uses, never what the sprite looks like.
-"""
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -30,7 +23,7 @@ def describe(path, only_class):
 
 def main():
     if len(sys.argv) < 3:
-        print(__doc__)
+        print("Usage: python3 inspect_ui_layouts.py <extracted-directory> <layout-name-substring> [--class Scrollbar]")
         return 1
     folder, needle = Path(sys.argv[1]), sys.argv[2].lower()
     only_class = sys.argv[sys.argv.index("--class") + 1] if "--class" in sys.argv else None

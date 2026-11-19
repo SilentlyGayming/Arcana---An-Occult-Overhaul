@@ -1,15 +1,14 @@
+using System;
 using Sims3.SimIFace;
 using Sims3.UI;
-using System;
 
 namespace SupernaturalExpanded.Journal
 {
     internal static class JournalTheme
     {
-
-        // Falls back to the layout's stock artwork and colors when the active UI skin cannot be read.
         internal static void ApplyHud(Button book, Window glyph, Button familyTree, WindowBase panel)
         {
+            // Falls back to the layout's stock artwork and colors when the active UI skin cannot be read.
             try
             {
                 CopyFace(Frame(book.Drawable), Frame(familyTree.Drawable));
@@ -42,7 +41,6 @@ namespace SupernaturalExpanded.Journal
                 StyleClose(journal, donor);
             });
             frames.HasTwoButtonFace = StyleTwoButtonFrame(frames.TwoButtonFace);
-            // The party picker's Cancel face does not render a circular backdrop outside its dialog, so Cancel copies the checkmark's frame and keeps its own X glyph.
             StyleCancel(journal);
             UseDonor("ThreeButtonDialog", 0x10000, delegate(WindowBase donor)
             {
@@ -71,9 +69,7 @@ namespace SupernaturalExpanded.Journal
                     StyleCounters(journal, Frame(sample.Drawable));
                 }
             });
-            // Unlike native button captions, the Grimoire labels remain fixed
-            // regardless of button state and use dark ink for light/blue buttons.
-            for (uint i = 0; i < 4; i++)
+            for (uint i = 0; i < GrimoirePage.CategoryCount; i++)
             {
                 Text caption = NativeLayouts.Find<Text>(journal, NativeLayouts.GrimoireFirstCaption + i);
                 if (caption != null)
@@ -81,8 +77,6 @@ namespace SupernaturalExpanded.Journal
                     caption.TextColor = new Color(0xFF0B246E);
                 }
             }
-            // Native table header and description text must remain navy regardless of any white
-            // typography supplied by a UI retexture's dialog button state.
             uint[] headerIds = {
                 NativeLayouts.GrimoireListTitle,
                 NativeLayouts.GrimoireTierHeader,
@@ -98,9 +92,6 @@ namespace SupernaturalExpanded.Journal
                     heading.TextColor = new Color(0xFF0B246E);
                 }
             }
-            // UI skins may supply white text colors for unrelated native dialogs.
-            // The Grimoire list/header all sit on a light EA-colored background,
-            // so restore consistent dark ink for every independent text control.
             Text empty = NativeLayouts.Find<Text>(journal, NativeLayouts.GrimoireEmptyList);
             if (empty != null) empty.TextColor = new Color(0xFF0B246E);
             uint[] mutedIds = { NativeLayouts.GrimoireDescriptionMeta, NativeLayouts.GrimoireDescriptionPrompt };
@@ -121,9 +112,9 @@ namespace SupernaturalExpanded.Journal
             return frames;
         }
 
-        // Gives the perk tooltip the stock tooltip's background, text colour and font, so it follows UI replacement mods; changes nothing when they cannot be read.
         internal static void ApplyTooltip(Window frame, Text title, Text tagline, Text body)
         {
+            // Gives the perk tooltip the stock tooltip's background, text colour and font so it follows UI replacement mods.
             UseDonor("SimpleTextTooltip", 1, delegate(WindowBase donor)
             {
                 StdDrawable source = DialogFrame(donor);
@@ -136,7 +127,6 @@ namespace SupernaturalExpanded.Journal
                 CopyFace(target, source);
                 frame.Invalidate();
 
-                // Text colour and font only change together with the background they were designed for.
                 Text sample = donor as Text;
                 if (sample != null)
                 {
@@ -171,7 +161,6 @@ namespace SupernaturalExpanded.Journal
                 close.ShadeColor = sample.ShadeColor;
             }
 
-            // Reuses the native checkmark face so a UI skin's replacement also reaches the '?' disc.
             Window help = NativeLayouts.Find<Window>(journal,
                 WitchTree.Tree.Id(PageControl.Page, (int)PageSlot.PointsHelpOuter));
             if (help != null && !help.Disposed)
@@ -182,8 +171,6 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Native two-notch dialog layouts (type 025C95B6), all sharing image D58F144D5B0FE27A with a 56x56 Accept at (-69,-69) and a 29x29 Cancel
-        // at (-94,-56). The 686x636 one comes first because it needs the least resizing; the single-notch frame stays if none loads.
         private static readonly ulong[] TwoButtonLayouts =
         {
             0x54D0A9831E5754E7UL,
@@ -221,7 +208,6 @@ namespace SupernaturalExpanded.Journal
                         continue;
                     }
 
-                    // The donor's ScaleType, ScaleAmount and ScaleArea travel with its image; the Collection frame's cuts would stretch the recesses.
                     CopyFace(target, source);
                     footer.ShadeColor = donor.ShadeColor;
                     footer.Invalidate();
@@ -233,7 +219,6 @@ namespace SupernaturalExpanded.Journal
                 }
                 catch (Exception error)
                 {
-                    // A missing donor (older installation or custom UI package) moves on to the next layout; the single-notch frame is the last resort.
                     JournalBootstrap.ReportOnce("Loading a two-button frame donor", error);
                 }
                 finally
@@ -253,8 +238,6 @@ namespace SupernaturalExpanded.Journal
                 return;
             }
 
-            // The checkmark's circular face works in the current menu and follows the active UI skin.
-            // Only its frame is copied, not the checkmark glyph: Cancel retains its original X glyph.
             CopyFace(Frame(cancel.Drawable), Frame(checkmark.Drawable));
             cancel.ShadeColor = checkmark.ShadeColor;
             cancel.Invalidate();
@@ -278,9 +261,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // An unavailable donor layout leaves the stock style in place.
         private static void UseDonor(string name, int export, Action<WindowBase> apply)
         {
+            // Copies a donor layout's style, leaving the stock style when the donor is unavailable.
             try
             {
                 Layout layout = UIManager.LoadLayout(NativeLayouts.Key(name));
@@ -351,7 +334,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // Grimoire categories use the native pressed face to show which filter is active.
     internal sealed class TabFaces
     {
         private static readonly DrawableBase.ControlStates[] Replaced =
@@ -409,7 +391,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // The Collection frame owns the silhouette on every page. Only the lower-right corner can switch to the two-notch artwork.
     internal sealed class JournalFrames
     {
         private const float FooterWidth = 144f;
@@ -473,7 +454,6 @@ namespace SupernaturalExpanded.Journal
             float height = journal.Area.Height;
             float x = width - (float)Math.Round(FooterWidth * scale);
             float y = height - (float)Math.Round(FooterHeight * scale);
-            // All copies draw at the same pixel coordinates so the clip boundaries meet without a seam.
             upper.Area = new Rect(0f, 0f, width, y);
             lowerLeft.Area = new Rect(0f, y, x, height);
             footer.Area = new Rect(x, y, width, height);

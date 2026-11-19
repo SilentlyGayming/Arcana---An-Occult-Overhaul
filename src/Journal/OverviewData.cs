@@ -1,12 +1,11 @@
+using System;
+using System.Collections.Generic;
 using Sims3.SimIFace;
 using Sims3.UI.Hud;
 using Sims3.UI;
-using System.Collections.Generic;
-using System;
 
 namespace SupernaturalExpanded.Journal
 {
-    // The text of a row's hover tooltip, shown in the same tooltip window the Perks page uses.
     internal sealed class OverviewTip
     {
         internal readonly string Title;
@@ -58,7 +57,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // One line of a dashboard list: an optional icon, a name, an optional detail beside the value, the value, and an optional tooltip.
     internal sealed class OverviewRow
     {
         internal readonly UIImage Icon;
@@ -82,15 +80,12 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // Everything the Overview shows for one Sim. A species provider fills the parts it has; whatever stays empty is shown as an empty state.
     internal sealed class OverviewData
     {
         internal string RankTitle = "";
         internal string RankDescription = "";
-        // The rank as a number from 1, drawn as a Roman numeral; 0 shows no numeral.
         internal int RankLevel;
         internal UIImage RankArtwork = null;
-        // The number of acquired perks, or -1 when the species has no perk list.
         internal int PerkCount = -1;
         internal readonly List<OverviewRow> Statistics = new List<OverviewRow>();
         internal readonly List<OverviewRow> Perks = new List<OverviewRow>();
@@ -98,7 +93,6 @@ namespace SupernaturalExpanded.Journal
         internal string LifeStateTitle = "";
         internal string LifeStateText = "";
         internal UIImage LifeStateIcon;
-        // Full-size art for the life state, shown stretched to its square instead of the glyph; null while a species has none.
         internal UIImage LifeStateArt = null;
     }
 
@@ -107,7 +101,6 @@ namespace SupernaturalExpanded.Journal
         internal readonly SimIdentity Identity;
         internal readonly OccultTypes Primary;
         internal readonly PowerSelection Witch;
-        // The power row the journal header shows for this Sim; not Available when the game has no reading for it.
         internal readonly StatusField Power;
         private readonly PowerPage perkPage;
         private readonly GrimoirePage grimoire;
@@ -122,9 +115,9 @@ namespace SupernaturalExpanded.Journal
             this.grimoire = grimoire;
         }
 
-        // The Grimoire category a knowledge row reads: its tab icon and the number of entries the Sim has in it.
         internal UIImage KnowledgeIcon(int category)
         {
+            // Returns the tab icon of a Grimoire category for its knowledge row.
             return grimoire == null ? null : grimoire.GetCategoryIcon(category);
         }
 
@@ -139,7 +132,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // A species supplies its own rows and rank text through this; the Overview layout never changes.
     internal interface IOverviewProvider
     {
         void Fill(OverviewContext context, OverviewData data);
@@ -151,9 +143,9 @@ namespace SupernaturalExpanded.Journal
         private static readonly IOverviewProvider witch = new WitchOverview();
         private static readonly IOverviewProvider magical = new MagicalOverview();
 
-        // Registers a species here when it has data for the Overview; the others keep the common content.
         private static IOverviewProvider For(OccultTypes primary)
         {
+            // Returns the Overview provider registered for a species.
             switch (primary)
             {
                 case OccultTypes.Witch:
@@ -185,7 +177,6 @@ namespace SupernaturalExpanded.Journal
             return value >= 1 && value <= Numerals.Length ? Numerals[value - 1] : value.ToString();
         }
 
-        // The life state, its description and icon, and the rank every occult shows in the header; this is the part that already exists.
         private sealed class CommonOverview : IOverviewProvider
         {
             public void Fill(OverviewContext context, OverviewData data)
@@ -232,10 +223,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Witches, Fairies and Genies share the Grimoire's four knowledge categories; each row shows the entries the Sim has
-        // unlocked in that category (the Grimoire holds nothing else), 0 included, so the rows are always present.
         private static void AddKnowledge(OverviewContext context, OverviewData data)
         {
+            // Adds one knowledge row per Grimoire category with the number of entries the Sim has unlocked.
             for (int category = 0; category < KnowledgeNames.Length; category++)
             {
                 data.Knowledge.Add(new OverviewRow(context.KnowledgeIcon(category), KnowledgeNames[category], "",
@@ -243,10 +233,12 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // The Grimoire's categories in tab order.
-        private static readonly string[] KnowledgeNames = { JournalText.Get("Arcana.Journal.Overview.Knowledge.Spells"), JournalText.Get("Arcana.Journal.Overview.Knowledge.Curses"), JournalText.Get("Arcana.Journal.Overview.Knowledge.Rituals"), JournalText.Get("Arcana.Journal.Overview.Knowledge.Abilities") };
+        private static readonly string[] KnowledgeNames = {
+            JournalText.Get("Arcana.Journal.Overview.Knowledge.Spells"), JournalText.Get("Arcana.Journal.Overview.Knowledge.Charms"),
+            JournalText.Get("Arcana.Journal.Overview.Knowledge.Curses"), JournalText.Get("Arcana.Journal.Overview.Knowledge.Rituals"),
+            JournalText.Get("Arcana.Journal.Overview.Knowledge.Abilities")
+        };
 
-        // Fairy and Genie: the shared knowledge categories; rank, perks and statistics stay with the common content until their systems exist.
         private sealed class MagicalOverview : IOverviewProvider
         {
             public void Fill(OverviewContext context, OverviewData data)
@@ -255,7 +247,6 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Witch: the knowledge categories, the rank text and the perks bought on the Perks page, read from the same saved progression.
         private sealed class WitchOverview : IOverviewProvider
         {
             public void Fill(OverviewContext context, OverviewData data)
@@ -274,7 +265,6 @@ namespace SupernaturalExpanded.Journal
                 data.RankDescription = WitchRankDescriptions.For(rank, context.Identity.FirstName);
                 data.RankLevel = rank + 1;
 
-                // Highest unlock rank first; the value is the rank that unlocks the perk, the detail the ranks bought of a multi-rank perk.
                 for (int unlock = top; unlock >= 0; unlock--)
                 {
                     foreach (Perk perk in tree.Perks)
@@ -292,10 +282,9 @@ namespace SupernaturalExpanded.Journal
                 data.PerkCount = data.Perks.Count;
             }
 
-            // The Perks page's own title, tagline and description for the rank bought, so the two pages can never disagree; a perk
-            // with several ranks says which one is owned, and ranks not yet bought are never described.
             private static OverviewTip PerkTip(Perk perk, int bought, string simName)
             {
+                // Builds a perk's tooltip from the Perks page text for the rank bought so both pages agree.
                 string description = perk.Describe(bought - 1, simName);
                 string body = perk.Tiers > 1 ? JournalText.Format("Arcana.Journal.Overview.Perks.OwnedRank", bought, perk.Tiers, description) : description;
                 return new OverviewTip(perk.Name, perk.Tagline, body, WitchPerkBenefits.For(perk, bought - 1));
@@ -303,7 +292,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // The Witch's description for each rank, shown in the Rank panel; {Name} becomes the selected Sim's first name.
     internal static class WitchRankDescriptions
     {
         private const string Placeholder = "{Name}";
@@ -316,9 +304,9 @@ namespace SupernaturalExpanded.Journal
             "Arcana.Witch.Rank.Description.HighWitch"
         };
 
-        // The rank is clamped to the five Witch ranks, so a rank the table does not know still shows a description.
         internal static string For(int rank, string firstName)
         {
+            // Returns the rank description, clamping unknown ranks to the five Witch ranks.
             int index = Math.Max(0, Math.Min(Descriptions.Length - 1, rank));
             string name = string.IsNullOrEmpty(firstName) ? JournalText.Get("Arcana.Common.ThisSim") : firstName;
             return JournalText.Get(Descriptions[index]).Replace(Placeholder, name);
@@ -327,17 +315,16 @@ namespace SupernaturalExpanded.Journal
 
     internal static class OverviewIcons
     {
-        // The large life state art a species ships with, or null so the glyph below is shown instead.
         internal static UIImage Art(OccultTypes primary)
         {
+            // Returns a species' large life state art, or null to show its glyph instead.
             ulong instance = OccultAssetData.LifeStateArt(primary);
             return instance == 0ul ? null : StatusReaders.StatusIcon(instance);
         }
 
-        // The icon that identifies a life state. The Witch is the project's hat icon from the journal header, because the HUD meter's
-        // wand is the game's own artwork; every other species keeps the HUD meter icon, else its skill icon. Null when none exists.
         internal static UIImage Species(OccultTypes primary)
         {
+            // Returns the icon that identifies a life state.
             if (primary == OccultTypes.None)
             {
                 return null;
@@ -350,149 +337,6 @@ namespace SupernaturalExpanded.Journal
                 return skill;
             }
             return OccultMeter.MeterIcon(primary) ?? skill;
-        }
-    }
-
-    // A percentage a gameplay system reports for the selected Sim: the effective change against the baseline,
-    // +15 for fifteen per cent more, -10 for ten per cent less, 0 for no change.
-    internal sealed class ModifierReading
-    {
-        // Reported by a system that has no figure for this Sim, so the Overview leaves the row out.
-        internal static readonly ModifierReading None = new ModifierReading(0f, "", false, null);
-
-        internal readonly float Percent;
-        // The situation the figure applies to ("Sleeping"), or empty when it always does.
-        internal readonly string Condition;
-        internal readonly OverviewTip Tip;
-        private readonly bool available;
-        private readonly string displayText;
-
-        internal ModifierReading(float percent, string condition)
-            : this(percent, condition, null)
-        {
-        }
-
-        internal ModifierReading(float percent, string condition, OverviewTip tip)
-            : this(percent, condition, !float.IsNaN(percent) && !float.IsInfinity(percent), tip)
-        {
-        }
-
-        internal ModifierReading(float percent, string condition, OverviewTip tip, string displayText)
-            : this(percent, condition, tip)
-        {
-            this.displayText = displayText;
-        }
-
-        private ModifierReading(float percent, string condition, bool available, OverviewTip tip)
-        {
-            Percent = percent;
-            Condition = condition ?? "";
-            Tip = tip;
-            this.available = available;
-        }
-
-        internal bool Available { get { return available; } }
-
-        internal string Text { get { return displayText ?? PercentText.Format(Percent, true); } }
-    }
-
-    internal delegate ModifierReading ModifierSource(OverviewContext context);
-
-    // Where a species' gameplay systems supply the percentages the Attributes panel shows under Magical Power. A system registers
-    // the label it wants and a source that reads the same effective modifier the gameplay applies (stacking included); the Overview
-    // only formats it. A source that reports ModifierReading.None adds no row, so nothing is shown for a mechanic that does not exist.
-    internal static class AttributeSources
-    {
-        private sealed class Entry
-        {
-            internal readonly OccultTypes Species;
-            internal readonly string Label;
-            internal readonly ModifierSource Source;
-
-            internal Entry(OccultTypes species, string label, ModifierSource source)
-            {
-                Species = species;
-                Label = label;
-                Source = source;
-            }
-        }
-
-        private const string RegenerationKey = "Arcana.Journal.Overview.Attributes.PowerRegeneration";
-        private static readonly List<Entry> entries = new List<Entry>();
-
-        static AttributeSources()
-        {
-#if ARCANA_GRIMOIRE_TEST
-            AttributeTestData.Register();
-#endif
-        }
-
-        internal static void Register(OccultTypes species, string label, ModifierSource source)
-        {
-            entries.Add(new Entry(species, label, source));
-        }
-
-        // Appends a row for every source registered for the Sim's species that has a figure, in registration order.
-        internal static void AddRows(OverviewContext context, OverviewData data)
-        {
-            UIImage icon = context.Power == null ? null : context.Power.Icon;
-            string regenerationLabel = JournalText.Get(RegenerationKey);
-            string englishRegeneration = JournalText.English(RegenerationKey);
-            bool reportedRegeneration = false;
-            int regenerationRow = -1;
-            foreach (Entry entry in entries)
-            {
-                if (entry.Species != context.Primary)
-                {
-                    continue;
-                }
-
-                ModifierReading reading;
-                try
-                {
-                    reading = entry.Source(context);
-                }
-                catch (ResetException)
-                {
-                    throw;
-                }
-                catch (Exception error)
-                {
-                    JournalBootstrap.ReportOnce("Reading " + entry.Label, error);
-                    continue;
-                }
-
-                if (reading == null || !reading.Available)
-                {
-                    continue;
-                }
-                bool isRegeneration = entry.Label == englishRegeneration || entry.Label == regenerationLabel;
-                string label = isRegeneration ? regenerationLabel : entry.Label;
-                string name = reading.Condition.Length == 0 ? label
-                    : JournalText.Format("Arcana.Common.WithQualifier", label, reading.Condition);
-                data.Statistics.Add(new OverviewRow(icon, name, "", reading.Text, reading.Tip));
-                if (isRegeneration)
-                {
-                    regenerationRow = data.Statistics.Count - 1;
-                }
-                reportedRegeneration |= isRegeneration;
-            }
-            // The UI should not silently lose the regeneration row just because the
-            // gameplay modifier provider is still unimplemented. An em dash is NOT a
-            // made-up percentage. Once an effective percentage source is registered,
-            // its actual value replaces the dash without modifying the Overview UI.
-            if (!reportedRegeneration && context.Power != null && context.Power.Available)
-            {
-                data.Statistics.Add(new OverviewRow(icon, regenerationLabel, "", JournalText.Get("Arcana.Common.UnavailableValue")));
-                regenerationRow = data.Statistics.Count - 1;
-            }
-
-            // Accuracy sits directly under the regeneration row, or last when the Sim has none.
-            OverviewRow accuracy = AccuracySources.Row(context);
-            if (accuracy != null)
-            {
-                data.Statistics.Insert(regenerationRow < 0 ? data.Statistics.Count : regenerationRow + 1, accuracy);
-            }
         }
     }
 }

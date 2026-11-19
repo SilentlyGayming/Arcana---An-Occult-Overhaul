@@ -1,9 +1,72 @@
+using System;
 using System.Collections.Generic;
 
 namespace SupernaturalExpanded.Journal
 {
-    // One benefit source for both pages. Index matches Perk.Describe, not a sum of upgrades.
-    // Player-facing benefit summaries describe the intended perk design; implementation coverage is tracked in docs.
+    internal static class WitchTree
+    {
+        internal static readonly OccultTree Tree = new OccultTree(
+            JournalText.Get("Arcana.LifeState.Name.Witch"), JournalText.Get("Arcana.Journal.Perks.Points"),
+            JournalText.Get("Arcana.Journal.Perks.PointsHelp"),
+            new[]
+            {
+                JournalText.Get("Arcana.Witch.Rank.Short.Novice"),
+                JournalText.Get("Arcana.Witch.Rank.Short.Apprentice"),
+                JournalText.Get("Arcana.Witch.Rank.Short.Adept"),
+                JournalText.Get("Arcana.Witch.Rank.Short.Master"),
+                JournalText.Get("Arcana.Witch.Rank.Short.HighWitch"),
+            },
+            new[]
+            {
+                JournalText.Get("Arcana.Witch.Rank.Full.Novice"),
+                JournalText.Get("Arcana.Witch.Rank.Full.Apprentice"),
+                JournalText.Get("Arcana.Witch.Rank.Full.Adept"),
+                JournalText.Get("Arcana.Witch.Rank.Full.Master"),
+                JournalText.Get("Arcana.Witch.Rank.Full.HighWitch"),
+            },
+            CreatePerks());
+
+        private static Perk[] CreatePerks()
+        {
+            Perk[] perks = new Perk[]
+            {
+                Power("RestForTheWicked", Rank.Novice, 0, 0.5f, JournalText.Get("Arcana.Witch.Perk.RestForTheWicked.Name"), 1, 1, 2),
+                Power("LessonsInTheUnseenArts", Rank.Novice, 1, 0.5f, JournalText.Get("Arcana.Witch.Perk.LessonsInTheUnseenArts.Name"), 2),
+                Power("TravellingScholar", Rank.Novice, 2, 0.5f, JournalText.Get("Arcana.Witch.Perk.TravellingScholar.Name"), 1),
+
+                Power("SorcerersApprentice", Rank.Apprentice, 0, 0f, JournalText.Get("Arcana.Witch.Perk.SorcerersApprentice.Name"), 2),
+                Power("AlchemicalSavant", Rank.Apprentice, 1, 0f, JournalText.Get("Arcana.Witch.Perk.AlchemicalSavant.Name"), 3),
+                Power("FamiliarBond", Rank.Apprentice, 2, 0f, JournalText.Get("Arcana.Witch.Perk.FamiliarBond.Name"), 2),
+                Power("Hexweaver", Rank.Apprentice, 3, 0f, JournalText.Get("Arcana.Witch.Perk.Hexweaver.Name"), 3),
+
+                Power("TrialByFire", Rank.Adept, 0, 0f, JournalText.Get("Arcana.Witch.Perk.TrialByFire.Name"), 3),
+                Power("TheWitchingHour", Rank.Adept, 1, 0f, JournalText.Get("Arcana.Witch.Perk.TheWitchingHour.Name"), 3),
+                Power("ThePowerOfThree", Rank.Adept, 2, 0f, JournalText.Get("Arcana.Witch.Perk.ThePowerOfThree.Name"), 3),
+                Power("DarkArts", Rank.Adept, 3, 0f, JournalText.Get("Arcana.Witch.Perk.DarkArts.Name"), 4),
+
+                Power("PracticallyMagic", Rank.Master, 0, 0f, JournalText.Get("Arcana.Witch.Perk.PracticallyMagic.Name"), 3),
+                Power("EideticWitchary", Rank.Master, 1, 0f, JournalText.Get("Arcana.Witch.Perk.EideticWitchary.Name"), 3, 4, 5),
+                Power("PowerShunt", Rank.Master, 2, 0f, JournalText.Get("Arcana.Witch.Perk.PowerShunt.Name"), 4),
+                Power("Scapegoat", Rank.Master, 3, 0f, JournalText.Get("Arcana.Witch.Perk.Scapegoat.Name"), 3, 4, 5),
+
+                Power("ArcaneAscendancy", Rank.HighWitch, 0, 0f, JournalText.Get("Arcana.Witch.Perk.ArcaneAscendancy.Name"), 6),
+                Power("TheOldWays", Rank.HighWitch, 3, 0f, JournalText.Get("Arcana.Witch.Perk.TheOldWays.Name"), 6)
+            };
+
+            perks[15].Conflict = perks[16];
+            perks[16].Conflict = perks[15];
+            perks[15].Face = 0xFF7A45E0;
+            perks[16].Face = 0xFF2E9E4F;
+            return perks;
+        }
+
+        private static Perk Power(string key, Rank rank, int column, float shift, string name, params int[] costs)
+        {
+            // Creates a perk with one cost per upgrade rank.
+            return new Perk(key, rank, column, shift, name, costs);
+        }
+    }
+
     internal static class WitchPerkBenefits
     {
         internal static TooltipModifier[] For(Perk perk, int descriptionIndex)

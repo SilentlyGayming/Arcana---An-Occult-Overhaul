@@ -4,21 +4,15 @@ using Sims3.UI;
 
 namespace SupernaturalExpanded.Journal
 {
-    // The Overview dashboard: Rank Information and Attributes above, Perks and Supernatural Knowledge below them,
-    // and Life State across the bottom, all inside the Journal's shared content region (WindowGeometry).
-    // The layout is the same for every species; OverviewData supplies what it shows.
     internal sealed class OverviewPage
     {
         private const int PanelCount = 5;
         private const int Rank = 0, Statistics = 1, Perks = 2, Knowledge = 3, LifeState = 4;
-        // Each list has a pool of this many row controls, so a long list scrolls instead of being cut off.
         private const int StatisticsRows = 6;
         private const int PerkRows = 8;
         private const int KnowledgeRows = 8;
-        // The rows each row of panels shows at once; the panels are this tall and the lists scroll past it.
         private const int UpperSlots = 3;
         private const int LowerSlots = 5;
-        // The header band and outline line up the same way as the Grimoire table.
         private const float HeaderHeight = 38f;
         private const float HeadingPadding = 14f;
         private const float OutlineInset = 3f;
@@ -29,19 +23,14 @@ namespace SupernaturalExpanded.Journal
         private const float BottomGap = 14f;
         private const float LeftShare = 0.6f;
         private const float LifeMinimumHeight = 120f;
-        // Rank Information.
         private const float RankPadding = 22f;
-        // The numeral stands alone, centred in this column at the panel's left.
         private const float NumeralWidth = 84f;
         private const float RankTextGap = 16f;
-        // The title starts this far below the panel's top; the description below it fits six lines.
         private const float RankTitleTop = 14f;
         private const float RankTitleHeight = 30f;
         private const float RankBodyGap = 4f;
-        // The description may run this close to the panel's bottom edge, so a longer rank text is never cut off.
         private const float RankBottomPadding = 10f;
         private const float ArtworkWidth = 150f;
-        // Life State.
         private const float LifeIconColumn = 124f;
         private const float LifeIconSize = 96f;
         private const float LifeTextLeft = 136f;
@@ -92,7 +81,6 @@ namespace SupernaturalExpanded.Journal
                 bodies[i] = journal.Control<Window>(NativeLayouts.OverviewFrame + (uint)(2 * i + 1));
                 outlines[i].IgnoreMouse = true;
             }
-            // Only the list bodies take the mouse, so the wheel scrolls anywhere over a list.
             bodies[Rank].IgnoreMouse = true;
             bodies[LifeState].IgnoreMouse = true;
 
@@ -130,9 +118,9 @@ namespace SupernaturalExpanded.Journal
             return NativeLayouts.OverviewFirstList + (uint)index * NativeLayouts.OverviewListStride;
         }
 
-        // The layout's ink colours are replaced by the active skin's dialog text colour, so the Journal restores them after theming.
         internal void ApplyInk()
         {
+            // Restores the layout's ink colours after theming.
             for (int i = 0; i < titles.Length; i++)
             {
                 titles[i].TextColor = Ink;
@@ -172,9 +160,9 @@ namespace SupernaturalExpanded.Journal
             Apply();
         }
 
-        // Shows new data without rebuilding anything: only captions, images and the rows behind the pooled controls change.
         internal void Refresh(OverviewData next)
         {
+            // Shows new data by updating captions, images and pooled rows only.
             data = next ?? new OverviewData();
             Apply();
         }
@@ -186,7 +174,6 @@ namespace SupernaturalExpanded.Journal
             OverviewList.SetCaption(rankText, hasRank ? data.RankDescription : NoRank);
             OverviewList.SetCaption(lifeTitle, data.LifeStateTitle);
             OverviewList.SetCaption(lifeText, data.LifeStateText);
-            // Large art is stretched to its square; a glyph keeps its own size and aspect in the other window.
             SetImage(lifeIcon, lifeImage, data.LifeStateArt == null ? data.LifeStateIcon : null);
             SetImage(lifeArt, lifeArtImage, data.LifeStateArt);
             SetImage(artwork, artworkImage, data.RankArtwork);
@@ -199,7 +186,6 @@ namespace SupernaturalExpanded.Journal
             lists[1].SetRows(data.Perks);
             lists[2].SetRows(data.Knowledge);
 
-            // The text column only gives up width to the artwork while there is some, so an empty reserved area leaves no gap.
             if (laidOut && (data.RankArtwork != null) != artworkPlaced)
             {
                 PlaceRank();
@@ -221,10 +207,9 @@ namespace SupernaturalExpanded.Journal
             return HeaderHeight + rows * OverviewList.RowHeight + BottomEdge;
         }
 
-        // Places every panel inside the content region. The two rows of panels have fixed heights (UpperSlots and LowerSlots rows),
-        // and Life State takes whatever is left down to the bottom of the region.
         internal void Layout()
         {
+            // Places every panel inside the content region.
             float left = WindowGeometry.ContentLeft + WindowGeometry.ContentInset;
             float paneWidth = WindowGeometry.ContentWidth - 2f * WindowGeometry.ContentInset;
             float leftWidth = (float)Math.Floor((paneWidth - Gap) * LeftShare + 0.5f);
@@ -250,17 +235,16 @@ namespace SupernaturalExpanded.Journal
             Apply();
         }
 
-        // A plain bordered panel: the stock outline widened so its line sits on the panel's edge, over the pale body.
         private void PlaceFrame(int panel, float x, float y, float width, float height)
         {
+            // Places a bordered panel with its outline on the panel's edge.
             journal.Place(outlines[panel], x - OutlineInset, y, width + 2f * OutlineInset, height);
             journal.Place(bodies[panel], x - OutlineInset + 1f, y + 1f, width + 2f * OutlineInset - 2f, height - 2f);
         }
 
-        // The numeral on the left; the title and description stack to its right, and the artwork area (when a species supplies one)
-        // takes the right edge.
         private void PlaceRank()
         {
+            // Places the rank numeral, title, description and optional artwork.
             float x = rankLeft, y = rankTop, width = rankWidth, height = rankHeight;
             PlaceFrame(Rank, x, y, width, height);
 
@@ -282,7 +266,6 @@ namespace SupernaturalExpanded.Journal
             float bodyTop = y + RankTitleTop + RankTitleHeight + RankBodyGap;
             float bodyHeight = Math.Max(1f, y + height - RankBottomPadding - bodyTop);
             journal.PlaceSnapped(rankText, textLeft, bodyTop, textWidth, bodyHeight);
-            // The paragraph is wrapped for the box it had when its caption was set, so a box that changed re-flows it.
             if (textWidth != placedTextWidth || bodyHeight != placedTextHeight)
             {
                 placedTextWidth = textWidth;
@@ -291,9 +274,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // A list panel built like the Grimoire table (see GrimoirePage.Layout).
         private void PlaceTable(int panel, int list, float x, float y, float width, float height)
         {
+            // Places a list panel built like the Grimoire table.
             float listTop = y + HeaderHeight - 1f;
             float outlineHeight = y + height + OutlineBottomExtra - listTop;
             journal.Place(outlines[panel], x - OutlineInset, listTop, width + 2f * OutlineInset, outlineHeight);
@@ -303,10 +286,9 @@ namespace SupernaturalExpanded.Journal
             lists[list].Layout(x + 1f, y + HeaderHeight, width - 2f, height - HeaderHeight - BottomEdge);
         }
 
-        // The icon sits centred in its own column; the title and description share one left edge, starting near the panel's top
-        // so the description has room for five lines.
         private void PlaceLifeState(float x, float y, float width, float height)
         {
+            // Places the life state icon, title and description.
             PlaceFrame(LifeState, x, y, width, height);
             float iconLeft = x + (LifeIconColumn - LifeIconSize) / 2f;
             float iconTop = y + (float)Math.Floor((height - LifeIconSize) / 2f);

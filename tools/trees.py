@@ -1,8 +1,3 @@
-"""The witch perk catalogue and its icon art.
-
-The perk keys are the quoted first arguments of the Power calls in the C# WitchTree type. Art is
-optional: put <PerkKey>.png in assets/UI/Icons/Occult/Witch/Powers. Perks without a file keep the native placeholder icon.
-"""
 import re
 from pathlib import Path
 
@@ -27,7 +22,7 @@ class Tree:
         return fnv64(self.prefix + perk)
 
     def id(self, kind, index):
-        """Control ID: tree base + kind * 0x100 + index (mirrors OccultTree.Id in C#)."""
+        # Returns a control ID that mirrors OccultTree.Id in C#.
         return ID_BASE + kind * 0x100 + index
 
     def icon_path(self, perk):
@@ -38,7 +33,7 @@ WITCH = Tree("WitchTree", ROOT / "assets" / "UI" / "Icons" / "Occult" / "Witch" 
 
 
 def icons(tree=WITCH):
-    """Returns {catalogue index: (perk, instance, png bytes)} for perks with art."""
+    # Returns the perks with art keyed by catalogue index.
     found = {}
     for index, perk in enumerate(tree.catalog()):
         path = tree.icon_path(perk)

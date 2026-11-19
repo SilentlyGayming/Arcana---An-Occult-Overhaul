@@ -1,8 +1,3 @@
-"""Aleister's Alchemy Station under Arcana's name: its catalog resource and the string tables it points at.
-
-The catalog resource in assets/Catalog/AlchemyStation is the game's own, with its name and description hashes replaced by
-Arcana's; src/Localization/AlchemyStation.json holds that text for each language the game ships.
-"""
 import json
 import struct
 

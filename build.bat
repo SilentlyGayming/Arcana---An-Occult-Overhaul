@@ -9,13 +9,12 @@ if errorlevel 1 (
 )
 set "ARCANA_PROJECT_OPEN=1"
 
-rem The Python build prepares local references from the installed game.
 rem Set SIMS3_GAME_DIR to the base game's folder for a custom install.
 
 if not exist "tools\build_journal.py" goto :missing_builder
 if not exist "tools\prepare_sims3_deps.py" goto :missing_builder
 if not exist "tools\dbpf.py" goto :missing_builder
-if not exist "tools\build_vampire_bitemark.py" goto :missing_builder
+if not exist "tools\vampire_bitemark.py" goto :missing_builder
 if not exist "tools\check_game_api.py" goto :missing_builder
 
 where py >nul 2>&1

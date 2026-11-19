@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.CAS;
 using Sims3.Gameplay;
@@ -17,7 +17,6 @@ namespace SupernaturalExpanded.Journal
         internal readonly OccultTypes Occults;
         internal readonly int Mood;
         internal readonly SimDescription Description;
-        // The save-stable identity; ObjectGuid can change when a Sim is re-instantiated or travels.
         internal readonly ulong SimDescriptionId;
 
         private SimIdentity(ObjectGuid id, string name, string lifeState, OccultTypes occults, int mood,
@@ -77,15 +76,14 @@ namespace SupernaturalExpanded.Journal
                 return SimDescription.Find(info.UninstantiatedSimDescriptionId);
             }
 
-            // The HUD can report the selection before the ObjectGuid resolves through GlobalFunctions.
             SimDescription selected = model.GetSimDescription() as SimDescription;
             Sim actor = selected == null ? null : selected.CreatedSim;
             return actor != null && actor.ObjectId == info.mGuid ? selected : null;
         }
 
-        // Reads just the supported occult flags for frequent HUD refreshes.
         internal static OccultTypes ReadOccults(IHudModel model, out ObjectGuid id)
         {
+            // Reads just the supported occult flags for frequent HUD refreshes.
             SimInfo info = model == null ? null : model.GetCurrentSimInfo();
             if (info == null || !info.mGuid.IsValid)
             {
@@ -138,19 +136,17 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // Shared header caption. Only witches have an implemented rank ladder; the other occults show no rank
-    // until their progression arrives, so no rank is ever invented for them.
     internal static class OccultRankLabel
     {
-        // True for the life states whose rank ladder is implemented.
         internal static bool HasLadder(OccultTypes types)
         {
+            // Returns whether the life state's rank ladder is implemented.
             return OccultAssetData.Primary(types) == OccultTypes.Witch;
         }
 
-        // The rank name when the Sim has a readable progression ladder.
         internal static string Rank(OccultTypes types, PowerSelection witchProgress)
         {
+            // Returns the rank name when the Sim has a readable progression ladder.
             if (HasLadder(types) && witchProgress != null && witchProgress.Available)
             {
                 return WitchTree.Tree.RankLabel((int)witchProgress.Rank);
@@ -158,9 +154,9 @@ namespace SupernaturalExpanded.Journal
             return "";
         }
 
-        // The primary life state, with its rank when available.
         internal static string For(OccultTypes types, PowerSelection witchProgress)
         {
+            // Returns the primary life state name with its rank when available.
             OccultTypes primary = OccultAssetData.Primary(types);
             string rank = Rank(types, witchProgress);
             string lifeState = LifeStateNames.For(primary);
@@ -188,7 +184,6 @@ namespace SupernaturalExpanded.Journal
 
     internal static class LifeStateDescriptions
     {
-        // Keep the legacy description priority for hybrids.
         private static readonly OccultTypes[] States =
         {
             OccultTypes.Vampire, OccultTypes.Witch, OccultTypes.Werewolf, OccultTypes.Fairy,

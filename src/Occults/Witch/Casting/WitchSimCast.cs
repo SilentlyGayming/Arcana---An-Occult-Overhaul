@@ -1,8 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
-using Sims3.Gameplay;
-using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.ActorSystems;
+using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.Autonomy;
 using Sims3.Gameplay.Core;
 using Sims3.Gameplay.EventSystem;
@@ -10,12 +10,11 @@ using Sims3.Gameplay.Interactions;
 using Sims3.Gameplay.Objects.Alchemy;
 using Sims3.Gameplay.Skills;
 using Sims3.Gameplay.Utilities;
+using Sims3.Gameplay;
 using Sims3.SimIFace;
 
 namespace SupernaturalExpanded.Journal
 {
-    // The supported native CastSpell definitions use this shared interaction. The stock definition
-    // still controls availability and supplies names and icons. The native spell supplies its payload.
     public sealed class WitchSimCast : MagicWand.CastSpell
     {
         private const BindingFlags InstanceFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -55,8 +54,10 @@ namespace SupernaturalExpanded.Journal
 
         protected override bool Run()
         {
+            // Casts a supported spell with Arcana's accuracy and power cost while keeping the native animation and effects.
             TargetSpell.Definition definition = (TargetSpell.Definition)InteractionDefinition;
             spell = definition.Spell;
+            if (!SpellKnowledge.Knows(Actor, SpellKnowledgeGates.EntryFor(spell.Stock))) return false;
             native = (MagicWand.CastSpell)spell.Stock.CreateInstance(Target, Actor, GetPriority(), Autonomous, CancellableByPlayer);
 
             long start = SimClock.CurrentTicks;
@@ -157,6 +158,7 @@ namespace SupernaturalExpanded.Journal
 
         private bool RouteForCast(long start)
         {
+            // Routes the caster and target into the native spellcasting jig.
             bool solo = Actor == Target;
             InteractionInstance follower = null;
             float close = (float)CloseRange.GetValue(null);
@@ -217,6 +219,7 @@ namespace SupernaturalExpanded.Journal
 
         private bool ResolveCast()
         {
+            // Rolls success and epic failure with Arcana's accuracy and prepares the native spell.
             rules = WitchCastingContext.ReadRules(Actor);
             float needPenalty;
             int empty;
@@ -235,6 +238,7 @@ namespace SupernaturalExpanded.Journal
 
         private void AnimateCast(SpellcastingSkill skill)
         {
+            // Plays the native spellcasting animation.
             EnterStateMachine(Actor == Target ? "SpellcastingSolo" : "SpellcastingSocial", "Enter", "x");
             if (Actor != Target)
             {
@@ -251,13 +255,13 @@ namespace SupernaturalExpanded.Journal
 
         protected override void ShowSuccessVfx(StateMachineClient sender, IEvent evt)
         {
+            // Shows the native success effect and takes over the effects the native spell creates.
             if (spell.NativeSuccessVisual.DeclaringType == typeof(MagicWand.CastSpell))
             {
                 base.ShowSuccessVfx(sender, evt);
                 return;
             }
 
-            // Ice Blast delivers the result in the native animation callback.
             try
             {
                 Invoke(spell.NativeSuccessVisual, native, new object[] { sender, evt });
@@ -273,9 +277,8 @@ namespace SupernaturalExpanded.Journal
 
         protected override void DrainMotives()
         {
+            // Drains the Arcana power cost through the wand's native efficiency, moon and familiar modifiers.
             float before = Actor.Motives.GetValue(CommodityKind.MagicFatigue);
-            // Convert Arcana power units to the native fatigue range. The wand still
-            // applies its real efficiency, lunar modifier and native familiar multiplier.
             float logicalCost = (float)spell.NativeCost.GetValue(null) * rules.CostMultiplier(spell.Category);
             float drain = rules.FatigueDrain(logicalCost, Actor.Motives.GetMin(CommodityKind.MagicFatigue),
                 Actor.Motives.GetMax(CommodityKind.MagicFatigue));
@@ -285,6 +288,7 @@ namespace SupernaturalExpanded.Journal
 
         protected override void OnSpellSuccess()
         {
+            // Applies the native success effect, Hexweaver's longer curses and the Dark Arts refund.
             BuffInstance prior = rules.Hexweaver && spell.TimedCurse != BuffNames.Undefined
                 ? Target.BuffManager.GetElement(spell.TimedCurse) : null;
             float before = prior == null ? 0f : prior.TimeoutCount;
@@ -305,6 +309,7 @@ namespace SupernaturalExpanded.Journal
 
         protected override void OnSpellEpicFailure()
         {
+            // Lets a familiar or scapegoat absorb the backfire before the native failure applies.
             if (!WitchBackfires.TryIntercept(Actor, spell, rules))
             {
                 Invoke(spell.NativeFailure, native, null);
@@ -313,6 +318,7 @@ namespace SupernaturalExpanded.Journal
 
         internal static object Invoke(MethodInfo method, object instance, object[] args)
         {
+            // Invokes a native method and rethrows its inner exception.
             try
             {
                 return method.Invoke(instance, args);
@@ -321,6 +327,65 @@ namespace SupernaturalExpanded.Journal
             {
                 throw error.InnerException ?? error;
             }
+        }
+    }
+
+    internal static class WitchBackfires
+    {
+        internal static bool TryIntercept(Sim caster, TargetSpell spell, WitchCastingRules rules)
+        {
+            // Absorbs or redirects a harmful backfire through Familiar Bond or Scapegoat.
+            BuffInstance template;
+            if (spell.Backfire == BuffNames.Undefined || !BuffManager.BuffDictionary.TryGetValue((ulong)spell.Backfire, out template) ||
+                !Accepts(caster, template))
+            {
+                return false;
+            }
+
+            if (rules.Familiar && RandomUtil.RandomChance(WitchCastingRules.FamiliarProtection))
+            {
+                return true;
+            }
+            if (rules.ScapegoatChance == 0f || caster.LotCurrent == null)
+            {
+                return false;
+            }
+
+            List<Sim> eligible = new List<Sim>();
+            foreach (Sim sim in caster.LotCurrent.GetSims())
+            {
+                if (WitchCastingContext.Nearby(caster, sim) && Accepts(sim, template) &&
+                    !sim.BuffManager.HasElement(spell.Backfire))
+                {
+                    eligible.Add(sim);
+                }
+            }
+            if (eligible.Count == 0 || !RandomUtil.RandomChance(rules.ScapegoatChance))
+            {
+                return false;
+            }
+
+            eligible.Sort(delegate(Sim a, Sim b)
+            {
+                return caster.GetDistanceToObjectSquared(a).CompareTo(caster.GetDistanceToObjectSquared(b));
+            });
+            foreach (Sim sim in eligible)
+            {
+                if (sim.BuffManager.AddElement(spell.Backfire, Origin.FromSpell))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool Accepts(Sim sim, BuffInstance template)
+        {
+            // Returns whether a Sim can receive the backfire moodlet.
+            return sim.SimDescription.IsHuman && sim.SimDescription.TeenOrAbove &&
+                !sim.SimDescription.IsDead && !sim.SimDescription.IsGhost &&
+                sim.BuffManager != null && (sim.SimDescription.GetCASAGSAvailabilityFlags() & template.mBuff.AvailabilityFlags) != 0 &&
+                template.mBuff.ShouldAdd(sim.BuffManager, MoodAxis.None, template.EffectValue);
         }
     }
 }

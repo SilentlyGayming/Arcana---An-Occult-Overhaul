@@ -1,6 +1,6 @@
+using System;
 using Sims3.Gameplay.CAS;
 using Sims3.Gameplay.Skills;
-using System;
 
 namespace SupernaturalExpanded.Journal
 {
@@ -18,7 +18,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // The Witch rank ladder and its Perk Point schedule; no game types, so it can be tested on its own.
     internal static class WitchProgression
     {
         internal const int RankCount = 5;
@@ -27,10 +26,8 @@ namespace SupernaturalExpanded.Journal
         private const int StepsPerRank = 3;
         private const long Milli = 1000L;
 
-        // Perk Points per milestone, 40 in all; milestone i sits i thirds up the ladder: rank i / 3, step i % 3 (0 = the rank itself, 1 and 2 = the notches above it).
         private static readonly int[] points = { 1, 1, 2, 2, 3, 3, 3, 3, 3, 4, 4, 5, 6 };
 
-        // Skill level at which each rank begins when the skill tops out at level 10; other maxima scale from this row.
         private static readonly int[] rankStartLevels = { 0, 3, 6, 8, 10 };
 
         internal static int PointsFor(int milestone)
@@ -63,9 +60,9 @@ namespace SupernaturalExpanded.Journal
             return -1;
         }
 
-        // Whole-and-fractional skill points as thousandths, rounded down, so every threshold test is integer arithmetic.
         internal static long ToThousandths(float skillPoints)
         {
+            // Converts skill points to thousandths, rounded down, so thresholds use integer arithmetic.
             if (float.IsNaN(skillPoints) || skillPoints <= 0f)
             {
                 return 0L;
@@ -74,9 +71,9 @@ namespace SupernaturalExpanded.Journal
             return scaled > 1e15 ? 1000000000000000L : (long)scaled;
         }
 
-        // A loaded Witch's attained native level provides a floor if saved points lag behind it.
         internal static long ExperienceForSkill(float skillPoints, int level, int[] pointsForNextLevel)
         {
+            // Returns the skill experience, using the attained native level as a floor.
             long experience = ToThousandths(skillPoints);
             if (pointsForNextLevel == null || level <= 0 || level > pointsForNextLevel.Length)
             {
@@ -85,9 +82,9 @@ namespace SupernaturalExpanded.Journal
             return Math.Max(experience, (long)pointsForNextLevel[level - 1] * Milli);
         }
 
-        // Cumulative thousandths of skill points at which each rank begins, or null when the skill data is unusable.
         internal static long[] RankThresholds(int[] pointsForNextLevel, int maxLevel)
         {
+            // Returns cumulative thousandths at which each rank begins, or null when skill data is unusable.
             if (pointsForNextLevel == null || maxLevel <= 0)
             {
                 return null;
@@ -139,9 +136,9 @@ namespace SupernaturalExpanded.Journal
             return 3L * (xpMilli - low) >= step * span;
         }
 
-        // How many milestones, counted from the first, the experience has reached.
         internal static int Reached(long xpMilli, long[] thresholds)
         {
+            // Counts the milestones the experience has reached.
             int count = 0;
             while (count < MilestoneCount && IsReached(count, xpMilli, thresholds))
             {
@@ -150,9 +147,9 @@ namespace SupernaturalExpanded.Journal
             return count;
         }
 
-        // Claimed milestones are a floor: experience lost later never lowers the rank or the bar below what was earned.
         internal static RankState GetRankState(long xpMilli, long[] thresholds, int claimedMask)
         {
+            // Returns the rank state, treating claimed milestones as a floor.
             int reached = Reached(xpMilli, thresholds);
             int floor = HighestClaimed(claimedMask) + 1;
             int count = Math.Max(reached, floor);
@@ -179,7 +176,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // Connects the vanilla Spellcasting skill, the saved milestone claims and the journal's view of them.
     internal static class WitchProgressSource
     {
         internal const long NoExperience = -1L;
@@ -191,10 +187,9 @@ namespace SupernaturalExpanded.Journal
             return Read(identity, null);
         }
 
-        // On a polling refresh, compare both the raw XP used by the perk
-        // ladder and the native skill fill. A level can change at the same XP.
         internal static PowerProgress Read(SimIdentity identity, PowerSelection previous)
         {
+            // Reads the Witch's progress, including the raw experience and native skill fill.
             if (identity == null || identity.Description == null || identity.SimDescriptionId == 0UL)
             {
                 return PowerProgress.Unavailable;
@@ -226,10 +221,9 @@ namespace SupernaturalExpanded.Journal
                 skill.SkillPoints, skill.SkillLevel, skill.PointsForNextLevel);
         }
 
-        // Give every vanilla Spellcasting level the same width. Skill.Progress
-        // is the native within-level fraction, including during hidden level 0.
         private static float ReadProficiency(Skill skill)
         {
+            // Reads Magical Proficiency with every Spellcasting level given the same width.
             if (skill == null || skill.MaxSkillLevel <= 0 || skill.SkillLevel < 0)
             {
                 return 0f;
@@ -251,9 +245,9 @@ namespace SupernaturalExpanded.Journal
             return (level + Math.Max(0f, Math.Min(1f, within))) / maximum;
         }
 
-        // Spendable Perk Points, or zero for a Sim that cannot be read.
         internal static int GetAvailablePoints(SimIdentity identity)
         {
+            // Spendable Perk Points, or zero for a Sim that cannot be read.
             PowerProgress progress = Read(identity);
             return progress.Available ? progress.PowerPoints : 0;
         }
@@ -274,9 +268,9 @@ namespace SupernaturalExpanded.Journal
             return skills == null ? null : skills.GetElement(SkillNames.Spellcasting);
         }
 
-        // The ladder comes from skill tuning, which is fixed for the session, so it is built once.
         private static long[] GetRankThresholds(Skill skill)
         {
+            // Returns the rank ladder, built once from fixed skill tuning.
             if (thresholds == null)
             {
                 if (skill != null)

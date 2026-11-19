@@ -1,6 +1,6 @@
-using Sims3.UI.Hud;
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
+using Sims3.UI.Hud;
 
 namespace SupernaturalExpanded.Journal
 {
@@ -30,7 +30,6 @@ namespace SupernaturalExpanded.Journal
         internal bool Available;
         internal long Experience;
 
-        // Shown in perk tooltips wherever the text says {name}.
         internal string SimName = JournalText.Get("Arcana.Common.ThisSim");
 
         internal PowerSelection(ulong simId, PowerProgress progress, OccultTree tree)
@@ -45,9 +44,9 @@ namespace SupernaturalExpanded.Journal
         internal ulong SimDescriptionId { get { return simId; } }
         internal int Milestones { get { return milestones; } }
 
-        // Takes in newly read progression, keeping staged picks; returns true when anything the journal shows has changed.
         internal bool Update(PowerProgress progress)
         {
+            // Takes in newly read progression, keeping staged picks, and reports whether anything shown changed.
             if (progress.Available && progress.SimDescriptionId != simId)
             {
                 return false;
@@ -130,13 +129,12 @@ namespace SupernaturalExpanded.Journal
             return Blocked(perk) == Block.None;
         }
 
-        // True when the Perk Points are the only thing keeping the next rank from being selected.
         internal bool ShortOnPoints(Perk perk)
         {
+            // Returns whether Perk Points alone keep the next rank from being selected.
             return Blocked(perk) == Block.Points;
         }
 
-        // The number of ranks selected but not yet bought.
         internal int PendingCount
         {
             get
@@ -150,14 +148,14 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // The line a tooltip adds below the description; a conflict has its own line and a locked page says nothing.
         internal string Requirement(Perk perk)
         {
+            // Returns the requirement line a tooltip adds below the description.
             switch (Blocked(perk))
             {
                 case Block.Rank: return JournalText.Format("Arcana.Journal.Perks.Requirement.Rank", tree.RankTitle((int)perk.Rank));
-                case Block.Complete: return null; // The upgrade indicator already shows completion.
-                case Block.Points: return null; // The tile already shows the next upgrade cost.
+                case Block.Complete: return null;
+                case Block.Points: return null;
                 default: return null;
             }
         }
@@ -172,15 +170,15 @@ namespace SupernaturalExpanded.Journal
             return true;
         }
 
-        // Drops every staged rank; nothing is bought and the points stay unspent.
         internal void DiscardStaged()
         {
+            // Drops every staged rank; nothing is bought and the points stay unspent.
             Array.Clear(staged, 0, staged.Length);
         }
 
-        // Buys every staged rank in one step; a purchase the saved record refuses changes nothing.
         internal bool Commit()
         {
+            // Buys every staged rank in one step.
             if (!Available)
             {
                 return false;
@@ -219,7 +217,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // A snapshot of one Sim's saved progression, shared by the header, the sidebar, the footer and the perk tiles.
     internal sealed class PowerProgress
     {
         internal readonly ulong SimDescriptionId;
@@ -270,8 +267,6 @@ namespace SupernaturalExpanded.Journal
 
     internal delegate int PointsReader(SimIdentity identity);
 
-    // Unspent Perk Points of the selected Sim across every occult tree. A new tree adds one entry to the list below,
-    // and the Simology Journal button then pulses for it as well.
     internal static class PerkPoints
     {
         private sealed class Source

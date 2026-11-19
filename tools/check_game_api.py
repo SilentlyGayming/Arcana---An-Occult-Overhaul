@@ -1,8 +1,6 @@
-"""Read CLR metadata and check the public API and reflection bindings Arcana uses."""
 import re
 import struct
 from dataclasses import dataclass
-from pathlib import Path
 
 ASSEMBLIES = ("UI", "SimIFace", "Sims3GameplaySystems", "Sims3GameplayObjects", "Sims3MetaData")
 PUBLIC, NESTED_PUBLIC, METHOD_PUBLIC = 1, 2, 6
@@ -10,7 +8,7 @@ CLR_V2 = b"v2.0.50727"
 
 
 def metadata(data):
-    """Locate the CLR metadata tables and string heap in a managed PE32 image."""
+    # Locates the CLR metadata tables and string heap in a managed PE32 image.
     if len(data) < 512 or data[:2] != b"MZ":
         raise ValueError("not a PE image")
     pe = struct.unpack_from("<I", data, 0x3C)[0]
@@ -166,7 +164,7 @@ def load(root_dir):
 
 
 def find(found, qualified, allow_private_nested=False):
-    """Look up a top-level type or a named nested type on a public owner."""
+    # Looks up a top-level type or a named nested type on a public owner.
     owner, _, nested = qualified.partition("/")
     namespace, _, name = owner.rpartition(".")
     for assembly in found.values():
@@ -174,7 +172,6 @@ def find(found, qualified, allow_private_nested=False):
             if (ns, nm) == (namespace, name):
                 if not nested:
                     return value
-                # The compiler emits an owner's nested types straight after it, with no namespace, until the next top-level type.
                 step = i + 1
                 following = {k[2]: (k, v) for k, v in assembly.items()}
                 while step in following and following[step][0][0] == "":
@@ -185,7 +182,6 @@ def find(found, qualified, allow_private_nested=False):
     return None
 
 
-# What the newest code calls on the game's types: (type, members). Each must be public.
 MEMBERS = (
     ("Sims3.UI.UIManager", "BeginModal EndModal IsModal GetModalWindow DarkenBackground GetFocus SetFocus LoadLayoutAndAddToWindow"),
     ("Sims3.UI.WindowBase", "AddModalTriggerHook RemoveTriggerHook WindowToScreen Disposed Visible Area FadeTransitionFinished "
@@ -212,7 +208,6 @@ MEMBERS = (
     ("Sims3.UI.InputContext", "kICKeyboard"),
 )
 
-# Types the source names; each needs the matching using (or a qualified name).
 NAMESPACES = {
     "Sims3.UI.Hud": ("IconZoop", "OccultTypes", "IHudModel"),
     "Sims3.UI": ("UIImage", "ImageDrawable", "ISimClockSpeedModel", "UIManager", "StdDrawable", "DrawableBase"),
@@ -221,7 +216,7 @@ NAMESPACES = {
 
 
 def require_ui_contract(ui_types):
-    """Verify the native dialog override contract and the reflected UI entry points."""
+    # Verifies the native dialog override contract and the reflected UI entry points.
     types = {"UI": ui_types}
     modal = find(types, "Sims3.UI.ModalDialog")
     if modal is None or modal.methods.get("EndDialog") not in ({4}, {5}):
@@ -258,7 +253,7 @@ def require_genie_contract(gameplay_types):
 
 
 def require_witch_contract(gameplay_types):
-    """Check the reflected Witch bindings used by the cast and motive adapters."""
+    # Checks the reflected Witch bindings used by the cast and motive adapters.
     types = {"Sims3GameplaySystems": gameplay_types}
     wand = "Sims3.Gameplay.Objects.Alchemy.MagicWand"
     bindings = [
@@ -283,7 +278,7 @@ def require_witch_contract(gameplay_types):
 
 
 def require_station_contract(objects_types):
-    """Check the native Alchemy Station types that Study Spells builds on."""
+    # Checks the native Alchemy Station types that Study Spells builds on.
     types = {"Sims3GameplayObjects": objects_types}
     station = "Sims3.Gameplay.Objects.Alchemy.AlchemyStation"
     bindings = (
@@ -326,7 +321,6 @@ def check(root_dir):
         for nested, owner in (("GameSpeed", "Gameflow"), ("TickStyles", "StopWatch")):
             assert not re.search(r"(?<![.\w])" + nested + r"\b", text), \
                 f"{path.name}: {nested} is nested in {owner}; write Sims3.SimIFace.{owner}.{nested}"
-        # Reflection names live in quoted strings. Outside them these specific APIs require an adapter.
         assert not re.search(r"\.\s*(?:LayoutHandle|UIImageHandle|WinHandle|InternalWindowShutdown|mPauseMode|mMaxMagicPoints|mCurrentMagicPointValue)\b", text), \
             f"{path.name}: direct access to a non-public Sims 3 member"
         assert not re.search(r"\b(?:HudController|SimDisplay)\.Instance\b", text), \

@@ -103,8 +103,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // UI.dll's IconZoopTask uses this same Simulator task type to advance native
-    // HUD UI effects without a WindowBase.Tick subscription or a threaded task.
     internal sealed class UiAnimationClock : Sims3.SimIFace.Task
     {
         private const int MinimumFrameMilliseconds = 16;

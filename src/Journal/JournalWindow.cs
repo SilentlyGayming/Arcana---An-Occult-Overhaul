@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Sims3.SimIFace;
-using Sims3.UI;
 using Sims3.UI.Hud;
+using Sims3.UI;
 
 namespace SupernaturalExpanded.Journal
 {
@@ -10,18 +10,14 @@ namespace SupernaturalExpanded.Journal
 
     internal sealed class JournalWindow : IDisposable
     {
-        // The identity header is three evenly spaced lines beside the portrait, 25 units apart.
         private const float IdentityLeft = 110f;
         private const float IdentityTop = 31f;
         private const float IdentityLineHeight = 24f;
         private const float IdentityLineSpacing = 25f;
         private const float TabTop = 107f;
-        // The group starts clear of the frame's curved left edge, and adjacent tabs have an even gap.
         private const float TabLeft = 41f;
         private const float TabGap = 9f;
         private const float TabHeight = 43f;
-        // Native circular Confirm and Cancel buttons inside the two-button dialog shell: the 56-unit Accept
-        // keeps its native size; the 29-unit X is centred at the donor's native -79.5 footer coordinate.
         private const float CloseSize = 56f;
         private const float CancelSize = 29f;
         private const float CloseCenterX = 41f;
@@ -35,7 +31,6 @@ namespace SupernaturalExpanded.Journal
 
         private readonly IHudModel model;
         private readonly Dictionary<WindowBase, Rect> placements = new Dictionary<WindowBase, Rect>();
-        // Controls whose scaled bounds are rounded to whole pixels, so wrapped text is never drawn at a fractional size.
         private readonly Dictionary<WindowBase, bool> snapped = new Dictionary<WindowBase, bool>();
         private readonly Dictionary<Button, JournalAction> actions = new Dictionary<Button, JournalAction>();
         private readonly List<Button> keyboardOrder = new List<Button>();
@@ -93,7 +88,6 @@ namespace SupernaturalExpanded.Journal
         }
 
         internal bool IsOpen { get { return !disposed && !gone && root != null && !root.Disposed; } }
-        // Another modal window is above the Journal, so input is not ours to take.
         private bool Covered { get { return modal != null && modal.Covered; } }
         internal WindowBase RootWindow { get { return root; } }
         internal float LayoutScale { get { return scale; } }
@@ -115,7 +109,6 @@ namespace SupernaturalExpanded.Journal
             {
                 throw new InvalidOperationException("The native portrait control has no image drawable.");
             }
-            // The native portrait group is centered on the three identity lines, with no square matte.
             float identityCenterY = IdentityTop + IdentityLineSpacing + IdentityLineHeight / 2f;
             Place(portrait, 25f, identityCenterY - 32f, 64f, 64f);
             Place(Control<Window>(NativeLayouts.PortraitFrame),
@@ -137,7 +130,6 @@ namespace SupernaturalExpanded.Journal
             Bind(cancel, RequestCancel);
             close = Control<Button>(NativeLayouts.Close);
             close.Visible = true;
-            // The checkmark names what it will do: buy what is selected, or just close when nothing is.
             close.CreateTooltipCallbackFunction = delegate(Vector2 mouse, WindowBase window, ref Vector2 position)
             {
                 PowerSelection active = ActiveSelection;
@@ -148,6 +140,7 @@ namespace SupernaturalExpanded.Journal
             grimoirePage = GrimoirePage.Create(this);
             overviewPage = OverviewPage.Create(this);
             grimoirePage.EntriesChanged += OnKnowledgeChanged;
+            SpellKnowledge.Changed += OnSpellLearned;
             header = StatusHeader.Create(this);
 
             frames = JournalTheme.ApplyDialog(root);
@@ -189,9 +182,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // One scale for the window, so switching pages never rescales it.
         private static float GetFitScale(float width, float height)
         {
+            // Returns one scale for the window so switching pages never rescales it.
             Rect screen = UIManager.ScreenArea;
             return Math.Min(NativeLayouts.UIScale(), Math.Min(Math.Max(1f, screen.Width - 30f) / width,
                 Math.Max(1f, screen.Height - 72f) / height));
@@ -203,9 +196,9 @@ namespace SupernaturalExpanded.Journal
             LayoutActivePage();
         }
 
-        // Sizes and centers the window and places the header, footer and content panel. Page switches skip it while none of its inputs changed.
         private void PlaceWindow()
         {
+            // Sizes and centers the window and places the header, footer and content panel.
             float width = WindowGeometry.Width;
             float height = WindowGeometry.Height;
             float fit = GetFitScale(width, height);
@@ -218,14 +211,11 @@ namespace SupernaturalExpanded.Journal
             placedHeader = showHeader;
             scale = fit;
 
-            // The window is a whole number of pixels in size and sits on a whole pixel: centring an odd screen width leaves it half a
-            // pixel off, and every glyph inside would then be drawn between pixels.
             root.Area = NativeLayouts.Box(0, 0, (float)Math.Round(width * scale), (float)Math.Round(height * scale));
             root.CenterInParent();
             float top = Math.Max(4f, (float)Math.Round(root.Area.TopLeft.y - 24f * scale));
             root.Position = new Vector2((float)Math.Round(root.Area.TopLeft.x), top);
             frames.Layout(scale);
-            // With the status panel shown, the title and name stop short of it.
             float textRight = showHeader ? HeaderLayout.PanelLeft(width) - HeaderLayout.PanelGap : width - 30f;
             Place(title, IdentityLeft, IdentityTop, textRight - IdentityLeft, IdentityLineHeight);
             if (showHeader)
@@ -236,7 +226,6 @@ namespace SupernaturalExpanded.Journal
                 textRight - IdentityLeft, IdentityLineHeight);
             Place(occultRank, IdentityLeft, IdentityTop + 2f * IdentityLineSpacing,
                 textRight - IdentityLeft, IdentityLineHeight);
-            // Both centers sit on the two-notch frame's native button centers (measured from the bottom right).
             Place(close, width - CloseCenterX - CloseSize / 2f, height - FooterCenterY - CloseSize / 2f, CloseSize, CloseSize);
             Place(cancel, width - CancelCenterX - CancelSize / 2f, height - FooterCenterY - CancelSize / 2f, CancelSize, CancelSize);
             Place(content, WindowGeometry.ContentLeft, WindowGeometry.ContentTop, WindowGeometry.ContentWidth, WindowGeometry.ContentHeight);
@@ -254,9 +243,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Places what belongs to the page being shown; this runs on every page switch.
         private void LayoutActivePage()
         {
+            // Places the controls of the page being shown.
             content.Visible = ActiveSelection == null;
             if (page == JournalPages.Overview && overviewPage != null)
             {
@@ -285,9 +274,9 @@ namespace SupernaturalExpanded.Journal
             control.Area = Scaled(area);
         }
 
-        // Like Place, with the scaled bounds rounded to whole pixels; used for wrapped paragraphs.
         internal void PlaceSnapped(WindowBase control, float x, float y, float width, float height)
         {
+            // Places a control like Place but rounds its scaled bounds to whole pixels.
             Rect area = NativeLayouts.Box(x, y, width, height);
             placements[control] = area;
             snapped[control] = true;
@@ -548,6 +537,7 @@ namespace SupernaturalExpanded.Journal
                 GrimoireTestData.Apply(grimoirePage);
 #endif
             }
+            if (changed && grimoirePage != null) SpellKnowledge.Populate(grimoirePage, identity);
             RefreshHeader();
             simName.Caption = identity.Name;
             RefreshOccultRank();
@@ -575,18 +565,17 @@ namespace SupernaturalExpanded.Journal
             SelectPage(page);
         }
 
-        // The rank text is its own label below the Sim name, keeping name and rank independent.
-        // Witch ranks follow the saved progression; the other occult progression ladders are not implemented yet.
         private void RefreshOccultRank()
         {
+            // Refreshes the rank label shown below the Sim name.
             string caption = OccultRankLabel.For(identity.Occults, selection);
             occultRank.Caption = caption;
             occultRank.Visible = caption.Length != 0;
         }
 
-        // The panel is informative only, so a failure is reported once and hides it instead of closing the journal.
         private void RefreshHeader()
         {
+            // Refreshes the status panel, hiding it after a reported failure instead of closing the Journal.
             if (header == null)
             {
                 return;
@@ -634,9 +623,9 @@ namespace SupernaturalExpanded.Journal
             UpdateHeaderFromHud();
         }
 
-        // Skill changes are only reported once a skill is visible (level 1), so the minute tick also looks for new experience.
         private void OnMinuteChanged()
         {
+            // Checks for new experience on the minute tick because skill changes below level 1 raise no event.
             if (RefreshProgression())
             {
                 UpdateHeaderFromHud();
@@ -647,9 +636,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Returns true when the native skill or Witch progression changes the Journal display.
         private bool RefreshProgression()
         {
+            // Returns true when the native skill or Witch progression changes the Journal display.
             if (!IsOpen || identity == null || selection == null)
             {
                 return false;
@@ -712,10 +701,9 @@ namespace SupernaturalExpanded.Journal
             return Math.Max(137f, 24f + 7f * title.Length);
         }
 
-        // User navigation alone prompts. RefreshSim can still redraw the
-        // current page or switch away from a page the new Sim cannot open.
         private void RequestPage(int index)
         {
+            // Handles user navigation to a page.
             if (index == page || !tabs[index].Visible || perkConfirmation != null)
             {
                 return;
@@ -739,8 +727,6 @@ namespace SupernaturalExpanded.Journal
             {
                 prompt = new PerkPurchaseDialog(delegate(PerkPurchaseChoice choice)
                 {
-                    // Resolve on the next UI task, after the native input
-                    // event (or shutdown notification) has returned.
                     JournalBootstrap.RunLater(delegate { ResolvePerkNavigation(prompt, index, pending, choice); });
                 });
                 perkConfirmation = prompt;
@@ -832,7 +818,6 @@ namespace SupernaturalExpanded.Journal
             {
                 tabs[i].Selected = i == page;
             }
-            // Perks shows the second notch and Cancel button for staged picks.
             bool twoNotch = page == JournalPages.Perks;
             cancel.Visible = twoNotch;
             if (frames != null)
@@ -854,6 +839,7 @@ namespace SupernaturalExpanded.Journal
             }
             if (grimoirePage != null)
             {
+                if (page == JournalPages.Grimoire) SpellKnowledge.Populate(grimoirePage, identity);
                 grimoirePage.Show(page == JournalPages.Grimoire);
             }
             UpdateLayout();
@@ -863,14 +849,21 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
+        private void OnSpellLearned(ulong simId)
+        {
+            if (identity == null || identity.SimDescriptionId != simId || grimoirePage == null) return;
+            SpellKnowledge.Populate(grimoirePage, identity);
+            RefreshOverview();
+        }
+
         private void OnKnowledgeChanged(object sender, EventArgs e)
         {
             RefreshOverview();
         }
 
-        // Rebuilds only the data behind the dashboard; the controls are reused. A failure leaves the page empty and is reported once.
         private void RefreshOverview()
         {
+            // Rebuilds the dashboard data while reusing its controls.
             if (overviewPage == null || page != JournalPages.Overview)
             {
                 return;
@@ -909,28 +902,27 @@ namespace SupernaturalExpanded.Journal
             Abandon
         }
 
-        // The checkmark: buys what is staged, plays the purchase sound (or the close sound), and closes.
         private void RequestClose()
         {
+            // Buys staged perks, plays the matching sound and closes the Journal.
             Close(CloseMode.Confirm, keyActivation);
         }
 
-        // The X, and Escape: drops what is staged, plays the close sound and closes. Nothing is bought and no purchase effect plays.
         private void RequestCancel()
         {
+            // Drops staged perks, plays the close sound and closes the Journal.
             Close(CloseMode.Cancel, keyActivation);
         }
 
-        // Closes without sounds, effects or purchases: for errors and for the game taking the window away.
         private void Abandon()
         {
+            // Closes without sounds, effects or purchases when an error occurs or the game removes the window.
             Close(CloseMode.Abandon, false);
         }
 
-        // Closing the Journal goes through here once. The checkmark buys what was staged; the other close actions drop it. Then the window
-        // is hidden and the game is handed back at once, whatever happened before; the window itself is disposed on the next tick.
         private void Close(CloseMode mode, bool keyboard)
         {
+            // Closes the Journal through the single shared close path.
             if (closing)
             {
                 return;
@@ -1029,6 +1021,7 @@ namespace SupernaturalExpanded.Journal
                 if (grimoirePage != null)
                 {
                     grimoirePage.EntriesChanged -= OnKnowledgeChanged;
+                    SpellKnowledge.Changed -= OnSpellLearned;
                     grimoirePage.Release();
                 }
                 if (perkPage != null)

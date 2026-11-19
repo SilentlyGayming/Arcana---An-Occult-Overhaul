@@ -1,11 +1,10 @@
+using System;
 using Sims3.SimIFace;
 using Sims3.UI.Hud;
 using Sims3.UI;
-using System;
 
 namespace SupernaturalExpanded.Journal
 {
-    // The two stock sparkle textures stay in place and twinkle independently.
     internal sealed class BarSparkles
     {
         internal const int Layers = 2;
@@ -95,11 +94,9 @@ namespace SupernaturalExpanded.Journal
     internal sealed class RankGlitter
     {
         internal const int TileCount = 10;
-        // The upward glitter travels one tile height per cycle; GlitterSpeed scales that speed relative to the original 1900 ms cycle.
         private const float BaseCycleMilliseconds = 1900f;
         internal const float GlitterSpeed = 0.82f;
         private const int CycleMilliseconds = (int)(BaseCycleMilliseconds / GlitterSpeed + 0.5f);
-        // The endpoint glint, in track widths: it swells and brightens once per cycle and its centre stays TipCoreInset inside the track ends.
         private const int TipCycleMilliseconds = 1300;
         private const float TipMinSide = 0.85f;
         private const float TipMaxSide = 1.20f;
@@ -147,8 +144,6 @@ namespace SupernaturalExpanded.Journal
             {
                 return false;
             }
-            // The phase scrolls up through a clip at the *fill* bounds. Each tile
-            // covers a constant-height interval and samples a vertically repeating image.
             float step = Math.Max(1f, (float)Math.Ceiling(track.Height / (TileCount - 2)));
             float phase = (elapsed % CycleMilliseconds) / (float)CycleMilliseconds * step;
             float y = -phase;
@@ -164,7 +159,6 @@ namespace SupernaturalExpanded.Journal
                 y += step;
             }
 
-            // The glint is a square centred on the bar's centre line at the fill endpoint; its track-sized clip trims it at the bar's edges.
             float wave = (float)(0.5 - 0.5 * Math.Cos(2.0 * Math.PI * (elapsed % TipCycleMilliseconds) / TipCycleMilliseconds));
             float glint = wave * wave;
             float side = track.Width * (TipMinSide + (TipMaxSide - TipMinSide) * glint);
@@ -201,7 +195,6 @@ namespace SupernaturalExpanded.Journal
     {
         internal const int ParticlesPerBurst = 28;
         internal const int BurstCount = 3;
-        // tools/ui_resources.py packages one 72-degree sweep of a five-point star.
         private const int SpinFrames = 12;
         private const ulong FirstSpinFrame = 0x33D0573FF965EC9EUL;
         private const float FullTurn = (float)(2.0 * Math.PI);
@@ -480,10 +473,9 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // Flies a larger copy of the perk icon from its card to the Journal button in a transient layout, falling back to the native zoop if that fails.
     internal static class PurchaseEffect
     {
-        internal const float FlightIconSize = 64f;   // ~2x the stock 33px icon
+        internal const float FlightIconSize = 64f;
         private const float EndIconSize = 46f;
         private const int DurationMilliseconds = 620;
         private const float Loft = 16f;
@@ -507,7 +499,6 @@ namespace SupernaturalExpanded.Journal
             catch (Exception error)
             {
                 JournalBootstrap.Report("Starting the large perk purchase effect", error);
-                // A failure of our larger visual should not break a successful purchase.
                 try
                 {
                     IconZoop.Zoop(image, null,
@@ -592,7 +583,6 @@ namespace SupernaturalExpanded.Journal
                 {
                     int elapsed = unchecked(System.Environment.TickCount - started);
                     float t = Math.Min(1f, Math.Max(0f, elapsed / (float)DurationMilliseconds));
-                    // Ease toward the HUD; shrink gently, but never to the stock tiny size.
                     float ease = 1f - (float)Math.Pow(1f - t, 2.2);
                     float centerX = from.x + (to.x - from.x) * ease;
                     float centerY = from.y + (to.y - from.y) * ease
@@ -601,7 +591,6 @@ namespace SupernaturalExpanded.Journal
                     icon.Area = NativeLayouts.Box(centerX - size / 2f, centerY - size / 2f,
                         size, size);
 
-                    // Gentle final fade; preserve a full-size, full-opacity icon early in the flight.
                     float opacity = t < 0.78f ? 1f : Math.Max(0f, (1f - t) / 0.22f);
                     uint alpha = (uint)(opacity * 255f);
                     icon.ShadeColor = new Color((alpha << 24) | 0x00FFFFFF);

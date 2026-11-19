@@ -5,29 +5,21 @@ using Sims3.UI;
 
 namespace SupernaturalExpanded.Journal
 {
-    // A list of icon, name, detail and value rows with the stock scrollbar parts, used by all three Overview lists.
-    // The rows are a fixed pool of controls; only the data behind them changes, so any number of rows fits.
     internal sealed class OverviewList
     {
         internal const float RowHeight = 42f;
         private const float IconSize = 30f;
-        // A list that fills its panel sizes its rows so they cover this share of the panel's height, within these limits;
-        // the rest is split evenly above and below the rows. The Grimoire category icons are 60 wide, so they stay below that.
         private const float FillShare = 0.88f;
         private const float MaxRowHeight = 84f;
         private const float MaxIconSize = 56f;
         private const float IconShare = 0.66f;
-        // A compact list squeezes its rows down to this height, with icons at this share of it, before it starts to scroll.
         private const float MinCompactRow = 30f;
         private const float CompactIconShare = 0.7f;
         private const float MinCompactIcon = 20f;
-        // Controls per row: icon, name, detail, value, separator and the window that takes the row's hover; the ids must match tools/journal_layouts.py.
         private const int RowControls = 6;
         private const float Padding = 14f;
-        // Without a scrollbar beside them, the values keep this much clear of the panel's edge.
         private const float EdgePadding = 22f;
         private const float IconGap = 10f;
-        // The stock scrollbar is 15 wide and its arrows are square; the strip keeps clear of the panel's outline.
         private const float ScrollWidth = 15f;
         private const float ArrowHeight = 15f;
         private const float StripInset = 3f;
@@ -49,7 +41,6 @@ namespace SupernaturalExpanded.Journal
         private readonly Text[] values;
         private readonly Window[] rules;
         private readonly Window[] hits;
-        // The list row each hover window stands for, or -1 while it is hidden.
         private readonly int[] hitRows;
         private readonly Window track;
         private readonly Button thumb;
@@ -61,7 +52,6 @@ namespace SupernaturalExpanded.Journal
         private bool barShown;
         private bool reviveQueued;
         private int first;
-        // The rows in view: the pool, less whatever the panel's height cannot hold at the current row height.
         private int slots;
         private float rowHeight = RowHeight;
         private float iconSize = IconSize;
@@ -78,11 +68,10 @@ namespace SupernaturalExpanded.Journal
         private bool dragging;
         private float dragOffset;
 
-        // With fill set, the rows grow to cover most of the panel and run their separators across its full width; with compact set,
-        // a list that has a few more rows than fit at the normal height shrinks them to fit instead of scrolling.
         internal OverviewList(JournalWindow journal, uint firstId, int capacity, Window body, string emptyMessage,
             float detailWidth, float valueWidth, bool fill, bool compact)
         {
+            // Creates a pooled list that can fill its panel or compact its rows.
             this.journal = journal;
             this.capacity = capacity;
             this.fill = fill;
@@ -112,7 +101,6 @@ namespace SupernaturalExpanded.Journal
                 details[i].IgnoreMouse = true;
                 values[i].IgnoreMouse = true;
                 rules[i].IgnoreMouse = true;
-                // The only row control that takes the mouse; the wheel still scrolls the list over it, and it has no click action.
                 hits[i] = journal.Control<Window>(id + 5);
                 hits[i].IgnoreMouse = false;
                 hits[i].MouseWheel += OnWheel;
@@ -124,7 +112,7 @@ namespace SupernaturalExpanded.Journal
             uint parts = firstId + NativeLayouts.OverviewScrollOffset;
             track = journal.Control<Window>(parts);
             track.IgnoreMouse = false;
-            thumb = journal.Button(parts + 1, "", 0, 0, ScrollWidth, 28, delegate { /* The thumb is dragged, not clicked. */ });
+            thumb = journal.Button(parts + 1, "", 0, 0, ScrollWidth, 28, delegate {  });
             up = journal.Button(parts + 2, "", 0, 0, ScrollWidth, ArrowHeight, delegate { ScrollBy(-1); });
             down = journal.Button(parts + 3, "", 0, 0, ScrollWidth, ArrowHeight, delegate { ScrollBy(1); });
             empty = journal.Label(parts + 4, emptyMessage, 0, 0, 100, 40);
@@ -142,9 +130,9 @@ namespace SupernaturalExpanded.Journal
             Show(false);
         }
 
-        // Replaces the rows; the scroll position stays where it was unless the list got shorter.
         internal void SetRows(List<OverviewRow> incoming)
         {
+            // Replaces the rows; the scroll position stays where it was unless the list got shorter.
             if (HasSameRows(incoming))
             {
                 return;
@@ -163,9 +151,9 @@ namespace SupernaturalExpanded.Journal
             Refresh();
         }
 
-        // A value that did not change must not rebuild the rows, since the same figures arrive on every motive tick.
         private bool HasSameRows(List<OverviewRow> incoming)
         {
+            // Returns whether the rows are unchanged so motive ticks do not rebuild them.
             int count = incoming == null ? 0 : incoming.Count;
             if (count != rows.Count)
             {
@@ -183,10 +171,9 @@ namespace SupernaturalExpanded.Journal
             return true;
         }
 
-        // Places the pool; left and top are the first row's top left corner, width runs to the panel's inner right edge and
-        // height to its bottom edge.
         internal void Layout(float left, float top, float width, float height)
         {
+            // Places the row pool inside the panel.
             listLeft = left;
             listTop = top;
             listWidth = width;
@@ -204,10 +191,9 @@ namespace SupernaturalExpanded.Journal
             Refresh();
         }
 
-        // Sizes the rows for the panel and the rows it holds: fixed at the default height, or, for a list that fills its panel,
-        // tall enough that its rows cover FillShare of the height (never below the default, so a long list scrolls instead).
         private void Fit()
         {
+            // Sizes the rows for the panel and the number of rows it holds.
             float nextRow = RowHeight;
             float nextIcon = IconSize;
             int nextSlots = capacity;
@@ -226,7 +212,6 @@ namespace SupernaturalExpanded.Journal
                 nextSlots = Math.Max(1, Math.Min(capacity, (int)Math.Floor(listHeight / nextRow + 0.001f)));
             }
 
-            // A filled list centers its rows vertically; one that scrolls starts at the top.
             float nextTop = 0f;
             if (fill && listHeight > 0f && rows.Count > 0 && rows.Count <= nextSlots)
             {
@@ -243,9 +228,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // The rows run to the panel's right edge, and give up the scrollbar's width only while the scrollbar is showing.
         private void PlaceRows()
         {
+            // Places the rows, leaving room for the scrollbar only while it shows.
             if (listWidth <= 0f)
             {
                 return;
@@ -268,9 +253,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // The layout's ink colours are replaced by the active skin's dialog text colour, so the page restores them after theming.
         internal void ApplyInk(Color ink, Color accent, Color muted)
         {
+            // Restores the layout's ink colours after a skin replaces them.
             for (int i = 0; i < capacity; i++)
             {
                 names[i].TextColor = ink;
@@ -291,7 +276,6 @@ namespace SupernaturalExpanded.Journal
             first = Math.Max(0, Math.Min(first, GetMaxScroll()));
             int count = rows.Count;
             empty.Visible = visible && count == 0;
-            // The separators run between rows only; a filled list that is shorter than its panel has none under its last row.
             int lastRule = fill ? Math.Min(slots, count - first) - 1 : slots - 1;
             bool hitsChanged = false;
             for (int i = 0; i < capacity; i++)
@@ -327,10 +311,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // A row whose window has to stand for a different list row is hidden here, which also drops any tooltip it was showing,
-        // and is shown again on the next tick; only rows that have a tooltip get a window. Returns true when one was hidden for that.
         private bool UpdateHit(int slot, int index)
         {
+            // Shows or hides a row's hover window, hiding it whenever it stands for a different row.
             int target = index >= 0 && rows[index].Tip != null ? index : -1;
             if (hitRows[slot] == target)
             {
@@ -361,9 +344,9 @@ namespace SupernaturalExpanded.Journal
             });
         }
 
-        // The window of a pooled row builds its tooltip when asked, from whichever list row it currently shows.
         private WindowBase.CreateTooltipCallback TooltipFor(int slot)
         {
+            // Builds the tooltip of whichever list row a pooled window currently shows.
             return delegate(Vector2 mouse, WindowBase window, ref Vector2 position)
             {
                 int index = hitRows[slot];
@@ -380,9 +363,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Sets the same caption again so the text wraps for the control's current size.
         internal static void Reflow(Text text)
         {
+            // Sets the same caption again so the text wraps for the control's current size.
             string caption = text.Caption;
             if (!string.IsNullOrEmpty(caption))
             {
@@ -391,9 +374,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // The scrollbar only shows for a list longer than its pool; a shorter list uses the full width.
         private void RefreshScrollbar(bool shown)
         {
+            // Shows the scrollbar only for lists longer than their pool.
             int max = GetMaxScroll();
             bool scrollable = shown && max > 0;
             if (scrollable != barShown)
@@ -421,9 +404,9 @@ namespace SupernaturalExpanded.Journal
             journal.Place(thumb, scrollLeft, GetThumbTop(max), ScrollWidth, thumbSize);
         }
 
-        // The stock arrow art has no disabled image, so a disabled arrow is dimmed with its shade colour.
         private static void Tint(Button arrow, bool enabled)
         {
+            // The stock arrow art has no disabled image, so a disabled arrow is dimmed with its shade colour.
             Color shade = enabled ? ArrowEnabled : ArrowDisabled;
             if (arrow.ShadeColor.ARGB == shade.ARGB)
             {
@@ -455,7 +438,6 @@ namespace SupernaturalExpanded.Journal
             {
                 return;
             }
-            // A positive delta is the wheel turning up, which is how the stock table reads it too.
             ScrollBy(delta > 0 ? -WheelRows : WheelRows);
             args.Handled = true;
         }
@@ -467,7 +449,6 @@ namespace SupernaturalExpanded.Journal
             {
                 return;
             }
-            // Page scroll on either side of the thumb.
             ScrollBy(y < GetThumbTop(GetMaxScroll()) ? -slots : slots);
             args.Handled = true;
         }
@@ -481,7 +462,6 @@ namespace SupernaturalExpanded.Journal
             }
             dragging = true;
             dragOffset = y - GetThumbTop(GetMaxScroll());
-            // The thumb takes the mouse capture, so its move and release events arrive even outside the Journal.
             UIManager.SetCaptureTarget(InputContext.kICMouse, thumb);
             args.Handled = true;
         }
@@ -493,7 +473,6 @@ namespace SupernaturalExpanded.Journal
             {
                 return;
             }
-            // A drag whose capture was taken away (focus loss, for example) ends here instead of following the pointer.
             if (!visible || UIManager.GetCaptureTarget(InputContext.kICMouse) != thumb)
             {
                 dragging = false;
@@ -533,15 +512,15 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // Lets the Journal drop an active drag before the window goes away.
         internal void Release()
         {
+            // Drops an active drag before the window goes away.
             EndDrag();
         }
 
-        // The cursor's position in layout units from the top left of the Journal, whatever its scale or position.
         private bool TryGetCursorY(out float y)
         {
+            // Reads the cursor's vertical position in layout units.
             y = 0f;
             WindowBase root = journal.RootWindow;
             if (root == null || root.Disposed)

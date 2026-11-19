@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Sims3.Gameplay;
-using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.ActorSystems;
+using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.Autonomy;
 using Sims3.Gameplay.Socializing;
 using Sims3.Gameplay.Utilities;
-using Sims3.SimIFace;
+using Sims3.Gameplay;
 using Sims3.SimIFace.CAS;
+using Sims3.SimIFace;
 using Sims3.UI.Hud;
 
 namespace SupernaturalExpanded.Journal
@@ -28,6 +28,7 @@ namespace SupernaturalExpanded.Journal
 
         internal static void RegisterFizzle()
         {
+            // Registers the Magical Fizzle moodlet once.
             ulong id = (ulong)FizzleBuff;
             if (!BuffManager.BuffDictionary.ContainsKey(id))
             {
@@ -61,6 +62,7 @@ namespace SupernaturalExpanded.Journal
 
         internal static void Fizzle(Sim sim, WitchCastingRules rules)
         {
+            // Applies Magical Fizzle and refreshes the Witch's regeneration.
             sim.BuffManager.RemoveElement(FizzleBuff);
             sim.BuffManager.AddElementIgnoreDelay(FizzleBuff, FizzleMood, FizzleMinutes * rules.FizzleDuration, Origin.FromSpell);
             Refresh(sim, rules);
@@ -75,6 +77,7 @@ namespace SupernaturalExpanded.Journal
 
         internal static void RefreshAll()
         {
+            // Refreshes every Witch's regeneration and restores tuning no longer in use.
             Dictionary<Motive, bool> present = new Dictionary<Motive, bool>();
             foreach (Sim sim in Sims3.Gameplay.Queries.GetObjects<Sim>())
             {
@@ -115,6 +118,7 @@ namespace SupernaturalExpanded.Journal
 
         private static Motive Refresh(Sim sim, WitchCastingRules rules)
         {
+            // Applies the Witch's regeneration rate to a cloned motive tuning.
             Motive motive = sim.Motives.GetMotive(CommodityKind.MagicFatigue);
             if (motive == null || motive.Tuning == null)
             {
@@ -124,7 +128,6 @@ namespace SupernaturalExpanded.Journal
             BuffInstance fizzle = sim.BuffManager.GetElement(FizzleBuff);
             if (fizzle != null)
             {
-                // Loaded instances may still have the raw strings stored by an older package.
                 fizzle.mBuffName = NativeBuffPrefix + FizzleName;
                 fizzle.mDescription = NativeBuffPrefix + FizzleDescription;
             }
@@ -159,7 +162,6 @@ namespace SupernaturalExpanded.Journal
                 foreach (MotiveTuning.MotiveBuffTrigger item in original.BuffTriggers)
                 {
                     MotiveTuning.MotiveBuffTrigger copy = (MotiveTuning.MotiveBuffTrigger)CloneMethod.Invoke(item, null);
-                    // Variable decay negates the configured value. Restoring power lowers fatigue.
                     if (copy.mDecay > 0f)
                     {
                         copy.mDecay *= rate;

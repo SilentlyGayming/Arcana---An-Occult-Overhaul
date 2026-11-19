@@ -1,15 +1,11 @@
+using System;
 using Sims3.SimIFace;
 using Sims3.UI;
-using System;
 
 namespace SupernaturalExpanded.Journal
 {
-    // Makes the Journal modal the way the game's own journals are. ModalDialog does this with the same UIManager calls, in the
-    // same order, but holds the calling task until the dialog closes; the Journal returns at once, so the steps are kept here.
-    // End undoes whatever Begin reached, in the order StopModal uses, and can be called any number of times.
     internal sealed class JournalModal
     {
-        // The key map and priority ModalDialog hooks onto a window-modal dialog.
         private const string TriggerMap = "OKCancelDialog";
         private const int WindowModalPriority = 18;
 
@@ -26,7 +22,6 @@ namespace SupernaturalExpanded.Journal
             this.window = window;
         }
 
-        // True while a different modal window is above the Journal, so that its keys are not ours.
         internal bool Covered
         {
             get
@@ -100,9 +95,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // The dim layer is counted; the last modal to leave clears the count, as the game's dialogs do.
         private void Undim()
         {
+            // Clears the counted dim layer once the last modal leaves, as the game's dialogs do.
             if (dimmed)
             {
                 dimmed = false;
@@ -110,10 +105,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // The game keeps the speed it had and puts it back on unlock, so a game the player had paused stays paused.
-        // A speed some other system has locked is left to that system.
         private void Pause()
         {
+            // Locks the game speed while remembering the speed to restore on unlock.
             Sims3.UI.IResponder responder = Sims3.UI.Responder.Instance;
             ISimClockSpeedModel clock = responder == null ? null : responder.ClockSpeedModel;
             if (clock == null || clock.GameSpeedLocked)
@@ -150,16 +144,11 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // The game's own interface sounds, started by name the way its dialogs start them. The engine applies the player's audio settings.
     internal static class JournalSounds
     {
-        // Added to the cart: the Lifetime Rewards shop plays it when an item is picked.
         internal const string Staged = "ui_cart_add_to";
-        // Every native modal dialog plays this when it closes.
         internal const string Close = "ui_hardwindow_close";
-        // The Lifetime Rewards shop swaps its close sound for this one when something was bought.
         internal const string Purchase = "ui_lifetime_reward_buy";
-        // The native dialogs play this when OK or Cancel is pressed from the keyboard.
         internal const string Key = "ui_secondary_button";
 
         internal static void Play(string sound)

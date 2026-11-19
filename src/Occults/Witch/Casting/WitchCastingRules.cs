@@ -7,10 +7,10 @@ namespace SupernaturalExpanded.Journal
     {
         Spell = 0,
         Curse = 1,
-        Ritual = 2
+        Ritual = 2,
+        Charm = 4
     }
 
-    // Tiers use the same zero-based indices as Rank. Legendary has separate rules.
     internal struct WitchSpell
     {
         internal readonly int Tier;
@@ -24,11 +24,26 @@ namespace SupernaturalExpanded.Journal
 
         internal bool IsCurse { get { return (Kind & WitchSpellKind.Curse) != 0; } }
         internal bool IsRitual { get { return (Kind & WitchSpellKind.Ritual) != 0; } }
+        internal bool IsCharm { get { return (Kind & WitchSpellKind.Charm) != 0; } }
+
+        internal static WitchSpellKind KindOf(SpellCategory category)
+        {
+            // Maps a Grimoire category to its casting kind explicitly so tab order never decides casting behavior.
+            switch (category)
+            {
+                case SpellCategory.Charm: return WitchSpellKind.Charm;
+                case SpellCategory.Curse: return WitchSpellKind.Curse;
+                case SpellCategory.Ritual: return WitchSpellKind.Ritual;
+                default: return WitchSpellKind.Spell;
+            }
+        }
     }
 
     internal struct WitchAccuracy
     {
         internal const float Base = 50f;
+        internal const float Minimum = 0f;
+        internal const float Maximum = 95f;
 
         internal float RankBonus;
         internal float Wand;
@@ -64,7 +79,6 @@ namespace SupernaturalExpanded.Journal
         internal float Rate { get { return Rank * Rest * Hour * Coven * Fizzle; } }
     }
 
-    // The cost breakdown and the actual deduction share these exact factors.
     internal struct WitchCostFactors
     {
         internal float Apprentice, Lessons, HighWitch, Familiar, Hexweaver, OldWays, Eidetic;
@@ -83,9 +97,9 @@ namespace SupernaturalExpanded.Journal
         internal const float MasterFizzleDuration = 0.80f;
         internal const float FamiliarProtection = 40f;
         internal const float DarkArtsRefundChance = 25f;
-        // Remaining fraction of the native motive's full min-to-max range.
         internal static float NeedPenalty(float remaining)
         {
+            // Returns the accuracy penalty for a need's remaining fraction of its native range.
             if (remaining <= 0.05f) return 35f;
             if (remaining <= 0.20f) return 25f;
             if (remaining <= 0.35f) return 10f;
@@ -93,7 +107,6 @@ namespace SupernaturalExpanded.Journal
         }
         internal const float MaxEmotionPenalty = 30f;
         internal const float MagicHandsAccuracyBonus = 20f;
-        // Shared effect tuning: gameplay and perk tooltips use the same values.
         internal const float ApprenticeDiscount = 0.05f;
         internal const float HighWitchDiscount = 0.05f;
         internal const float LessonsDiscount = 0.25f;
@@ -126,8 +139,6 @@ namespace SupernaturalExpanded.Journal
             return upgrade <= 0 ? 0f : upgrade == 1 ? 25f : upgrade == 2 ? 40f : 55f;
         }
 
-        // Legendary uses a separate success model not implemented in this branch.
-        // The future Legendary resolver can consume this bonus without changing eligibility.
         internal float GeneralAccuracyBonus
         {
             get { return Ascendancy ? AscendancyAccuracyBonus : 0f; }
@@ -135,6 +146,7 @@ namespace SupernaturalExpanded.Journal
 
         internal float SpecialtyAccuracyBonus(WitchSpell spell)
         {
+            // Returns The Old Ways' accuracy bonus for curses, rituals and Legendary magic.
             return OldWays && !Ascendancy && (spell.IsCurse || spell.IsRitual || spell.Tier == Legendary)
                 ? OldWaysAccuracyBonus : 0f;
         }
@@ -170,6 +182,7 @@ namespace SupernaturalExpanded.Journal
 
         internal WitchRegeneration RegenerationFactors(bool asleep, bool witchingHour, bool fizzled)
         {
+            // Returns each regeneration factor from rank, sleep, the witching hour, the coven and fizzles.
             float rankBonus = Rank >= Rank.HighWitch ? 1.15f : Rank >= Rank.Adept ? 1.10f : 1f;
             float sleepBonus = asleep ? 1f + RestBonus(Rest) : 1f;
             float hourBonus = !asleep && witchingHour && WitchingHour ? 1f + WitchingHourRegen : 1f;
@@ -178,11 +191,13 @@ namespace SupernaturalExpanded.Journal
 
         internal float FatigueDrain(float powerCost, float nativeMinimum, float nativeMaximum)
         {
+            // Converts a power cost to the native fatigue range.
             return powerCost * Math.Max(0f, nativeMaximum - nativeMinimum) / Capacity;
         }
 
         internal static float PowerFraction(float fatigue, float nativeMinimum, float nativeMaximum)
         {
+            // Returns the remaining power as a fraction of the native fatigue range.
             if (nativeMaximum <= nativeMinimum)
             {
                 return 0f;
@@ -192,6 +207,7 @@ namespace SupernaturalExpanded.Journal
 
         internal bool Overreaches(WitchSpell spell)
         {
+            // Returns whether an ordinary spell's tier is above the caster's rank.
             return spell.Tier < Legendary && spell.Tier > (int)Rank;
         }
 
@@ -202,22 +218,21 @@ namespace SupernaturalExpanded.Journal
 
         internal WitchAccuracy AccuracyFor(WitchSpell spell, float wand, float emotionPenalty, float needPenalty, int emptyNeeds)
         {
+            // Returns the accuracy breakdown for a spell from rank, tier, wand, mood, needs and perks.
             WitchAccuracy result = new WitchAccuracy();
             if (Overreaches(spell))
             {
                 return result;
             }
-            // Shared casting conditions also apply to future Legendary resolution.
             result.RankBonus = 5f * (int)Rank;
             result.Wand = wand;
             result.Mood = -Math.Max(0f, Math.Min(MaxEmotionPenalty, emotionPenalty));
             result.Needs = -Math.Max(0f, needPenalty);
             result.DarkArts = DarkArts ? -DarkArtsPenaltyReduction * result.Mood : 0f;
             result.Ascendancy = GeneralAccuracyBonus;
-            result.Ceiling = emptyNeeds >= 2 ? 5f : emptyNeeds == 1 ? 15f : 95f;
+            result.Ceiling = emptyNeeds >= 2 ? 5f : emptyNeeds == 1 ? 15f : WitchAccuracy.Maximum;
             if (spell.Tier == Legendary)
             {
-                // Keep the common inputs and Need ceiling; do not invent the separate success model.
                 result.Total = float.NaN;
                 return result;
             }
@@ -226,16 +241,23 @@ namespace SupernaturalExpanded.Journal
             float raw = WitchAccuracy.Base + result.RankBonus + tierBonus + wand;
             raw += result.Mood + result.DarkArts + result.Needs;
             raw += result.Ascendancy + curseOrRitual;
-            float bounded = Math.Max(5f, Math.Min(95f, raw));
-            float withCoven = InCoven && spell.Tier >= 0 && spell.Tier <= CovenMaximumTier && !spell.IsRitual ? 100f - (100f - bounded) * (1f - CovenFailureReduction) : bounded;
+            float bounded = Math.Max(WitchAccuracy.Minimum, Math.Min(WitchAccuracy.Maximum, raw));
+            float withCoven = InCoven && CovenEligible(spell) ? 100f - (100f - bounded) * (1f - CovenFailureReduction) : bounded;
             result.Coven = withCoven - bounded;
             result.Total = Math.Min(result.Ceiling, withCoven);
             result.Limit = result.Total - raw - result.Coven;
             return result;
         }
 
+        internal static bool CovenEligible(WitchSpell spell)
+        {
+            // The Power of Three covers Tier I-III spells, charms and curses; rituals and Legendary magic stay excluded.
+            return spell.Tier >= 0 && spell.Tier <= CovenMaximumTier && !spell.IsRitual;
+        }
+
         internal WitchCostFactors CostFactors(WitchSpell spell)
         {
+            // Returns the cost factors shared by the actual drain and the cost tooltip.
             bool earlyTier = spell.Tier <= (int)Rank.Apprentice;
             WitchCostFactors factors = new WitchCostFactors();
             factors.Apprentice = earlyTier && Rank >= Rank.Apprentice ? 1f - ApprenticeDiscount : 1f;
@@ -253,10 +275,9 @@ namespace SupernaturalExpanded.Journal
             return CostFactors(spell).Multiplier;
         }
 
-        // Display-only bounds for learned/ordinary tiers up to the caster's current rank.
-        // The actual cost formula is unchanged and never averages across tiers.
         internal void CostRange(WitchSpellKind kind, out float minimum, out float maximum)
         {
+            // Returns display-only cost bounds across the tiers up to the caster's rank.
             minimum = maximum = CostMultiplier(new WitchSpell(0, kind));
             for (int tier = 1; tier <= (int)Rank; tier++)
             {
@@ -268,6 +289,7 @@ namespace SupernaturalExpanded.Journal
 
         internal float RefundFraction(WitchSpell spell)
         {
+            // Returns the share of spent power Dark Arts refunds.
             return spell.IsCurse ? 0.85f : 0.70f;
         }
 

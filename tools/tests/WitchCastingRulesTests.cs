@@ -26,6 +26,7 @@ namespace SupernaturalExpanded.Journal
             CostRanges();
             PowerPoolConversion();
             RecoveryAndProtection();
+            CharmClassification();
             Console.WriteLine("PASS: " + checks + " deterministic Witch casting and progression checks");
         }
 
@@ -40,7 +41,7 @@ namespace SupernaturalExpanded.Journal
             Equal(0f, novice.Accuracy(TierTwo, 25f, 0f, 0, 0), "overreach");
             Equal(40f, novice.Accuracy(TierOne, 0f, 0f, 10f, 0), "low Need");
             Equal(20f, novice.Accuracy(TierOne, 0f, 60f, 0, 0), "emotions cap");
-            Equal(5f, novice.Accuracy(TierOne, 0f, 30f, 30f, 0), "floor");
+            Equal(0f, novice.Accuracy(TierOne, 0f, 30f, 30f, 0), "negative totals show 0%");
             True(float.IsNaN(novice.Accuracy(Legendary, 0f, 0f, 0, 0)), "Legendary special");
             WitchCastingRules master = new WitchCastingRules(Rank.Master);
             Equal(65f, master.Accuracy(TierFour, 0f, 0f, 0, 0), "rank bonus");
@@ -69,7 +70,7 @@ namespace SupernaturalExpanded.Journal
             Equal(55f, high.Accuracy(new WitchSpell(4, WitchSpellKind.Curse), 20f, 30f, 35f, 0), "curse specialty");
             Equal(55f, high.Accuracy(new WitchSpell(4, WitchSpellKind.Ritual), 20f, 30f, 35f, 0), "ritual specialty");
             Equal(15f, high.Accuracy(TierFive, 20f, 30f, 35f, 1), "empty Need cap");
-            Equal(5f, high.Accuracy(TierFive, 20f, 30f, 70f, 2), "two empty Needs cap");
+            Equal(0f, high.Accuracy(TierFive, 20f, 30f, 70f, 2), "two empty Needs with a negative total");
             high.OldWays = false;
             high.Ascendancy = true;
             Equal(50f, high.Accuracy(TierFive, 20f, 30f, 35f, 0), "Ascendancy with critical Hunger");
@@ -233,11 +234,11 @@ namespace SupernaturalExpanded.Journal
 
         private static void CostBreakdown()
         {
-            // Compare the shared factors to the pre-breakdown rules across every rank,
-            // spell category, tier, upgrade and combination of discount perks.
+            // Checks that the cost breakdown matches the original rules across every combination.
             for (int rank = 0; rank <= (int)Rank.HighWitch; rank++)
             for (int tier = 0; tier <= WitchCastingRules.Legendary; tier++)
-            for (int kind = 0; kind < 4; kind++)
+            foreach (WitchSpellKind kind in new[] { WitchSpellKind.Spell, WitchSpellKind.Curse, WitchSpellKind.Ritual,
+                WitchSpellKind.Curse | WitchSpellKind.Ritual, WitchSpellKind.Charm })
             for (int perks = 0; perks < 32; perks++)
             for (int eidetic = 0; eidetic <= 3; eidetic++)
             {
@@ -248,7 +249,7 @@ namespace SupernaturalExpanded.Journal
                 rules.OldWays = (perks & 8) != 0;
                 rules.Ascendancy = (perks & 16) != 0;
                 rules.Eidetic = eidetic;
-                WitchSpell spell = new WitchSpell(tier, (WitchSpellKind)kind);
+                WitchSpell spell = new WitchSpell(tier, kind);
                 float expected = 1f;
                 if (tier <= 1 && rank >= 1) expected *= 0.95f;
                 if (tier <= 1 && rules.Lessons) expected *= 0.75f;
@@ -341,6 +342,75 @@ namespace SupernaturalExpanded.Journal
                 high.Scapegoat = i;
                 Equal(chances[i], high.ScapegoatChance, "Scapegoat total chance");
             }
+        }
+
+        private static void CharmClassification()
+        {
+            True(WitchSpell.KindOf(SpellCategory.Spell) == WitchSpellKind.Spell, "Spell category maps to Spell");
+            True(WitchSpell.KindOf(SpellCategory.Charm) == WitchSpellKind.Charm, "Charm category maps to Charm");
+            True(WitchSpell.KindOf(SpellCategory.Curse) == WitchSpellKind.Curse, "Curse category maps to Curse");
+            True(WitchSpell.KindOf(SpellCategory.Ritual) == WitchSpellKind.Ritual, "Ritual category maps to Ritual");
+            True((WitchSpellKind.Charm & (WitchSpellKind.Curse | WitchSpellKind.Ritual)) == 0, "Charm flag overlaps Curse or Ritual");
+            True((int)WitchSpellKind.Curse == 1 && (int)WitchSpellKind.Ritual == 2, "Existing kind values changed");
+            for (int tier = 0; tier <= 5; tier++)
+            {
+                WitchSpell charm = new WitchSpell(tier, WitchSpell.KindOf(SpellCategory.Charm));
+                True(charm.IsCharm && !charm.IsCurse && !charm.IsRitual, "Charm satisfies a Curse or Ritual test");
+                True(!new WitchSpell(tier, WitchSpellKind.Spell).IsCharm && !new WitchSpell(tier, WitchSpellKind.Curse).IsCharm
+                    && !new WitchSpell(tier, WitchSpellKind.Ritual).IsCharm, "Other kinds read as Charm");
+            }
+            float[] wands = { 0f, 5f, 20f, 25f };
+            for (int rank = 0; rank <= 4; rank++)
+            for (int tier = 0; tier <= 5; tier++)
+            for (int perks = 0; perks < 256; perks++)
+            {
+                WitchCastingRules rules = new WitchCastingRules((Rank)rank);
+                rules.Lessons = (perks & 1) != 0;
+                rules.Familiar = (perks & 2) != 0;
+                rules.Hexweaver = (perks & 4) != 0;
+                rules.OldWays = (perks & 8) != 0;
+                rules.Ascendancy = (perks & 16) != 0;
+                rules.InCoven = (perks & 32) != 0;
+                rules.DarkArts = (perks & 64) != 0;
+                rules.Eidetic = (perks & 128) != 0 ? 3 : 0;
+                WitchSpell charm = new WitchSpell(tier, WitchSpellKind.Charm);
+                WitchSpell spell = new WitchSpell(tier, WitchSpellKind.Spell);
+                Equal(rules.CostMultiplier(spell), rules.CostMultiplier(charm), "Charm cost differs from the ordinary baseline");
+                WitchCostFactors factors = rules.CostFactors(charm);
+                Equal(1f, factors.Hexweaver, "Hexweaver discounted a charm");
+                Equal(0.70f, rules.RefundFraction(charm), "Charm refund is not the ordinary spell refund");
+                True(WitchCastingRules.CovenEligible(charm) == (tier <= 2), "Power of Three eligibility for Tier I-III charms");
+                True(WitchCastingRules.CovenEligible(charm) == WitchCastingRules.CovenEligible(spell), "Charm and spell coven eligibility differ");
+                True(rules.Overreaches(charm) == rules.Overreaches(spell), "Charm rank eligibility differs");
+                if (tier == WitchCastingRules.Legendary)
+                {
+                    continue;
+                }
+                Equal(1f, factors.OldWays, "The Old Ways discounted an ordinary charm");
+                Equal(0f, rules.SpecialtyAccuracyBonus(charm), "Specialty accuracy applied to an ordinary charm");
+                foreach (float wand in wands)
+                {
+                    WitchAccuracy a = rules.AccuracyFor(charm, wand, 18f, 10f, 0);
+                    WitchAccuracy b = rules.AccuracyFor(spell, wand, 18f, 10f, 0);
+                    Equal(b.Total, a.Total, "Charm accuracy differs from the ordinary baseline");
+                    Equal(b.Coven, a.Coven, "Charm coven adjustment differs");
+                    Equal(b.DarkArts, a.DarkArts, "Charm Dark Arts offset differs");
+                    Equal(b.Ascendancy, a.Ascendancy, "Charm Ascendancy bonus differs");
+                }
+            }
+            WitchCastingRules covenAdept = new WitchCastingRules(Rank.Adept);
+            covenAdept.InCoven = true;
+            WitchAccuracy coven = covenAdept.AccuracyFor(new WitchSpell(2, WitchSpellKind.Charm), 0f, 0f, 0, 0);
+            True(coven.Coven > 0f, "The Power of Three skipped a Tier III charm");
+            Equal(0f, covenAdept.AccuracyFor(new WitchSpell(2, WitchSpellKind.Ritual), 0f, 0f, 0, 0).Coven, "The Power of Three reached a ritual");
+            WitchCastingRules hex = new WitchCastingRules(Rank.HighWitch);
+            hex.Hexweaver = true;
+            Equal(0.75f, hex.CostFactors(new WitchSpell(2, WitchSpellKind.Curse)).Hexweaver, "Hexweaver lost its curse discount");
+            WitchCastingRules oldWays = new WitchCastingRules(Rank.HighWitch);
+            oldWays.OldWays = true;
+            Equal(WitchCastingRules.OldWaysAccuracyBonus, oldWays.SpecialtyAccuracyBonus(new WitchSpell(4, WitchSpellKind.Curse)), "The Old Ways lost its curse accuracy");
+            Equal(0.75f, oldWays.CostFactors(new WitchSpell(4, WitchSpellKind.Ritual)).OldWays, "The Old Ways lost its ritual discount");
+            Equal(0.75f, oldWays.CostFactors(new WitchSpell(5, WitchSpellKind.Charm)).OldWays, "The Old Ways lost its Legendary discount");
         }
 
         private static void Equal(float expected, float actual, string check)

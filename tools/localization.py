@@ -1,4 +1,3 @@
-"""Validate the editable catalogs and generate Sims 3 string tables and English fallback."""
 import argparse
 import json
 import re
@@ -7,12 +6,11 @@ from pathlib import Path
 
 from dbpf import Key, STBL, fnv64
 from trees import ROOT, WITCH
-from cs_source import class_text
+from cs_source import class_text, file_text
 
 CATALOG_DIR = ROOT / "src" / "Localization"
 GENERATED = ROOT / "build" / "generated" / "ArcanaEnglish.g.cs"
 ENGLISH = "en-US"
-# The game puts the locale ID in the high byte of a string table's instance.
 LOCALE_IDS = {locale: index for index, locale in enumerate((
     "en-US", "zh-CN", "zh-TW", "cs-CZ", "da-DK", "nl-NL", "fi-FI", "fr-FR",
     "de-DE", "el-GR", "hu-HU", "it-IT", "ja-JP", "ko-KR", "no-NO", "pl-PL",
@@ -22,7 +20,7 @@ TABLE_FAMILY = fnv64("Arcana.Localization.Strings") & 0x00FFFFFFFFFFFFFF
 PERK_PREFIX = "Arcana.Witch.Perk."
 NATIVE_BUFF_PREFIX = "Gameplay/Excel/buffs/BuffList:"
 NATIVE_BUFF_KEYS = ("Arcana.Witch.Fizzle.Name", "Arcana.Witch.Fizzle.Description")
-KEY = re.compile(r"Arcana(?:\.[A-Za-z0-9]+)+")
+KEY = re.compile(r"Arcana(?:\.[A-Za-z0-9_]+)+")
 TOKEN = re.compile(r"\{(0|[1-9][0-9]*|name|Name)\}")
 HEADER = struct.Struct("<4sB2xI6x")
 ENTRY = struct.Struct("<QI")
@@ -42,7 +40,7 @@ def perk_tiers():
 
 
 def format_argument_count(source, start):
-    """Count the format arguments after a literal key, including nested calls."""
+    # Counts the format arguments after a literal key, including nested calls.
     brackets = 0
     count = 0
     for token in re.finditer(r'"(?:\\.|[^"\\])*"|[()[\]{},]', source[start:]):
@@ -63,7 +61,6 @@ def format_argument_count(source, start):
 def runtime_keys():
     keys = set()
     formatted = {}
-    # Literal keys cover the production UI. The perk helper appends ranks at runtime.
     for path in (ROOT / "src").rglob("*.cs"):
         source = path.read_text(encoding="utf-8")
         keys.update(re.findall(r'"(' + KEY.pattern + r')"', source))
@@ -77,6 +74,16 @@ def runtime_keys():
         prefix = PERK_PREFIX + key
         keys.add(prefix + ".Tagline")
         keys.update(f"{prefix}.Description.{rank}" for rank in range(1, count + 1))
+    catalog_source = file_text(ROOT, "SpellCatalog")
+    spell_ids = set(re.findall(r'Add\(entries, "([a-z_]+)"', catalog_source))
+    for motive in ("bladder", "hunger", "energy", "hygiene", "fun", "social"):
+        spell_ids.update(("charm_" + motive, "curse_" + motive))
+    for spell_id in spell_ids:
+        keys.update(("Arcana.Spell." + spell_id + ".Name", "Arcana.Spell." + spell_id + ".Description"))
+    formatted["Arcana.Study.Discovered"] = {"0", "1"}
+    formatted["Arcana.Spell.IceOtherTargets"] = {"0"}
+    formatted["Arcana.Spell.SunlightOtherTargets"] = {"0"}
+    formatted["Arcana.Cheat.UnlockAll.Success"] = {"0", "1"}
     return keys, formatted
 
 
@@ -201,7 +208,6 @@ def resources(directory=CATALOG_DIR):
     tables = []
     for locale in sorted(localized, key=LOCALE_IDS.__getitem__):
         entries = localized[locale].copy()
-        # The native moodlet HUD adds its own lookup prefix.
         for key in NATIVE_BUFF_KEYS:
             entries[NATIVE_BUFF_PREFIX + key] = entries.get(key, english[key])
         tables.append((table_key(locale), encode_table(entries)))
@@ -241,7 +247,7 @@ def generate(destination=GENERATED):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Validate the string catalogs and optionally generate the English fallback.")
     parser.add_argument("--generate", type=Path, help="Also write the generated English C# file.")
     args = parser.parse_args()
     for locale, catalog in catalogs().items():

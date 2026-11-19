@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<base>
+  <Current_Tuning>
+    <kInstantiator value="True" />
+    <kStudyExperienceFraction value="0.40" />
+    <kStudyResearchIntervalMinutes value="30" />
+    <kStudyDiscoveryChancePercent value="25" />
+  </Current_Tuning>
+</base>

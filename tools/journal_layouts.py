@@ -3,15 +3,15 @@ import xml.etree.ElementTree as ET
 
 from hud_icons import BAR_TRACK, PALETTE
 
+from cs_source import file_text
 from trees import ROOT as PROJECT, WITCH, icons
-from ui_icons import GRIMOIRE_CATEGORY_NAMES, grimoire_icon_instance
-from ui_resources import (portrait_mask_key, HALO_INSTANCE, STAR_INSTANCE,
+from ui_resources import (GRIMOIRE_CATEGORY_NAMES, grimoire_icon_instance, portrait_mask_key, HALO_INSTANCE, STAR_INSTANCE,
     GLITTER_BODY_INSTANCE, GLITTER_TIP_INSTANCE, TILE_EDGE_INSTANCE)
 
 
 def _layout_name(constant):
-    """Layout names come from NativeLayouts.cs so the game never pairs the assembly with an older layout."""
-    text = (PROJECT / "src" / "Core" / "NativeLayouts.cs").read_text(encoding="utf-8")
+    # Reads a layout name from NativeLayouts.cs so the game never pairs the assembly with an older layout.
+    text = file_text(PROJECT, "NativeLayouts")
     return re.search(constant + r' = "(\w+)"', text).group(1)
 
 
@@ -29,16 +29,17 @@ SIM_NAME = 0x53E00006
 OCCULT_RANK = 0x53E0000C
 CLOSE = 0x53E00009
 CONTENT = 0x53E0000A
-CANCEL = 0x53E0000D  # the X left of the checkmark
+CANCEL = 0x53E0000D
 FRAME_UPPER = 0x53E00020
 FRAME_LOWER_LEFT = 0x53E00022
 FRAME_FOOTER = 0x53E00024
 ENTRY_GLYPH = 0x53E0000B
 PERK_PULSE = 0x53E000ED
 FIRST_TAB = 0x53E00010
-GRIMOIRE_FIRST_TAB = 0x53E000C0
-GRIMOIRE_FIRST_ICON = 0x53E000C4
-GRIMOIRE_FIRST_CAPTION = 0x53E000C8  # Fixed-position label overlays for skin-independent centering.
+GRIMOIRE_FIRST_TAB = 0x53E00180
+GRIMOIRE_FIRST_ICON = 0x53E00188
+GRIMOIRE_FIRST_CAPTION = 0x53E00190
+GRIMOIRE_CATEGORY_BLOCK = 8
 GRIMOIRE_LIST_PANEL = 0x53E000D0
 GRIMOIRE_LIST_BODY = 0x53E000D1
 GRIMOIRE_LIST_TITLE = 0x53E000D2
@@ -47,30 +48,26 @@ GRIMOIRE_TIER_HEADER = 0x53E000D7
 GRIMOIRE_COST_HEADER = 0x53E000D8
 GRIMOIRE_FIRST_COLUMN_BUTTON = 0x53E000D9
 GRIMOIRE_TABLE_HEADER = 0x53E000DC
-GRIMOIRE_FIRST_SORT_ARROW = 0x53E000DF  # Ascending arrows, one per column.
-GRIMOIRE_FIRST_SORT_ARROW_DOWN = 0x53E000E2  # Descending arrows, one per column.
+GRIMOIRE_FIRST_SORT_ARROW = 0x53E000DF
+GRIMOIRE_FIRST_SORT_ARROW_DOWN = 0x53E000E2
 GRIMOIRE_DESC_PANEL = 0x53E000E5
 GRIMOIRE_DESC_BODY = 0x53E000E6
 GRIMOIRE_DESC_NAME = 0x53E000E7
 GRIMOIRE_DESC_TEXT = 0x53E000E8
-GRIMOIRE_DESC_PROMPT = 0x53E000F0  # centered hint shown while no entry is selected
-GRIMOIRE_DESC_META = 0x53E000F1  # Tier and Energy Cost line under the entry name
+GRIMOIRE_DESC_PROMPT = 0x53E000F0
+GRIMOIRE_DESC_META = 0x53E000F1
 GRIMOIRE_FIRST_ROW = 0x53E00100
-GRIMOIRE_ROWS = 12  # Keep in sync with GrimoirePage.VisibleRows; 12 rows end at 0x53E0013B, below the scrollbar parts at 0x53E00140.
+GRIMOIRE_ROWS = 12
 GRIMOIRE_SCROLL_TRACK = 0x53E00140
 GRIMOIRE_SCROLL_THUMB = 0x53E00141
 GRIMOIRE_SCROLL_UP = 0x53E00142
 GRIMOIRE_SCROLL_DOWN = 0x53E00143
-# Shared Skill & Power header (StatusHeader.cs). Each row owns consecutive IDs: icon, label, value, the glass overlay, the fill and the
-# track, the fill viewport at +6, then the power row shimmer starting at +8. Keep in sync with the Status* constants in NativeLayouts.cs.
 STATUS_PANEL = 0x53E00090
 STATUS_PROGRESS = 0x53E000A0
 STATUS_POWER = 0x53E000B0
 STATUS_SPARKLE_FIRST = 0x53E00260
-# The Overview dashboard (OverviewPage.cs). Keep in sync with the Overview* constants in NativeLayouts.cs.
-# Five panels (Rank, Statistics, Perks, Knowledge, Life State), two windows each: the outline, then the body behind it.
 OV_FRAME = 0x53E00300
-OV_HEADER_CELL = 0x53E0030A  # one header band for each of the three lists
+OV_HEADER_CELL = 0x53E0030A
 OV_HEADER_TITLE = 0x53E0030D
 OV_RANK_TITLE = 0x53E0031C
 OV_RANK_TEXT = 0x53E0031D
@@ -79,29 +76,22 @@ OV_LIFE_ICON = 0x53E00321
 OV_LIFE_TITLE = 0x53E00322
 OV_LIFE_TEXT = 0x53E00323
 OV_RANK_NUMERAL = 0x53E00325
-OV_LIFE_ART = 0x53E0032E  # Life State art that is large enough to be shown stretched to its square, such as the 128px Witch hat
-# Each list owns 0x40 IDs: six per row (icon, name, detail, value, rule, hover window), then track, thumb, up arrow, down arrow and the empty message at +0x30.
+OV_LIFE_ART = 0x53E0032E
 OV_LIST_FIRST = 0x53E00340
 OV_LIST_STRIDE = 0x40
-OV_LIST_ROWS = (6, 8, 8)  # Statistics, Perks, Knowledge. Keep in sync with OverviewPage.
+OV_LIST_ROWS = (6, 8, 8)
 OV_KNOWLEDGE_LIST = 2
 OV_ROW_CONTROLS = 6
 OV_SCROLL_OFFSET = 0x30
-# Stock text styles (TextStylesWestern): bold 15pt headings, bold 18pt rank title, the stock 30px bold LargeButtonCaption for the rank numeral
-# (there is no larger Sims3 bold), bold 11pt rows, regular 12pt body, regular 10pt empty states.
 OV_HEADING_FONT = "0x062eae0d"
 OV_RANK_FONT = "0x062eae0e"
 OV_NUMERAL_FONT = "0xaf90b579"
 OV_ROW_FONT = "0x062eae08"
-# The Supernatural Knowledge rows are bigger than the other lists': bold 13pt names and counts (two steps above the 11pt rows).
 OV_KNOWLEDGE_FONT = "0x062eae07"
 OV_BODY_FONT = "0x062ead00"
 OV_NOTE_FONT = "0x062ead06"
-# Muted blue-gray for empty states.
 OV_MUTED = "0xff5f78a3"
-# The thin rule under each list row, a little darker than the stock alternate row colour.
 ROW_RULE = "0xffb4cae3"
-# A life state glyph is a 24x16 HUD icon or a 24x24 skill icon; it is drawn at its own aspect, not stretched. Larger art uses OV_LIFE_ART.
 LIFE_ICON_SCALE = 3.0
 TOOLTIP_ROOT = 0x53E00080
 TOOLTIP_TITLE = 0x53E00081
@@ -109,60 +99,39 @@ TOOLTIP_TAGLINE = 0x53E00082
 TOOLTIP_BODY = 0x53E00083
 TOOLTIP_CONFLICT = 0x53E00084
 TOOLTIP_FIRST_MODIFIER = 0x53E00085
-TOOLTIP_MODIFIERS = 32
+TOOLTIP_MODIFIERS = 40
 CONFLICT_RED = "0xffd03030"
 TAGLINE_BLUE = "0xff2d8cd8"
 
-# Native image keys referenced by the corresponding game layouts.
-# The Collection Journal keys are read from HUDCollectionJournalDialog
-# (025C95B6:00000000:57560E847AC1F2F1) in the game's UI package.
 COLLECTION_FRAME = "163462cf3324a2a8"
-# The native Collection Journal slice, used for all frame pieces until the live skin is loaded.
 FRAME_MARGINS = (0.5, 0.5, 0.5, 0.5)
 CHECK_STATES = ("7a91827e813bb2f2", "ca45721b0a7fbeba", "7a91827e813bb2f2", "d0c25a031bc3b081")
 CHECK_GLOW = "191215ac147a4e1c"
-# Stock magic sparkle textures used by the horizontal status bar.
-HUD_SPARKLES = ("639e96c213071130", "4d8b5bc6550234a2")  # BarSparkles.Layers
-RANK_GLITTER_TILES = 10  # RankGlitter.TileCount
-SPARK_PARTICLES = 3 * 28  # SparkleBurst.BurstCount * SparkleBurst.ParticlesPerBurst
+HUD_SPARKLES = ("639e96c213071130", "4d8b5bc6550234a2")
+RANK_GLITTER_TILES = 10
+SPARK_PARTICLES = 3 * 28
 CHECK_GLYPH = "e89ab064542f4db2"
-# The stock Cancel (0x05EF6BD2) of the party picker dialog (PartyPicker, 025C95B6:00000000:BBFA8F53A61E1511): a smaller circle with
-# its own face (normal, hover, normal, pressed) and the X glyph. It is 29 units beside our 56-unit Accept.
 CANCEL_STATES = ("ea7394e86250f782", "56f4ea61adc1888a", "ea7394e86250f782", "5a0bd249bc2251d1")
 CANCEL_GLYPH = "a11c98cfe0beff5a"
 CANCEL_SIZE = 29
-# Read from the stock moodlet layout (instance 89062B1155190A24, "Moodlet Positive"):
-# frame states normal / hover / pressed, and the icon placeholder.
 MOODLET_FRAME = ("b28416cfec2c43b9", "fc90ad10698be554", "bee1ac10464f8d1a")
 MOODLET_ICON = "cf36dac848cc55c5"
 TILE_SIZE = 84
 RANKS = 5
-NOTCHES_PER_RANK = 2  # Keep in sync with PowerLayout.NotchesPerRank.
+NOTCHES_PER_RANK = 2
 RANK_MARKER_SIZE = 40
 PORTRAIT_BORDER = "e6b8ca7ff476cb71"
-# Table header sort arrows, read from the stock ColumnControl layout (025C95B6:00000000:BC11067CACD466F2).
-# Windows 05D16482 "Sort Down" and 05D16483 "Sort Up"; both use right/middle alignment and fixed size.
-# The keys are verified; which way each sprite points is not (the images are not in the extracted layouts).
 SORT_ASCENDING_ARROW = "424ae4f366bbd963"
 SORT_DESCENDING_ARROW = "5cdfce63208c1e46"
-# Stock alternate row colour (TableContainer), drawn at about 44% so the list body shows through.
 ROW_ALTERNATE = "0x70d2ebf7"
-# Scrollbar parts, read from the stock TableContainer layout (025C95B6:00000000:44963F65936C74FC), Scrollbar 05D16382.
-# Slots follow the game's ScrollbarComponents order: Background, DecArrow, DecArea, Thumb, ThumbContainer, IncArea, IncArrow.
-# Each arrow has a normal and a pressed image.
 SCROLL_UP_ARROW = ("af9e7e2a22f68356", "5d34b6f318ffd075")
 SCROLL_DOWN_ARROW = ("27873013b2788c9d", "2ab402b90bf77cc0")
-# List artwork, read from the Collection Journal (025C95B6:00000000:57560E847AC1F2F1), the Lifetime Rewards shop
-# (HUDRewardTraitsShopDialog) and ColumnControl layouts. The header cell is sliced 0.45/0.333; the scrollbar thumb 0.333/0.5.
 LIST_BODY = "766f8cac65af1d8e"
-# The pale blue panel behind the stock lists (Lifetime Rewards): the middle layer between the dark dialog frame and the white list.
 SURROUND = "1d22a854c78c91b3"
-# The thin outline the Lifetime Rewards list draws in front of its white body.
 LIST_OUTLINE = "0db945ce1fe0e14f"
 HEADER_CELL = "07beea261832de47"
 SCROLL_TRACK = "8af6409d7469288c"
 SCROLL_THUMB = "07670b7c0c62a8f7"
-# Hover glow masks of the stock scrollbar parts.
 SCROLL_UP_GLOW = "56e9bf0598ff09f4"
 SCROLL_DOWN_GLOW = "749e2dc29314d1c5"
 SCROLL_THUMB_GLOW = "04647583b327cbc3"
@@ -173,21 +142,17 @@ SIMOLOGY_BUTTON = ("133438cf8a8b7ca1", "61e57a7da8148ebb", "133438cf8a8b7ca1", "
 SKILLS_JOURNAL_ICON = "7f53ab12423911b1"
 NAVY = "0xff0b246e"
 BLUE = "0xff124f92"
-WITCH_ACCENT = f"0x{dict(PALETTE)['Witch']:08x}"  # same vibrant palette as the in-game HUD meter
-MILESTONE_GREEN = "0x907fcf9f"  # translucent mint green at about 56% opacity
+WITCH_ACCENT = f"0x{dict(PALETTE)['Witch']:08x}"
+MILESTONE_GREEN = "0x907fcf9f"
 STATUS_PLATE = "0xcfffffff"
-# The stock HUD meter bar (Motives, the Sim display's magic meter, the Celebrity Journal's performance bar): one nine-slice capsule
-# (Borders 0.5) drawn twice, tinted by ShadeColor, plus the glass overlay that gives it its cylindrical highlight.
 BAR_ART = "9c8c7369cf8efcc7"
 BAR_GLASS = "56cfed696129b052"
 BAR_EDGE = (0.5,) * 4
 BAR_GLOW = "1,1"
-STATUS_TRACK = "0x%08x" % BAR_TRACK  # darker than the stock meters' 0xff3f5088 so the fill stands out from it
-STATUS_FILL = "0xff2d7bd0"  # placeholder; StatusHeader sets the real colour per species at run time
+STATUS_TRACK = "0x%08x" % BAR_TRACK
+STATUS_FILL = "0xff2d7bd0"
 TABS = 3
-# All three identity lines share precisely the same TS3 text style.
-IDENTITY_FONT = "0x062eae07"  # formerly the Sim name's font
-# The Perk Points footer: the stock 15pt bold style (Sims3Bold15pt), one step above the 13pt it used before.
+IDENTITY_FONT = "0x062eae07"
 FOOTER_FONT = "0x062eae0d"
 
 
@@ -250,8 +215,7 @@ def standard_drawable(images, stretch="2", edge=(0.333333343,) * 4, glow_mask=No
 
 def portrait_frame_drawable():
     face = standard_drawable((PORTRAIT_BORDER,))
-    # The shared drawable glows only while highlighted (kGlowOnHiliteOnly), which a static frame never is.
-    face.find("prop[@name='GlowType']").set("value", "1")  # kGlowAlways
+    face.find("prop[@name='GlowType']").set("value", "1")
     face.find("prop[@name='GlowColor']").set("value", "0x506c9bdb")
     face.find("prop[@name='GlowScale']").set("value", "1.035,1.035")
     return face
@@ -288,7 +252,6 @@ def label(identifier, font="0x062eae06", color=NAVY, top=False, align=0, export=
     prop(node, "HorizontalAlign", "0x6f43fccf", "uint32", align)
     prop(node, "VerticalAlign", "0x6f43fcd0", "uint32", 0 if top else 1)
     prop(node, "WordWrap", "0x6f43fcd1", "uint32", 4 if top else 0)
-    # Ellipsis overflow cuts wrapped text down to one line, so multi-line text clips at its box instead.
     prop(node, "Overflow", "0x6f43fcd2", "uint32", 1 if multiline else 2)
     return node
 
@@ -301,7 +264,6 @@ def button(identifier, hud=False, grimoire=False, tab=False):
         glyph = window(ENTRY_GLYPH, image_drawable(SKILLS_JOURNAL_ICON, fixed=True), flags="0x00002003")
         glyph.find("prop[@name='Area']").set("value", "0,0,36,30")
         glyph.find("prop[@name='ShadeColor']").set("value", "0xff5278ad")
-        # The glyph draws above the transparent-center ring.
         children = prop(node, "Children", "0xeec1b00b", "object", count="2")
         children.append(glyph)
         children.append(window(PERK_PULSE, image_drawable(f"{HALO_INSTANCE:016x}"), flags="0x00002012"))
@@ -310,7 +272,6 @@ def button(identifier, hud=False, grimoire=False, tab=False):
                        font="0x062eae06", sound=2)
         normal, disabled, highlighted, pressed = SIMOLOGY_BUTTON
         if tab:
-            # Page tabs use the normal face while held, for both checked and unchecked states.
             states = (normal, disabled, highlighted, normal)
             drawing = standard_drawable(states * 2)
         else:
@@ -324,7 +285,6 @@ def button(identifier, hud=False, grimoire=False, tab=False):
     borders(node, "CaptionBorder", "0xeec1d006", (1, 1, 1, 1))
     prop(node, "CaptionOffset", "0xeec1d00a", "pointf", "0,0")
     colors = prop(node, "CaptionColors", "0xeec1d00b", "uint32", count="8")
-    # A page tab is never disabled, but the selected state reads from the same table, so every slot is navy.
     for color in ((NAVY,) * 8 if tab else (NAVY, "0xff536987", NAVY, NAVY) * 2):
         ET.SubElement(colors, "value").text = color
     prop(node, "CaptionHAlign", "0xeec1d00c", "uint32", 1)
@@ -333,8 +293,7 @@ def button(identifier, hud=False, grimoire=False, tab=False):
 
 
 def native_button(identifier, drawing):
-    """A button whose artwork is one drawable and whose text lives in separate labels, so a skin's state colours
-    never reach it."""
+    # Builds a button whose artwork is one drawable and whose text lives in separate labels.
     node = control("Button", "0xeeefe2c3", identifier, "0x0000200a",
                    fill="0x00000000", font="0x062eae06", sound=2)
     prop(node, "ButtonFlags", "0xeec1d002", "uint32", 0)
@@ -352,7 +311,7 @@ def list_header(identifier):
 
 
 def sort_button(identifier):
-    # The shared header provides the face. This overlay appears only on focus, hover or press.
+    # Builds a sort button whose face comes from the shared header.
     drawing = standard_drawable(("", "", HEADER_CELL, HEADER_CELL), edge=HEADER_SLICE)
     node = native_button(identifier, drawing)
     node.find("prop[@name='ShadeColor']").set("value", "0x30305480")
@@ -360,7 +319,7 @@ def sort_button(identifier):
 
 
 def scroll_arrow_button(identifier, images, glow_mask):
-    """Stock scrollbar arrow: normal image, pressed image in the active slot, stretched like the original."""
+    # Builds a stock scrollbar arrow with its normal and pressed images.
     return native_button(identifier, standard_drawable(
         (images[0], "", "", images[1]), stretch="1", glow_mask=glow_mask))
 
@@ -371,7 +330,7 @@ def scroll_thumb_button(identifier):
 
 
 def list_body(identifier):
-    """The pale list surface of the stock lists. The inset panel outline draws in front of it."""
+    # Builds the pale list surface of the stock lists.
     return window(identifier, standard_drawable((LIST_BODY,)), flags="0x00002003")
 
 
@@ -433,8 +392,7 @@ def hover_glow(node, color="0x22000000", time=0.12, interpolation=0, ease_in=0):
 
 
 def tile(identifier):
-    """States are normal, disabled, highlighted, active, then the same four when selected.
-    Hover is intentionally softer than the pressed state so mousing over a perk does not flood the tile with dark blue."""
+    # Builds a perk tile with its normal, disabled, highlighted and active states.
     normal, hover, _, pressed = DIALOG_BUTTON
     node = state_button(identifier, TILE_SIZE, "0x062eae06", standard_drawable(
         (normal, hover, hover, pressed) * 2))
@@ -442,13 +400,12 @@ def tile(identifier):
 
 
 def perk_icon(identifier, art=None):
-    """The icon is its own window so it can sit at the top of the tile; PowerPage fades it when the perk is unavailable."""
+    # Builds the perk icon window that PowerPage fades when unavailable.
     return hover_glow(window(identifier, image_drawable(f"{art[1]:016x}" if art else MOODLET_ICON)), "0x12ffffff")
 
 
 def tile_edge(identifier):
-    """The coloured edge gradient of a specialization tile. It draws no hit region, so clicks and hover reach the tile
-    under it; PowerPage sets its shade to the perk's colour."""
+    # Builds the coloured edge gradient of a specialization tile.
     return window(identifier, image_drawable(f"{TILE_EDGE_INSTANCE:016x}"), flags="0x00002012")
 
 
@@ -496,17 +453,13 @@ def checkmark(identifier):
 
 
 def cancel_button(identifier):
-    """Native X glyph on a compact circular face. JournalTheme copies the checkmark's working
-    circular background into its first drawable layer at runtime, preserving the separate native X glyph.
-    Using the same fallback face also avoids a floating X if the donor layout is unavailable."""
+    # Builds the native X glyph on a compact circular face.
     node = control("Sims3IconButton", "0x062569a8", identifier, "0x0000200b",
                    area=f"0,0,{CANCEL_SIZE},{CANCEL_SIZE}", fill="0xff7f7f7f", sound=2)
     hover_glow(node, "0x3accedff", 0.23, interpolation=1, ease_in=0.8)
     prop(node, "ButtonFlags", "0xeec1d002", "uint32", "0x00000000")
     prop(node, "ButtonStateFlags", "0xeec1d001", "uint32", "0x00000000")
 
-    # The checkmark's face is our verified working native circular background. The
-    # former PartyPicker-only face was not reliably visible in Arcana outside that dialog.
     frame = standard_drawable(CHECK_STATES, stretch="1", glow_mask=CHECK_GLOW, glow_scale="1.15,1.15")
     frame.find("prop[@name='HitMask']").set("key", image_key(CHECK_STATES[0]))
     frame.find("prop[@name='GlowColor']").set("value", "0x4dffffff")
@@ -535,7 +488,7 @@ def cancel_button(identifier):
 
 
 def frame_piece(identifier, two_faces=False):
-    """Give each clip the same full-size native frame coordinates."""
+    # Builds a frame clip with the full-size native frame coordinates.
     clip = window(identifier, flags="0x00002413")
     faces = [window(identifier + 1, standard_drawable((COLLECTION_FRAME,), edge=FRAME_MARGINS))]
     if two_faces:
@@ -546,19 +499,13 @@ def frame_piece(identifier, two_faces=False):
 
 
 def help_face(identifier):
-    """Perk footer help disc. Use the EXACT native confirmation-button
-    button-face sprite keys, not a bespoke circle or recolored TS4 asset.
-    At runtime JournalTheme copies the resolved face from our existing
-    checkmark button so a UI replacement applied to it is shared with help.
-    """
+    # Builds the perk footer help disc.
     return window(identifier, standard_drawable(CHECK_STATES, stretch="1"),
                   flags="0x00002003")
 
 
 def help_question(identifier):
-    """Centered stock TS3 font glyph, separate from the native button face.
-    The journal's normal UI-mod font/ink donor colors this label at runtime.
-    """
+    # Builds the centred stock font question mark.
     return label(identifier, font=FOOTER_FONT, color="0xff002d74",
                  align=1, flags="0x00002003")
 
@@ -582,27 +529,25 @@ def cost_icon(identifier):
 
 
 def milestone(identifier):
-    """One of three stacked rows of a small translucent mint-green tick on the rank bar: a short row, a full-width
-    row and a short row, which together make a bar with softened ends. The rows do not overlap, so the
-    translucency is even. Solid fills render reliably in every skin."""
+    # Builds one row of a translucent mint-green milestone tick on the rank bar.
     return window(identifier, fill=MILESTONE_GREEN)
 
 
 def status_sparkle(identifier, image, shade):
-    """One stationary stock sparkle layer inside the filled region."""
+    # Builds one stationary stock sparkle layer inside the filled region.
     return window(identifier, image_drawable(image), flags="0x00002412", shade=shade)
 
 
 def glow_window(identifier, mask, scale, color, flags):
-    """A window that draws nothing but a glow: the stock glow mask, stretched with the stock nine-slice, always on."""
+    # Builds a window that draws only the stock glow.
     face = standard_drawable((), stretch="2", glow_mask=mask, glow_scale=scale)
-    face.find("prop[@name='GlowType']").set("value", "1")  # kGlowAlways
+    face.find("prop[@name='GlowType']").set("value", "1")
     face.find("prop[@name='GlowColor']").set("value", color)
     return window(identifier, face, flags=flags)
 
 
 def add_effect(node, cls, class_id, values):
-    """Adds one native effect (WinProc) to a window and keeps the WinProcs count right."""
+    # Adds one native effect (WinProc) to a window and keeps the WinProcs count right.
     proc = ET.Element("object", cls=cls, clsid=class_id)
     for name, identifier, kind, value in values:
         prop(proc, name, identifier, kind, value)
@@ -615,8 +560,7 @@ def add_effect(node, cls, class_id, values):
 
 
 def effect_timing(seconds, ease_out, loop, trigger=0):
-    # Trigger 0 starts the effect when the window becomes visible (TriggerTypes.Visible) and 1 when it is hidden, in which case the
-    # window stays drawn until the effect has run, as the game's own fade-outs do; interpolation 1 is ease-in-out.
+    # Returns native effect timing for a visible or hidden trigger.
     return (
         ("EffectGroupID", "0x4f2b000a", "uint32", 0),
         ("Time", "0x4f2b0000", "float", seconds),
@@ -656,7 +600,7 @@ def rank_glitter_tip(page):
 
 
 def sparkle_clip(first):
-    """Clip the two stationary sparkle layers until BarSparkles starts their fades."""
+    # Builds the clip that holds the stationary sparkle layers.
     clip = window(first, flags="0x00002412")
     prop(clip, "Children", "0xeec1b00b", "object", count=str(len(HUD_SPARKLES))).extend(
         status_sparkle(STATUS_SPARKLE_FIRST + layer, image, shade)
@@ -666,19 +610,14 @@ def sparkle_clip(first):
 
 
 def bar_drawable(image):
-    """A stock meter capsule: nine-slice with 0.5 borders, so any width keeps both rounded ends."""
+    # Builds a stock nine-slice meter capsule.
     face = standard_drawable((image,), stretch="2", edge=BAR_EDGE, glow_scale=BAR_GLOW)
     face.find("prop[@name='GlowType']").set("value", "0")
     return face
 
 
 def status_row(first, default_icon=None, glint=False):
-    """One header row: icon, label, value and the stock cylindrical HUD meter bar.
-
-    The bar is built the way the game builds its own meters: a tinted capsule for the empty track, the same capsule tinted
-    with the occult colour for the fill, and the stock glass overlay in front of both. The order is the draw order, topmost
-    first; StatusHeader positions everything, sizes the fill and sets its tint.
-    """
+    # Builds one header row with its icon, label, value and HUD meter bar.
     icon, text, value, gloss, fill, track = range(first, first + 6)
     fill_clip = window(first + 6, flags="0x00002412")
     prop(fill_clip, "Children", "0xeec1b00b", "object", count="1").append(
@@ -695,13 +634,13 @@ def status_row(first, default_icon=None, glint=False):
 
 
 def status_panel(identifier):
-    """Use the same native plate as the Overview list bodies so UI skins reach the status header."""
+    # Builds the status panel on the same native plate as the Overview list bodies.
     return window(identifier, standard_drawable((LIST_BODY,)), flags="0x00002003",
                   shade=STATUS_PLATE)
 
 
 def tree_controls(tree):
-    """Returns (front, middle, back) controls for the perk tree. IDs follow OccultTree.Id in the C# source."""
+    # Returns the front, middle and back controls of the perk tree.
     perks = range(len(tree.catalog()))
     art = icons(tree)
     ids = tree.id
@@ -709,7 +648,6 @@ def tree_controls(tree):
     front = [
         sparkler_overlay(page),
         rank_glitter_tip(page),
-        # Native help question-mark button/face from the provided working build.
         help_question(page(6)),
         help_face(page(10)),
         label(page(7), font=FOOTER_FONT, align=2),
@@ -718,7 +656,6 @@ def tree_controls(tree):
         label(page(9), font=FOOTER_FONT),
         label(page(14), font=FOOTER_FONT, color=BLUE),
         *(marker(ids(5, i)) for i in range(RANKS)),
-        # Above every part of the tile, so the outline is never cut by a plate; the glow stays clear of the icon.
         *(tile_edge(ids(9, i)) for i in perks),
         *(label(ids(1, i), align=1) for i in perks),
         *(window(ids(2, i), standard_drawable((DIALOG_BUTTON[0],))) for i in perks),
@@ -738,21 +675,13 @@ def tree_controls(tree):
 
 
 def transparent_button(identifier):
-    """Clickable, unpainted hit region."""
+    # Builds a clickable, unpainted hit region.
     return native_button(identifier, standard_drawable(("", "", "", "")))
 
 
 def grimoire_controls():
-    """Full-width, data-driven seven-row viewport, fixed headers and native controls.
-
-    The row pool never extends beyond the visible content area; offscreen rows
-    are represented only by C# records, so the game cannot paint them outside
-    the panel. Earlier objects draw above later ones in TS3 layouts, so each inset panel outline sits in front of
-    its pale body, and the rows, header and scrollbar sit in front of both.
-    """
+    # Builds the Grimoire's category row, table header, pooled rows and native scrollbar.
     controls = [
-        # All three *header captions* are centered in their own entire table cells.
-        # Body rows keep their distinct left/center/right alignment for easy scanning.
         label(GRIMOIRE_LIST_TITLE, font="0x062eae06", color=NAVY,
               align=1, flags="0x00002003"),
         label(GRIMOIRE_TIER_HEADER, font="0x062eae06", color=NAVY,
@@ -767,12 +696,10 @@ def grimoire_controls():
               align=0, flags="0x00002003"),
         label(GRIMOIRE_DESC_PROMPT, font=OV_NOTE_FONT, color=OV_MUTED,
               align=1, flags="0x00002003"),
-        # The 0x400 flag clips the description to its box, so a long text can never run out of the panel.
         label(GRIMOIRE_DESC_TEXT, font="0x062eae06", color=NAVY,
               top=True, flags="0x00002403", multiline=True),
     ]
     for i in range(3):
-        # Stock header arrows are right-aligned (alignment 2) and vertically centred inside the cell.
         controls.append(window(GRIMOIRE_FIRST_SORT_ARROW + i,
                                image_drawable(SORT_ASCENDING_ARROW, fixed=True, horizontal=2),
                                flags="0x00002003"))
@@ -792,8 +719,6 @@ def grimoire_controls():
             window(base, fill="0x00000000" if i % 2 == 0 else ROW_ALTERNATE,
                    flags="0x00002003"),
         ]
-    # Stock scrollbar artwork (TableContainer > Scrollbar). The input and range calculations live in GrimoirePage and
-    # use the row pool; the arrows are the stock sprites themselves, with their own pressed image and hover glow.
     controls += [
         scroll_arrow_button(GRIMOIRE_SCROLL_UP, SCROLL_UP_ARROW, SCROLL_UP_GLOW),
         scroll_arrow_button(GRIMOIRE_SCROLL_DOWN, SCROLL_DOWN_ARROW, SCROLL_DOWN_GLOW),
@@ -821,7 +746,7 @@ def grimoire_controls():
 
 
 def overview_list(first, rows, font=OV_ROW_FONT):
-    """One scrolling list: the pooled rows, the stock scrollbar parts and an empty-state message. Draw order is front first."""
+    # Builds one scrolling list with its pooled rows, scrollbar parts and empty message.
     track, thumb, up, down, empty = (first + OV_SCROLL_OFFSET + i for i in range(5))
     controls = [
         label(empty, font=OV_NOTE_FONT, color=OV_MUTED, align=1),
@@ -838,14 +763,13 @@ def overview_list(first, rows, font=OV_ROW_FONT):
             label(base + 3, font=font, color=NAVY, align=2),
             window(base, image_drawable(MOODLET_ICON)),
             window(base + 4, fill=ROW_RULE),
-            # Transparent and the only row control that takes the mouse: the whole row is hoverable for its tooltip and the wheel scrolls through it.
             window(base + 5, flags="0x00002003"),
         ]
     return controls
 
 
 def overview_controls():
-    """The five Overview panels, front to back, using the Grimoire's native list artwork."""
+    # Builds the five Overview panels front to back.
     controls = []
     for index, rows in enumerate(OV_LIST_ROWS):
         controls += overview_list(OV_LIST_FIRST + index * OV_LIST_STRIDE, rows,
@@ -860,7 +784,6 @@ def overview_controls():
         label(OV_LIFE_TITLE, font=OV_HEADING_FONT, color=NAVY),
         label(OV_LIFE_TEXT, font=OV_BODY_FONT, color=NAVY, top=True, flags="0x00002413", multiline=True),
     ]
-    # The three list headings are centred across their whole header band.
     controls += [label(OV_HEADER_TITLE + i, font=OV_HEADING_FONT, color=NAVY, align=1) for i in range(3)]
     controls += [list_header(OV_HEADER_CELL + i) for i in range(3)]
     for panel_index in range(5):
@@ -879,8 +802,6 @@ def dialog():
         label(TITLE, font=IDENTITY_FONT),
         label(SIM_NAME, font=IDENTITY_FONT, color=BLUE),
         label(OCCULT_RANK, font=IDENTITY_FONT, color=BLUE),
-        # Rounded EA Sims 3 portrait frame with a subtle native drawable glow.
-        # No square matte or additional background and no portrait repositioning.
         window(PORTRAIT, image_drawable(mask=portrait_mask_key())),
         window(PORTRAIT_FRAME, portrait_frame_drawable()),
         *status_row(STATUS_PROGRESS, SKILLS_JOURNAL_ICON),
@@ -892,7 +813,6 @@ def dialog():
         *front,
         *middle,
         *back,
-        # The Overview, Grimoire and Perks panels use the stock pale blue surround, like the Lifetime Rewards dialog.
         surround_panel(CONTENT, flags="0x00002003"),
         frame_piece(FRAME_UPPER),
         frame_piece(FRAME_LOWER_LEFT),
@@ -910,9 +830,7 @@ def dialog():
 
 
 def purchase_flight():
-    """The enlarged, non-interactive flying purchase icon, with its image filled in by C#."""
-    # Keep the root hidden until C# replaces the harmless stock placeholder with
-    # the purchased perk image and positions it, so there is never a one-frame flash.
+    # Builds the flying purchase icon whose image C# fills in.
     root = window(0x53E00200, image_drawable(SKILLS_JOURNAL_ICON), flags="0x00002012")
     root.set("id", hex_id(1))
     root.find("prop[@name='Area']").set("value", "0,0,64,64")
@@ -920,11 +838,7 @@ def purchase_flight():
 
 
 def perk_tooltip():
-    """The perk tooltip: a native panel with a title, a blue tagline and a description, each its own Text.
-
-    The window starts hidden and ignores the mouse, like a stock tooltip; the tooltip manager shows and places it.
-    PerkTooltip sets the captions, measures each Text and sizes the window, so the areas here are only starting values.
-    """
+    # Builds the perk tooltip layout with its title, tagline, description and modifier lines.
     root = panel(TOOLTIP_ROOT, flags="0x00002012")
     root.set("id", hex_id(1))
     root.find("prop[@name='Area']").set("value", "0,0,340,120")
@@ -934,7 +848,6 @@ def perk_tooltip():
         label(TOOLTIP_BODY, top=True, area="10,52,330,110"),
         label(TOOLTIP_CONFLICT, color=CONFLICT_RED, top=True, area="10,112,330,128"),
     ]
-    # Accuracy groups may show six Needs, shared modifiers, four headers, and category adjustments. Unused rows stay hidden.
     texts.extend(label(TOOLTIP_FIRST_MODIFIER + i, top=True, flags="0x00002012")
                  for i in range(TOOLTIP_MODIFIERS))
     for text in texts:

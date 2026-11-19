@@ -1,4 +1,3 @@
-"""Find a C# declaration without depending on the file or folder that owns it."""
 import re
 from pathlib import Path
 
@@ -24,7 +23,7 @@ def file_text(root_dir, name):
 
 
 def class_text(root_dir, name):
-    """Return a declaration through its closing brace, without sibling types."""
+    # Returns a declaration through its closing brace, without sibling types.
     _, text, match = _definition(root_dir, name)
     depth, index = 0, text.index('{', match.end())
     while True:
@@ -35,3 +34,16 @@ def class_text(root_dir, name):
             if depth == 0:
                 return text[match.start():index + 1]
         index += 1
+
+
+def without_comments(text):
+    # Removes the full-line function comments so checks can match the code itself.
+    return re.sub(r'(?m)^[ \t]*//[^\n]*\n', '', text)
+
+
+def class_code(root_dir, name):
+    return without_comments(class_text(root_dir, name))
+
+
+def file_code(root_dir, name):
+    return without_comments(file_text(root_dir, name))

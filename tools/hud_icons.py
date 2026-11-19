@@ -1,4 +1,3 @@
-"""HUD icon validation and authoritative generated occult palette/icon source."""
 from pathlib import Path
 import struct
 import zlib
@@ -9,11 +8,8 @@ NAMES = ('Fairy', 'Ghost', 'Genie', 'Mermaid', 'Vampire', 'Werewolf')
 STATUS_SPECIES = ('Witch', 'Fairy', 'Vampire', 'Werewolf', 'Genie', 'Mermaid')
 STATUS_ICONS = tuple((species, kind) for species in STATUS_SPECIES for kind in ('Skill', 'Power'))
 STATUS_NAMES = tuple(species + kind for species, kind in STATUS_ICONS)
-# The reorganized UI assets keep each occult's HUD, Powers and Skills together.
 OCCULT_ICONS = ROOT / 'assets' / 'UI' / 'Icons' / 'Occult'
 HUD_FILES = {name: ('Vampire.png' if name == 'Vampire' else name + 'HUD.png') for name in NAMES}
-# Single vivid occult palette shared by the HUD and Supernatural Journal.
-# These are the formerly Journal-only colors; do not darken them for the HUD.
 PALETTE = (
     ('Witch',    0xFF4D63D3),
     ('Fairy',    0xFF1ED561),
@@ -24,9 +20,6 @@ PALETTE = (
     ('Ghost',    0xFF2CE0ED),
 )
 
-# The header bars multiply a near-white texture by a tint, so a dark or desaturated accent reads as a dull fill against the track.
-# The track is darker than the stock tint so the fill separates from it; a species whose accent is too close to the track in
-# colour gets a brighter, more saturated tint of the same palette entry (Witch is shifted towards purple, away from the track's blue).
 BAR_TRACK = 0xFF263158
 BAR_SATURATION = 0.70
 BAR_HUE = {'Witch': 250.0}
@@ -53,7 +46,7 @@ def _rgb(color):
 
 
 def bar_distance(tint):
-    """CIE76 distance between a fill tint and the track once both are multiplied by the bar texture."""
+    # Returns the CIE76 distance between a fill tint and the track once both are multiplied by the bar texture.
     a = _lab(tuple(round(v * BAR_TEXTURE) for v in _rgb(tint)))
     b = _lab(tuple(round(v * BAR_TEXTURE) for v in _rgb(BAR_TRACK)))
     return sum((p - q) ** 2 for p, q in zip(a, b)) ** 0.5
@@ -72,8 +65,6 @@ def bar_tint(name, accent):
 BAR_TINTS = tuple((name, bar_tint(name, color)) for name, color in PALETTE)
 
 IMAGE = 0x2F7D0004
-# Full-size Life State art: assets/UI/Icons/Occult/{Species}/Lifestate/{Species}Lifestate.png for every species in the palette.
-# A species whose file is missing keeps its glyph and the build prints a NOTE.
 LIFE_ART_SIZE = 128
 LIFE_ART = tuple((name, OCCULT_ICONS / name / 'Lifestate' / (name + 'Lifestate.png')) for name, _ in PALETTE)
 GENERATED = ROOT / 'build' / 'generated' / 'OccultAssetData.g.cs'
@@ -81,7 +72,6 @@ GENERATED = ROOT / 'build' / 'generated' / 'OccultAssetData.g.cs'
 
 def key(name):
     return Key(IMAGE, 0, fnv64('SupernaturalExpanded.HudIcon.' + name))
-
 
 
 def status_key(name):
@@ -151,7 +141,6 @@ def resources():
     if len({k for k, _ in result}) != len(NAMES):
         raise ValueError('HUD icon key collision')
     return result
-
 
 
 def status_resources():

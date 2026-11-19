@@ -16,7 +16,6 @@ namespace SupernaturalExpanded.Journal
     internal sealed class PowerPage
     {
         private const uint FadedAlpha = 0x66000000;
-        // At most this many icons fly to the Journal button, however many perks were bought at once.
         private const int MostFlights = 4;
         private static readonly string[] Numerals = { "I", "II", "III", "IV", "V" };
         private static readonly string[] RankUnlocks =
@@ -25,20 +24,16 @@ namespace SupernaturalExpanded.Journal
             "Arcana.Witch.Rank.Unlock.4", "Arcana.Witch.Rank.Unlock.5"
         };
         private static readonly Color LitIcon = new Color(0xFFFFFFFF);
-        // Half-transparent and darkened, so the icon still reads as unavailable in a skin that ignores one of the two.
         private static readonly Color FadedIcon = new Color(0x80A0A8B4);
-        // A cost the Sim cannot pay is red, as unaffordable prices are elsewhere in the game; a selected but unbought rank tints its badge green.
         private static readonly Color UnaffordableCost = new Color(0xFFC02828);
         private static readonly Color PendingPlate = new Color(0xFFFFD4D0);
         private static readonly Color PendingText = new Color(0xFFD42020);
-        // A faded perk's outline keeps its colour but loses most of its strength, like the icon.
         private const uint FadedEdgeAlpha = 0x66000000;
 
         private readonly OccultTree tree;
         private readonly List<WindowBase> controls = new List<WindowBase>();
         private readonly Button[] tiles;
         private readonly Window[] icons;
-        // Only a perk with a Face has an edge; the rest stay null.
         private readonly Window[] edges;
         private readonly UIImage[] iconImages;
         private readonly Text[] counts;
@@ -65,9 +60,9 @@ namespace SupernaturalExpanded.Journal
         private bool visible = true;
         private bool repaintQueued;
 
-        // Returns null when the installed layout lacks the tree's controls.
         internal static PowerPage Create(JournalWindow journal, OccultTree tree)
         {
+            // Creates the Perks page, or returns null when the installed layout lacks the tree's controls.
             return journal.HasControl(tree.Id(PageControl.Page, (int)PageSlot.RankTrack)) ? new PowerPage(journal, tree) : null;
         }
 
@@ -109,7 +104,6 @@ namespace SupernaturalExpanded.Journal
             {
                 for (int notch = 1; notch <= PowerLayout.NotchesPerRank; notch++)
                 {
-                    // Three stacked rows (short, full width, short) make one tick with softened ends.
                     int first = PowerLayout.NotchSlot + (rank * PowerLayout.NotchesPerRank + notch - 1) * 3;
                     float left = barCenter - PowerLayout.NotchWidth / 2f;
                     float top = PowerLayout.NotchTop(rank, notch);
@@ -151,7 +145,6 @@ namespace SupernaturalExpanded.Journal
                 Window edge = journal.Control<Window>(tree.Id(PageControl.Edge, i));
                 if (perk.Face != 0)
                 {
-                    // In front of the tile and its plates; the icon never takes this colour.
                     edges[i] = Add(edge);
                     journal.Place(edge, x, y, PowerLayout.TileSize, PowerLayout.CellHeight);
                     edge.ShadeColor = new Color(perk.Face);
@@ -163,8 +156,6 @@ namespace SupernaturalExpanded.Journal
                 icons[i] = Add(journal.Control<Window>(tree.Id(PageControl.Icon, i)));
                 journal.Place(icons[i], x + (PowerLayout.TileSize - PowerLayout.IconSize) / 2f, y + PowerLayout.IconTop,
                     PowerLayout.IconSize, PowerLayout.IconSize);
-                // Multi-rank counters stay upper-left. The pending +1 for a single-rank perk
-                // is centered at the TOP of the tile rather than floating at its left edge.
                 float badgeLeft = perk.Tiers > 1 ? x + 2f : x + (PowerLayout.TileSize - PowerLayout.CounterWidth) / 2f;
                 counts[i] = Add(journal.Label(tree.Id(PageControl.Counter, i), "", badgeLeft, y + 2f,
                     PowerLayout.CounterWidth, PowerLayout.CounterHeight));
@@ -173,7 +164,6 @@ namespace SupernaturalExpanded.Journal
                 float top = y + PowerLayout.BandTop;
                 costPlates[i] = Add(journal.Control<Window>(tree.Id(PageControl.CostPlate, i)));
                 journal.Place(costPlates[i], x + 4f, top, PowerLayout.TileSize - 8f, PowerLayout.BandHeight);
-                // Icon and number form one group centred on the tile; the number is centred in its own box.
                 float groupLeft = x + (PowerLayout.TileSize - PowerLayout.CostGroupWidth) / 2f;
                 costIcons[i] = Add(journal.Control<Window>(tree.Id(PageControl.CostIcon, i)));
                 journal.Place(costIcons[i], groupLeft, top + 1f, PowerLayout.CostIconSize, PowerLayout.CostIconSize);
@@ -183,7 +173,6 @@ namespace SupernaturalExpanded.Journal
             }
 
             float pointsLeft = PowerLayout.PointsLeft;
-            // The help disc takes the themed checkmark's face (JournalTheme.StyleClose); the '?' is stock text colored by the theme's text donor.
             Window helpDisc = Add(journal.Control<Window>(Slot(PageSlot.PointsHelpOuter)));
             Text helpGlyph = Add(journal.Control<Text>(Slot(PageSlot.PointsHelp)));
             float helpLeft = pointsLeft + PowerLayout.HelpOffsetX;
@@ -192,7 +181,6 @@ namespace SupernaturalExpanded.Journal
                 PowerLayout.HelpGlyphShiftX, PowerLayout.HelpGlyphShiftY);
             helpGlyph.Caption = "?";
             helpGlyph.TooltipText = tree.PointsHelp;
-            // The caption is right-aligned in a box that ends CaptionWidth after its start, so the icon sits just after the colon.
             float captionLeft = pointsLeft + PowerLayout.HelpSize + PowerLayout.HelpGap;
             Add(journal.Label(Slot(PageSlot.Points), JournalText.Format("Arcana.Journal.Perks.PointsCaption", tree.PointsName), captionLeft - 28f,
                 PowerLayout.FooterTop, PowerLayout.CaptionWidth + 28f, PowerLayout.FooterHeight));
@@ -261,9 +249,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // A numeral whose glyphs are rasterised in the frame that first paints its marker stays blank until invalidated, so the markers are repainted once after the page appears.
         private void QueueRankLabelRepaint()
         {
+            // Repaints the rank markers once after the page appears so their numerals are drawn.
             if (repaintQueued)
             {
                 return;
@@ -286,18 +274,18 @@ namespace SupernaturalExpanded.Journal
             });
         }
 
-        // Drops what is staged without buying it, so the points stay unspent and no purchase effect plays.
         internal void Discard()
         {
+            // Drops what is staged without buying it, so the points stay unspent and no purchase effect plays.
             if (selection != null)
             {
                 selection.DiscardStaged();
             }
         }
 
-        // Buys what is staged and returns whether anything was bought. With celebrate set, the icon of each perk bought flies from its card to the Journal button.
         internal bool Commit(bool celebrate)
         {
+            // Buys what is staged and returns whether anything was bought.
             if (selection == null)
             {
                 return false;
@@ -352,9 +340,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // The perk's own icon, kept once loaded so the Overview list can show the same art.
         internal UIImage PerkIcon(Perk perk)
         {
+            // Returns the perk's icon, caching it so the Overview can reuse the art.
             if (perk.Index < 0 || perk.Index >= icons.Length)
             {
                 return null;
@@ -431,17 +419,13 @@ namespace SupernaturalExpanded.Journal
             {
                 Perk perk = tree.Perks[i];
                 int tier = selection.Tier(perk);
-                // A perk with ranks owned or staged stays lit, even when no further rank can be picked.
                 bool open = tier > 0 || selection.CanStage(perk);
                 tiles[i].Enabled = open;
                 tiles[i].Selected = tier > 0;
                 SetEdge(i, perk, !open);
                 SetPerkFaded(i, !open, selection.ShortOnPoints(perk));
-                // A rank that is selected but not bought shows the badge even on a single-rank perk ("+1"), tinted, so it never
-                // reads as already owned.
                 bool staged = selection.Staged(perk) > 0;
                 SetPending(i, staged);
-                // Keep normal ownership counts navy; pending purchases are visibly red.
                 Color badgeColor = staged ? PendingText : (faded[i] ? GetFadedColor(ink) : ink);
                 if (counts[i].TextColor.ARGB != badgeColor.ARGB)
                 {
@@ -463,9 +447,9 @@ namespace SupernaturalExpanded.Journal
             pendingText.Visible = visible && waiting > 0;
         }
 
-        // A specialization's outline takes the colour its tree names; the tile face and the icon are left as they are.
         private void SetEdge(int index, Perk perk, bool fade)
         {
+            // Colours a specialization's outline with its tree colour.
             if (edges[index] == null)
             {
                 return;
@@ -489,9 +473,9 @@ namespace SupernaturalExpanded.Journal
             counterPlates[index].Invalidate();
         }
 
-        // Greys out a perk that cannot be selected: its icon, cost and rank counter fade, and the disabled tile supplies the grey face.
         private void SetPerkFaded(int index, bool fade, bool unaffordable)
         {
+            // Greys out a perk that cannot be selected: its icon, cost and rank counter fade, and the disabled tile supplies the grey face.
             if (styled && faded[index] == fade && unaffordableCost[index] == unaffordable)
             {
                 return;
@@ -527,9 +511,9 @@ namespace SupernaturalExpanded.Journal
                 JournalText.Get(RankUnlocks[rank]), null);
         }
 
-        // The tile supplies its tooltip on hover, so it always reflects the current owned and staged ranks.
         private WindowBase.CreateTooltipCallback TooltipFor(Perk perk)
         {
+            // Builds a tile's tooltip from the current owned and staged ranks.
             return delegate(Vector2 mouse, WindowBase window, ref Vector2 position)
             {
                 return BuildTooltip(perk);
@@ -553,9 +537,9 @@ namespace SupernaturalExpanded.Journal
                 WitchPerkBenefits.For(perk, selection.Tier(perk)));
         }
 
-        // The red line: which perk this one excludes and, once that one is chosen, why this one can no longer be.
         private string ConflictLine(Perk perk)
         {
+            // Returns the red conflict line for a perk that excludes or is excluded by another.
             Perk other = perk.Conflict;
             if (other == null)
             {

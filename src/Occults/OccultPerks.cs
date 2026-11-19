@@ -21,11 +21,9 @@ namespace SupernaturalExpanded.Journal
         internal readonly int[] Costs;
         internal string Tagline;
         internal string[] Descriptions;
-        // The perk that cannot be taken together with this one (set on both perks).
         internal Perk Conflict;
         internal int Index;
 
-        // The colour of the gradient along the edge of this perk's tile, as 0xAARRGGBB; zero leaves the tile plain. A tree sets it on its specializations.
         internal uint Face;
 
         internal Perk(string key, Rank rank, int column, float shift, string name, int[] costs)
@@ -40,9 +38,9 @@ namespace SupernaturalExpanded.Journal
 
         internal int Tiers { get { return Costs.Length; } }
 
-        // Previews the rank a click would buy, stopping at the last description; tier counts owned plus staged ranks.
         internal string Describe(int tier, string simName)
         {
+            // Returns the description of the rank a click would buy.
             int shown = PreviewIndex(tier);
             return Descriptions[shown].Replace("{name}", simName);
         }
@@ -99,9 +97,9 @@ namespace SupernaturalExpanded.Journal
             return rank < 0 ? 0 : (rank >= RankNames.Length ? RankNames.Length - 1 : rank);
         }
 
-        // The short rank name for narrow labels; the top rank keeps its full title, since "High" alone says nothing.
         internal string RankLabel(int rank)
         {
+            // Returns the short rank name for narrow labels.
             rank = ClampRank(rank);
             return rank == RankNames.Length - 1 ? RankTitle(rank) : RankNames[rank];
         }
@@ -118,9 +116,9 @@ namespace SupernaturalExpanded.Journal
             return null;
         }
 
-        // Must match Tree.id in tools/trees.py.
         internal uint Id(PageControl kind, int index)
         {
+            // Returns a control ID that matches Tree.id in tools/trees.py.
             return IdBase + (uint)kind * 0x100 + (uint)index;
         }
     }
@@ -137,72 +135,5 @@ namespace SupernaturalExpanded.Journal
         CostIcon = 7,
         Icon = 8,
         Edge = 9
-    }
-
-    internal static class WitchTree
-    {
-        internal static readonly OccultTree Tree = new OccultTree(
-            JournalText.Get("Arcana.LifeState.Name.Witch"), JournalText.Get("Arcana.Journal.Perks.Points"),
-            JournalText.Get("Arcana.Journal.Perks.PointsHelp"),
-            new[]
-            {
-                JournalText.Get("Arcana.Witch.Rank.Short.Novice"),
-                JournalText.Get("Arcana.Witch.Rank.Short.Apprentice"),
-                JournalText.Get("Arcana.Witch.Rank.Short.Adept"),
-                JournalText.Get("Arcana.Witch.Rank.Short.Master"),
-                JournalText.Get("Arcana.Witch.Rank.Short.HighWitch"),
-            },
-            new[]
-            {
-                JournalText.Get("Arcana.Witch.Rank.Full.Novice"),
-                JournalText.Get("Arcana.Witch.Rank.Full.Apprentice"),
-                JournalText.Get("Arcana.Witch.Rank.Full.Adept"),
-                JournalText.Get("Arcana.Witch.Rank.Full.Master"),
-                JournalText.Get("Arcana.Witch.Rank.Full.HighWitch"),
-            },
-            CreatePerks());
-
-        private static Perk[] CreatePerks()
-        {
-            Perk[] perks = new Perk[]
-            {
-                Power("RestForTheWicked", Rank.Novice, 0, 0.5f, JournalText.Get("Arcana.Witch.Perk.RestForTheWicked.Name"), 1, 1, 2),
-                Power("LessonsInTheUnseenArts", Rank.Novice, 1, 0.5f, JournalText.Get("Arcana.Witch.Perk.LessonsInTheUnseenArts.Name"), 2),
-                Power("TravellingScholar", Rank.Novice, 2, 0.5f, JournalText.Get("Arcana.Witch.Perk.TravellingScholar.Name"), 1),
-
-                Power("SorcerersApprentice", Rank.Apprentice, 0, 0f, JournalText.Get("Arcana.Witch.Perk.SorcerersApprentice.Name"), 2),
-                Power("AlchemicalSavant", Rank.Apprentice, 1, 0f, JournalText.Get("Arcana.Witch.Perk.AlchemicalSavant.Name"), 3),
-                Power("FamiliarBond", Rank.Apprentice, 2, 0f, JournalText.Get("Arcana.Witch.Perk.FamiliarBond.Name"), 2),
-                Power("Hexweaver", Rank.Apprentice, 3, 0f, JournalText.Get("Arcana.Witch.Perk.Hexweaver.Name"), 3),
-
-                Power("TrialByFire", Rank.Adept, 0, 0f, JournalText.Get("Arcana.Witch.Perk.TrialByFire.Name"), 3),
-                Power("TheWitchingHour", Rank.Adept, 1, 0f, JournalText.Get("Arcana.Witch.Perk.TheWitchingHour.Name"), 3),
-                Power("ThePowerOfThree", Rank.Adept, 2, 0f, JournalText.Get("Arcana.Witch.Perk.ThePowerOfThree.Name"), 3),
-                Power("DarkArts", Rank.Adept, 3, 0f, JournalText.Get("Arcana.Witch.Perk.DarkArts.Name"), 4),
-
-                Power("PracticallyMagic", Rank.Master, 0, 0f, JournalText.Get("Arcana.Witch.Perk.PracticallyMagic.Name"), 3),
-                Power("EideticWitchary", Rank.Master, 1, 0f, JournalText.Get("Arcana.Witch.Perk.EideticWitchary.Name"), 3, 4, 5),
-                Power("PowerShunt", Rank.Master, 2, 0f, JournalText.Get("Arcana.Witch.Perk.PowerShunt.Name"), 4),
-                // Ranks 1-3 redirect eligible backlash; shared tuning supplies the tooltip values.
-                Power("Scapegoat", Rank.Master, 3, 0f, JournalText.Get("Arcana.Witch.Perk.Scapegoat.Name"), 3, 4, 5),
-
-                Power("ArcaneAscendancy", Rank.HighWitch, 0, 0f, JournalText.Get("Arcana.Witch.Perk.ArcaneAscendancy.Name"), 6),
-                Power("TheOldWays", Rank.HighWitch, 3, 0f, JournalText.Get("Arcana.Witch.Perk.TheOldWays.Name"), 6)
-            };
-
-            // High Witch: choose only one; a staged choice can be cancelled to pick the other, an acquired one is final.
-            perks[15].Conflict = perks[16];
-            perks[16].Conflict = perks[15];
-            // Each specialization names the colour of its tile's edge: violet for Arcane Ascendancy (the Witch UI), green for The Old Ways.
-            perks[15].Face = 0xFF7A45E0;
-            perks[16].Face = 0xFF2E9E4F;
-            return perks;
-        }
-
-        // One cost per upgrade rank, in order; the number of costs is the number of ranks.
-        private static Perk Power(string key, Rank rank, int column, float shift, string name, params int[] costs)
-        {
-            return new Perk(key, rank, column, shift, name, costs);
-        }
     }
 }

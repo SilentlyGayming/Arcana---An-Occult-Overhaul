@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Sims3.Gameplay;
 using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.Autonomy;
 using Sims3.Gameplay.EventSystem;
@@ -9,6 +8,7 @@ using Sims3.Gameplay.Interactions;
 using Sims3.Gameplay.Objects.Alchemy;
 using Sims3.Gameplay.Skills;
 using Sims3.Gameplay.Utilities;
+using Sims3.Gameplay;
 using Sims3.SimIFace;
 
 namespace SupernaturalExpanded.Journal
@@ -18,12 +18,11 @@ namespace SupernaturalExpanded.Journal
         private static readonly FieldInfo SkillMultipliers = typeof(InteractionInstance).GetField("mSkillMultipliers",
             BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly Dictionary<ulong, WeakReference> practice = new Dictionary<ulong, WeakReference>();
-        private static readonly Dictionary<Type, TargetSpell.Definition> replacements = new Dictionary<Type, TargetSpell.Definition>();
         private static EventListener instantiated;
         private static EventListener practiced;
         private static AlarmHandle recovery = AlarmHandle.kInvalidHandle;
 
-        internal static bool CastingInstalled { get { return replacements.Count > 0; } }
+        internal static bool CastingInstalled { get { return SpellKnowledgeGates.Installed; } }
 
         internal static void Prepare()
         {
@@ -35,24 +34,20 @@ namespace SupernaturalExpanded.Journal
 
         internal static void Start()
         {
+            // Installs the knowledge gates, event listeners and regeneration alarm for Witch casting.
             if (!GameUtils.IsInstalled(ProductVersion.EP7))
             {
                 return;
             }
 
             WitchMagicRecovery.RegisterFizzle();
-            Register(new TargetSpell.GoodLuckCharm());
-            Register(new TargetSpell.LoveCharm());
-            Register(new TargetSpell.IceBlast());
-            Register(new TargetSpell.SunlightCharm());
-            Register(new TargetSpell.PestilenceCurse());
-            Register(new TargetSpell.HauntingCurse());
+            SpellKnowledgeGates.Prepare();
 
             instantiated = EventTracker.AddListener(EventTypeId.kSimInstantiated, OnInstantiated);
             practiced = EventTracker.AddListener(EventTypeId.kPracticedSpellcasting, OnPractice);
-            foreach (Sim sim in Sims3.Gameplay.Queries.GetObjects<Sim>())
+            foreach (Sims3.Gameplay.Abstracts.GameObject target in Sims3.Gameplay.Queries.GetObjects<Sims3.Gameplay.Abstracts.GameObject>())
             {
-                InstallFor(sim);
+                SpellKnowledgeGates.InstallFor(target);
             }
             WitchMagicRecovery.RefreshAll();
             recovery = AlarmManager.Global.AddAlarmRepeating(5f, TimeUnit.Minutes,
@@ -61,6 +56,7 @@ namespace SupernaturalExpanded.Journal
 
         internal static void Stop()
         {
+            // Removes the casting listeners and alarm and restores native regeneration.
             if (instantiated != null)
             {
                 EventTracker.RemoveListener(instantiated);
@@ -82,12 +78,6 @@ namespace SupernaturalExpanded.Journal
             }
             WitchMagicRecovery.RestoreAll();
             practice.Clear();
-            replacements.Clear();
-        }
-
-        private static void Register(TargetSpell.Definition replacement)
-        {
-            replacements.Add(replacement.Spell.Stock.GetType(), replacement);
         }
 
         private static ListenerAction OnInstantiated(Event e)
@@ -102,33 +92,12 @@ namespace SupernaturalExpanded.Journal
 
         private static void InstallFor(Sim sim)
         {
-            if (sim == null || sim.HasBeenDestroyed || sim.Interactions == null)
-            {
-                return;
-            }
-
-            List<InteractionObjectPair> pairs = sim.Interactions;
-            for (int i = 0; i < pairs.Count; i++)
-            {
-                InteractionObjectPair pair = pairs[i];
-                TargetSpell.Definition replacement;
-                if (replacements.TryGetValue(pair.InteractionDefinition.GetType(), out replacement))
-                {
-                    pairs[i] = new CastPair(replacement, sim, pair.Tuning);
-                }
-            }
-        }
-
-        private sealed class CastPair : InteractionObjectPair
-        {
-            internal CastPair(InteractionDefinition definition, Sim target, InteractionTuning tuning)
-                : base(definition, target, tuning)
-            {
-            }
+            SpellKnowledgeGates.InstallFor(sim);
         }
 
         private static ListenerAction OnPractice(Event e)
         {
+            // Applies the Practice Magic experience bonus once per practice interaction.
             Sim sim = e.Actor as Sim;
             if (!WitchCastingContext.IsWitch(sim) || SkillMultipliers == null)
             {

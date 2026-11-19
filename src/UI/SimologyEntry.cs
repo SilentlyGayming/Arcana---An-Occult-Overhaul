@@ -199,18 +199,18 @@ namespace SupernaturalExpanded.Journal
             Refresh();
         }
 
-        // Skill points below level 1 raise no skill event, so a Sim who can earn Perk Points is also checked on the minute tick.
         private void OnMinuteChanged()
         {
+            // Checks Perk Points on the minute tick because skill points below level 1 raise no event.
             if (pointsTracked)
             {
                 RefreshPoints();
             }
         }
 
-        // The middle of the Journal button in screen coordinates, or false while the button is not showing.
         internal bool TryButtonCenter(out Vector2 center)
         {
+            // Returns the Journal button's centre in screen coordinates, or false while it is hidden.
             center = new Vector2(0f, 0f);
             if (disposed || button == null || button.Disposed || !button.Visible)
             {
@@ -222,9 +222,9 @@ namespace SupernaturalExpanded.Journal
             return true;
         }
 
-        // Called when the selected Sim's Perk Points may have changed: a skill or occult update, or a purchase in the journal.
         internal void RefreshPoints()
         {
+            // Refreshes the Perk Point notice after a skill, occult or purchase change.
             pointsStale = true;
             if (pointsQueued || disposed || !PanelShowing)
             {
@@ -263,9 +263,9 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        // The selected Sim is read only when something that can change the points has happened; otherwise the cached answer is reapplied.
         private void UpdatePoints()
         {
+            // Reapplies cached Perk Points unless something that can change them has happened.
             if (pointsStale && PanelShowing)
             {
                 SimIdentity identity = model == null ? null : SimIdentity.Read(model);
@@ -562,7 +562,6 @@ namespace SupernaturalExpanded.Journal
         private readonly Button button;
         private readonly Window ring;
         private readonly UiAnimation animation;
-        // The ring grows from its resting size by PulseExpansion (in units of the 36x30 slot) and brightens from PulseMinOpacity to PulseMaxOpacity.
         private const float PulseExpansion = 2.6f;
         private const float PulseMinOpacity = 0.20f;
         private const float PulseMaxOpacity = 0.78f;
@@ -595,8 +594,6 @@ namespace SupernaturalExpanded.Journal
 
             Rect bounds = button.Area;
             float wave = (float)((1.0 - Math.Cos(2.0 * Math.PI * (elapsed % 1600) / 1600.0)) * 0.5);
-            // The native face occupies 29x24 of the 36x30 slot. The ring asset
-            // includes a 1.6-unit falloff and its peak fits within that slot.
             float width = bounds.Width * (32.2f + PulseExpansion * wave) / 36f;
             float height = bounds.Height * (27.2f + PulseExpansion * wave) / 30f;
             ring.Area = NativeLayouts.Box((bounds.Width - width) / 2f,

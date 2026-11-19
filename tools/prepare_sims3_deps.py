@@ -1,14 +1,3 @@
-"""Locate an installed copy of The Sims 3 and extract Arcana's build references.
-
-Run automatically by the build; requires Python 3 and the project's existing tools/dbpf.py.
-No third-party Python packages, S3PE installation, or .NET SDK are needed to
-*extract* references. Game files are read only; nothing is copied from a game
-installation into a public repository automatically.
-
-Optional: set SIMS3_GAME_DIR to your game folder (or its Game/Bin directory)
-for unusual Steam/EA/Origin installations.
-"""
-
 import argparse
 import hashlib
 import json
@@ -37,7 +26,7 @@ CACHE_VERSION = 2
 
 
 def decode_s3sa(blob):
-    """Unwrap the game's XOR-chained S3SA script resource (not simply a DLL)."""
+    # Unwraps the game's XOR-chained S3SA script resource.
     if not blob:
         raise ValueError("empty S3SA resource")
     p = 0
@@ -50,7 +39,7 @@ def decode_s3sa(blob):
         if not 0 <= n <= 1024:
             raise ValueError("invalid S3SA game version length")
         p += 4 + n * 2
-    p += 4 + 64  # unknown field and digest
+    p += 4 + 64
     count = struct.unpack_from("<H", blob, p)[0]
     p += 2
     table = blob[p:p + count * 8]
@@ -81,7 +70,7 @@ def decode_s3sa(blob):
 
 
 def installed_game_bin(candidate):
-    """Resolve install root / Game/Bin / Steam common folder to core packages."""
+    # Resolves an install root, Game/Bin or Steam folder to the core packages.
     candidate = Path(candidate).expanduser()
     for folder in (candidate, candidate / "Game" / "Bin", candidate / "Bin",
                    candidate / "The Sims 3" / "Game" / "Bin"):
@@ -137,7 +126,7 @@ def steam_libraries(steam_root):
 
 
 def install_candidates(explicit=None):
-    """Search standard Windows install roots, registry entries and Steam libraries."""
+    # Searches standard install roots, registry entries and Steam libraries.
     seen = set()
 
     def add(path):
@@ -190,7 +179,7 @@ def install_candidates(explicit=None):
 
 
 def validated_references(folder):
-    """Return the paths and hashes of one complete, compatible reference set."""
+    # Returns the paths and hashes of one complete, compatible reference set.
     paths, hashes = {}, {}
     if folder.is_dir():
         for path in folder.iterdir():
@@ -247,7 +236,7 @@ def load_manifest(output):
 
 
 def extract(bin_dir, staging):
-    """Decode each required assembly directly from the installed core packages."""
+    # Decodes each required assembly directly from the installed core packages.
     missing = set(REQUIRED)
     for package_name in PACKAGES:
         package = bin_dir / package_name
@@ -269,8 +258,7 @@ def extract(bin_dir, staging):
 
 
 def extract_reference_set(bin_dir, output, stamp):
-    # Stage a complete set. A later build detects an interrupted publication
-    # by comparing every reference hash against the manifest written last.
+    # Stages a complete reference set.
     target = output.resolve()
     game_root = bin_dir.parent.parent if bin_dir.parent.name.casefold() == "game" else bin_dir
     if target == game_root or game_root in target.parents:
@@ -345,7 +333,7 @@ def prepare_references(project, game_dir=None, refresh=False):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Extract the Sims 3 reference assemblies Arcana builds against.")
     parser.add_argument("--project", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--game-dir", help="Override installation autodetection, including Game/Bin paths.")
     parser.add_argument("--refresh", action="store_true", help="Re-extract the entire reference set.")

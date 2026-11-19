@@ -1,5 +1,3 @@
-"""Read TS3 DBPF 2.0 indexes and write additive, uncompressed resources."""
-
 from dataclasses import dataclass
 import struct
 import zlib
@@ -82,8 +80,7 @@ def index(package):
 
 
 def refpack(data, expected_size):
-    # Sims 3 uses both 0x10FB and 0x50FB headers. Bit 0x40 is a valid
-    # variant flag and does not change the size-field width.
+    # Decompresses a RefPack resource in either Sims 3 header variant.
     if len(data) < 2 or data[1] != 0xFB or data[0] & 0x3E != 0x10:
         raise ValueError("Unsupported RefPack header " + data[:4].hex())
     width = 4 if data[0] & 0x80 else 3

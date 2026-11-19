@@ -1,8 +1,8 @@
 using System;
 using System.Reflection;
 using Sims3.SimIFace;
-using Sims3.UI;
 using Sims3.UI.Hud;
+using Sims3.UI;
 
 namespace SupernaturalExpanded.Journal
 {
@@ -14,13 +14,12 @@ namespace SupernaturalExpanded.Journal
 
     internal static class NativeLayouts
     {
-        internal const string Journal = "SupernaturalExpandedJournalDialog_r81";
+        internal const string Journal = "SupernaturalExpandedJournalDialog_r82";
         internal const string HudButton = "SupernaturalExpandedJournalHudButton_r16";
-        internal const string PerkTooltip = "SupernaturalExpandedPerkTooltip_r3";
+        internal const string PerkTooltip = "SupernaturalExpandedPerkTooltip_r4";
         internal const string PurchaseFlight = "SupernaturalExpandedPurchaseFlight_r1";
         internal const int RootExport = 1;
 
-        // Controls of the game's own layouts.
         internal const uint MagicBar = 0x0DFC29C0;
         internal const uint SimName = 0xEF984401;
         internal const uint SimologyTraits = 0xEF98440A;
@@ -28,9 +27,7 @@ namespace SupernaturalExpanded.Journal
         internal const uint Celebrity = 0xEF984412;
         internal const uint Zodiac = 0xEF984420;
         internal const uint CollectionOkay = 0x05EF6BD1;
-        // The journal Cancel retains the game's X glyph, but borrows the proven native checkmark frame.
 
-        // Controls of the journal's layouts; must match the constants at the top of tools/journal_layouts.py.
         internal const uint Title = 0x53E00003;
         internal const uint Portrait = 0x53E00004;
         internal const uint PortraitFrame = 0x53E00005;
@@ -39,44 +36,37 @@ namespace SupernaturalExpanded.Journal
         internal const uint Close = 0x53E00009;
         internal const uint Content = 0x53E0000A;
         internal const uint Cancel = 0x53E0000D;
-        // Each clip owns a full-size frame drawable at the next ID.
         internal const uint FrameUpper = 0x53E00020;
         internal const uint FrameLowerLeft = 0x53E00022;
         internal const uint FrameFooter = 0x53E00024;
         internal const uint HudGlyph = 0x53E0000B;
-        // The Perk Point notification inside the HUD button: a hidden container and the two glow windows it holds.
         internal const uint PerkPulse = 0x53E000ED;
         internal const uint FirstTab = 0x53E00010;
 
-        // Grimoire subcategories. Reserve an independent block to avoid collisions with the Witch perk tree.
-        internal const uint GrimoireFirstTab = 0x53E000C0;
-        internal const uint GrimoireFirstIcon = 0x53E000C4;
-        internal const uint GrimoireFirstCaption = 0x53E000C8;
+        internal const uint GrimoireFirstTab = 0x53E00180;
+        internal const uint GrimoireFirstIcon = 0x53E00188;
+        internal const uint GrimoireFirstCaption = 0x53E00190;
         internal const uint GrimoireListPanel = 0x53E000D0;
         internal const uint GrimoireListBody = 0x53E000D1;
         internal const uint GrimoireListTitle = 0x53E000D2;
         internal const uint GrimoireEmptyList = 0x53E000D4;
-        // Native Lifetime Rewards-style three-column header. No dropdown.
         internal const uint GrimoireTierHeader = 0x53E000D7;
         internal const uint GrimoireCostHeader = 0x53E000D8;
         internal const uint GrimoireFirstColumnButton = 0x53E000D9;
         internal const uint GrimoireTableHeader = 0x53E000DC;
         internal const uint GrimoireFirstSortArrow = 0x53E000DF;
         internal const uint GrimoireFirstSortDescending = 0x53E000E2;
-        // The fixed-height description panel under the list: outline, pale body, entry name and short description.
         internal const uint GrimoireDescriptionPanel = 0x53E000E5;
         internal const uint GrimoireDescriptionBody = 0x53E000E6;
         internal const uint GrimoireDescriptionName = 0x53E000E7;
         internal const uint GrimoireDescriptionText = 0x53E000E8;
         internal const uint GrimoireDescriptionPrompt = 0x53E000F0;
         internal const uint GrimoireDescriptionMeta = 0x53E000F1;
-        // Seven reusable visible rows; five controls per row.
         internal const uint GrimoireFirstRow = 0x53E00100;
         internal const uint GrimoireScrollTrack = 0x53E00140;
         internal const uint GrimoireScrollThumb = 0x53E00141;
         internal const uint GrimoireScrollUp = 0x53E00142;
         internal const uint GrimoireScrollDown = 0x53E00143;
-        // The Overview dashboard: five panels (two windows each), three list headers and three scrolling lists.
         internal const uint OverviewFrame = 0x53E00300;
         internal const uint OverviewHeaderCell = 0x53E0030A;
         internal const uint OverviewHeaderTitle = 0x53E0030D;
@@ -88,11 +78,9 @@ namespace SupernaturalExpanded.Journal
         internal const uint OverviewLifeText = 0x53E00323;
         internal const uint OverviewRankNumeral = 0x53E00325;
         internal const uint OverviewLifeArt = 0x53E0032E;
-        // Each list owns OverviewListStride IDs: six per row (icon, name, detail, value, rule, hover window), then the scrollbar parts and the empty message at +0x30.
         internal const uint OverviewFirstList = 0x53E00340;
         internal const uint OverviewListStride = 0x40;
         internal const uint OverviewScrollOffset = 0x30;
-        // The header panel, then the controls of each row at consecutive IDs: icon, label, value, glass overlay, fill art, track, and fill viewport. The power row has a sparkle clip at +8.
         internal const uint StatusPanel = 0x53E00090;
         internal const uint StatusProgress = 0x53E000A0;
         internal const uint StatusPower = 0x53E000B0;
@@ -161,7 +149,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // Bridge for native UI members with internal access in Steam's UI.dll.
     internal static class NativeUi
     {
         private static readonly MethodInfo HudInstance = NativeReflection.Getter(typeof(HudController), "Instance", NativeReflection.Static);
@@ -241,7 +228,6 @@ namespace SupernaturalExpanded.Journal
             {
                 throw new MissingFieldException("ModalDialog.mPauseMode");
             }
-            // StopModal checks the mode when resuming even if StartModal(false) skipped Pause.
             PauseModeField.SetValue(dialog, ModalDialog.PauseMode.NoPause);
         }
     }

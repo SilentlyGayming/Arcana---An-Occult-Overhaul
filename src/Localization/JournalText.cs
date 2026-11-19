@@ -10,8 +10,7 @@ namespace SupernaturalExpanded.Journal
 
         internal static string Get(string key)
         {
-            // Raw lookup leaves the catalog's placeholders intact. The game
-            // selects the loaded locale and accepts the FNV64 string ID.
+            // Looks up a localized string by key, falling back to English.
             string text = StringTable.GetLocalizedString(ResourceUtils.HashString64(key));
             if (!string.IsNullOrEmpty(text) && text.Trim().Length != 0)
             {
@@ -37,7 +36,6 @@ namespace SupernaturalExpanded.Journal
             }
             catch (FormatException)
             {
-                // This can happen with an independently edited STBL.
 #if DEBUG || ARCANA_LOCALIZATION_LOG
                 ReportFallback(key, "Invalid numbered placeholders in the active table.");
 #endif
@@ -55,7 +53,6 @@ namespace SupernaturalExpanded.Journal
 #endif
     }
 
-    // The original entry contract is shared by the Perks and Overview pages.
     internal static class WitchText
     {
         internal static string[] Entry(string key)
@@ -74,6 +71,36 @@ namespace SupernaturalExpanded.Journal
                 entry[tier] = JournalText.Get(prefix + ".Description." + tier.ToString(CultureInfo.InvariantCulture));
             }
             return entry;
+        }
+    }
+
+    internal static class PercentText
+    {
+        internal static long AbsoluteTenths(double percent)
+        {
+            // Rounds a percentage to whole tenths without MidpointRounding, which the game's CLR lacks.
+            return (long)Math.Floor(Math.Abs(percent) * 10.0 + 0.5);
+        }
+
+        internal static string Format(float percent, bool signed)
+        {
+            if (float.IsNaN(percent) || float.IsInfinity(percent))
+            {
+                return JournalText.Get("Arcana.Common.UnavailableValue");
+            }
+
+            long tenths = AbsoluteTenths(percent);
+            string number = (tenths / 10).ToString(CultureInfo.InvariantCulture);
+            if (tenths % 10 != 0)
+            {
+                number += "." + (tenths % 10).ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (signed)
+            {
+                return JournalText.Format("Arcana.Common.SignedPercent", percent < 0f && tenths != 0 ? "-" : "+", number);
+            }
+            return JournalText.Format("Arcana.Common.Percent", number);
         }
     }
 }

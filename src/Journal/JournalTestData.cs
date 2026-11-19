@@ -1,11 +1,9 @@
 #if ARCANA_GRIMOIRE_TEST
-using Sims3.UI.Hud;
 using System.Collections.Generic;
+using Sims3.UI.Hud;
 
 namespace SupernaturalExpanded.Journal
 {
-    // Development-only sample percentages for checking how the Attributes panel looks with four rows. A normal build leaves this
-    // file out; it is compiled only by "build.bat --grimoire-test". The figures are made up and describe no gameplay.
     internal static class AttributeTestData
     {
         internal static void Register()
@@ -15,10 +13,6 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
-    // Development-only sample entries for exercising the Grimoire list. A normal build leaves this file out;
-    // it is compiled only by "build.bat --grimoire-test". Spells has enough entries to scroll, Curses has
-    // one more than a page, Rituals fills a page exactly and Abilities is left empty. Descriptions run from none
-    // through one line to far more than the panel holds, and a few names, costs and tiers are deliberately extreme.
     internal static class GrimoireTestData
     {
         private static readonly string[] Tiers = { "Novice", "Apprentice", "Adept", "Expert", "Master" };
@@ -31,10 +25,11 @@ namespace SupernaturalExpanded.Journal
 
         internal static void Apply(GrimoirePage page)
         {
-            page.SetEntries(0, Spells());
-            page.SetEntries(1, Curses());
-            page.SetEntries(2, Rituals());
-            page.ClearEntries(3);
+            page.SetEntries((int)SpellCategory.Spell, Spells());
+            page.ClearEntries((int)SpellCategory.Charm);
+            page.SetEntries((int)SpellCategory.Curse, Curses());
+            page.SetEntries((int)SpellCategory.Ritual, Rituals());
+            page.ClearEntries((int)SpellCategory.Ability);
         }
 
         private static List<GrimoireEntry> Spells()
