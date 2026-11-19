@@ -63,12 +63,13 @@ namespace SupernaturalExpanded.Journal
             long start = SimClock.CurrentTicks;
             Actor.SkillManager.AddElement(SkillNames.Spellcasting);
             SpellcastingSkill skill = Actor.SkillManager.GetElement(SkillNames.Spellcasting) as SpellcastingSkill;
+            MagicCasters.EnsureHands(Actor);
             mWand = WitchCastingContext.EquippedWand(Actor);
             if (skill == null)
             {
                 return false;
             }
-            if (mWand == null && WitchCastingContext.HasPracticallyMagic(Actor))
+            if (mWand == null && MagicCasters.NeedsHands(Actor))
             {
                 var hands = GlobalFunctions.CreateObjectOutOfWorld("magicHandsLHR", ProductVersion.EP7);
                 temporaryHands = hands as MagicHands;
@@ -76,6 +77,7 @@ namespace SupernaturalExpanded.Journal
                 {
                     hands.Destroy();
                 }
+                if (temporaryHands != null) MagicCasters.MakeWorthless(temporaryHands);
                 mWand = temporaryHands;
             }
             if (mWand == null)
@@ -150,6 +152,7 @@ namespace SupernaturalExpanded.Journal
             {
                 if (temporaryHands != null)
                 {
+                    if (Actor != null && Actor.Inventory != null) Actor.Inventory.TryToRemove(temporaryHands);
                     temporaryHands.Destroy();
                     temporaryHands = null;
                 }
@@ -220,17 +223,17 @@ namespace SupernaturalExpanded.Journal
         private bool ResolveCast()
         {
             // Rolls success and epic failure with Arcana's accuracy and prepares the native spell.
-            rules = WitchCastingContext.ReadRules(Actor);
+            rules = MagicCasters.ReadRules(Actor);
             float needPenalty;
             int empty;
             WitchCastingContext.CountNeeds(Actor, out needPenalty, out empty, null);
             emotions = WitchCastingContext.EmotionPenalty(Actor);
-            bool overreach = rules.Overreaches(spell.Category);
-            mSpellCastingSucceeded = !overreach && RandomUtil.RandomChance(
-                rules.Accuracy(spell.Category, WitchCastingContext.WandBonus(mWand, false), emotions, needPenalty, empty));
+            mSpellCastingSucceeded = RandomUtil.RandomChance(
+                rules.Accuracy(spell.Category, rules.Innate ? rules.InnateAccuracy : WitchCastingContext.WandBonus(mWand, false),
+                    emotions, needPenalty, empty));
             NativeWand.SetValue(native, mWand);
             NativeSucceeded.SetValue(native, mSpellCastingSucceeded);
-            mSpellCastingEpiclyFailed = !overreach && !mSpellCastingSucceeded &&
+            mSpellCastingEpiclyFailed = !mSpellCastingSucceeded &&
                 (bool)Invoke(spell.NativeEpicAllowed, native, null) && RandomUtil.RandomChance(mWand.EpicFailChance(Actor));
             NativeEpic.SetValue(native, mSpellCastingEpiclyFailed);
             return (bool)Invoke(spell.NativePreparation, native, null);
@@ -277,7 +280,12 @@ namespace SupernaturalExpanded.Journal
 
         protected override void DrainMotives()
         {
-            // Drains the Arcana power cost through the wand's native efficiency, moon and familiar modifiers.
+            // Drains the Arcana power cost through the wand's native efficiency, moon and familiar modifiers; Fairies and Genies spend their own power.
+            if (rules.Innate)
+            {
+                spent = MagicCasters.SpendInnate(Actor, rules, rules.FinalCost(spell.BaseCost, spell.Category, 1f));
+                return;
+            }
             float before = Actor.Motives.GetValue(CommodityKind.MagicFatigue);
             float logicalCost = rules.FinalCost(spell.BaseCost, spell.Category, 1f);
             float drain = rules.FatigueDrain(logicalCost, Actor.Motives.GetMin(CommodityKind.MagicFatigue),

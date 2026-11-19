@@ -41,6 +41,7 @@ python tools\verify_grimoire.py
 | `src/Localization` | String lookup and percentage formatting |
 | `src/Magic` | The spell catalog with fixed costs, spell knowledge, Study Spells at Aleister's station and cheats |
 | `src/Occults` | Shared occult status, meter and perk trees |
+| `src/Occults/Magic` | Shared Fairy and Genie casting: caster rules, power pools, the Genie Magic skill, spell tests and Grimoire abilities |
 | `src/Occults/Witch` | Witch ranks, milestones, perks, saved progress, abilities and Grimoire cost quotes |
 | `src/Occults/Witch/Casting` | Spell Accuracy, Magical Power, cost corrections for native spells, backfires, regeneration and Magical Fizzle |
 | `assets` | Icons, the vampire bite-mark replacement and the station's catalog resource |
@@ -50,7 +51,15 @@ python tools\verify_grimoire.py
 
 Every spell, charm, curse, ritual and Conjure Apple has a fixed Magical Power cost in `src/Magic/SpellCatalog.cs`. It does not grow with the Witch's power pool. The cost actually spent is that base cost × rank and perk discounts × wand, moon and familiar multipliers, and the Grimoire shows the same number.
 
+Rank only limits which spells a Sim can learn from the spellbook and the alchemy station. A known spell can always be cast if the Sim has enough power; a spell above the caster's rank (Witch rank, or Fairy Magic / Genie Magic skill level ÷ 2) loses 45% accuracy per tier above it, shown directly under Base Accuracy in the Spell Accuracy tooltip. Every Sim-targeted spell, charm and curse uses Arcana's accuracy for every caster. The game's own ground, plumbing, statue, Magically Upgrade and Conversion spells and the native rituals still roll success with the game's own formula, which mods cannot change per cast.
+
 Accuracy, power pools, discounts and recovery are tuned in `src/Occults/Witch/Casting/WitchCastingRules.cs`. Good Luck Charm, Ice Blast, Love Charm, Haunting Curse, Sunlight Charm and Pestilence Curse cast through Arcana. Other spells, rituals and object casts keep the game's own interactions; `WitchNativeCosts.cs` corrects their Magical Power drain to the fixed cost when the game drains it.
+
+## Fairy and Genie magic
+
+Fairies and Genies can study at the alchemy station, discover spells and cast them with their own power: Fairies spend Faeric Power, Genies spend the saved Genie power pool (0–100, refilling 10 per Sim hour). They study at half a Witch's speed and raise Fairy Magic or the new Genie Magic skill; every two skill levels let them learn the next spell tier, up to Tier IV. They cannot learn Tier V or Legendary magic.
+
+They start at 60% accuracy (Witches start at 50%) and cast through Innate Power instead of a wand: +25% accuracy for Fairies, −15% spell cost for Genies. Witch rank discounts and Witch perks do not apply. They cast every Sim-targeted spell, charm and curse they know through Arcana's own casting, and the ground, plumbing, statue, Magically Upgrade and Conversion spells through the game's own interactions. For those, Arcana keeps the game's Magic Hands item in their inventory, which the native spells use in place of a wand, and charges the fixed cost from their own power. Witches with Practically Magic get the same Magic Hands, so every native spell works for them without a wand. Arcana's Magic Hands are worth nothing, so they can never count toward household value or fire insurance, and they are removed within a few Sim minutes from any Sim who stops being a Fairy or Genie or loses Practically Magic.
 
 ## Aleister's All-in-One Magic Station
 

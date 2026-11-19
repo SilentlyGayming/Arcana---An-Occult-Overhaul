@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Sims3.Gameplay.ActorSystems;
@@ -65,7 +64,7 @@ namespace SupernaturalExpanded.Journal
             // Applies Magical Fizzle and refreshes the Witch's regeneration.
             sim.BuffManager.RemoveElement(FizzleBuff);
             sim.BuffManager.AddElementIgnoreDelay(FizzleBuff, FizzleMood, FizzleMinutes * rules.FizzleDuration, Origin.FromSpell);
-            Refresh(sim, rules);
+            if (!rules.Innate) Refresh(sim, rules);
         }
 
         internal static WitchRegeneration AppliedRegeneration(Motive motive)

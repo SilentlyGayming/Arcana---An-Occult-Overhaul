@@ -103,12 +103,14 @@ namespace SupernaturalExpanded.Journal
 
         private static InteractionInstance Pending(Sim sim)
         {
-            // Returns the Witch's running native spell cast when its fixed cost has not been charged yet.
-            if (!WitchCastingContext.IsWitch(sim) || sim.Motives == null || sim.SimDescription == null)
+            // Returns the caster's running native spell cast when its fixed cost has not been charged yet.
+            if (!MagicCasters.IsCaster(sim) || sim.Motives == null || sim.SimDescription == null)
             {
                 return null;
             }
             InteractionInstance cast = sim.CurrentInteraction;
+            NativeSpellCast known = cast as NativeSpellCast;
+            if (known != null) cast = known.Running;
             if (cast == null || cast is WitchSimCast || SpellKnowledgeGates.EntryFor(cast.InteractionDefinition) == null)
             {
                 return null;
@@ -127,6 +129,12 @@ namespace SupernaturalExpanded.Journal
             }
             charged[sim.SimDescription.SimDescriptionId] = new WeakReference(cast);
             SpellEntry entry = SpellKnowledgeGates.EntryFor(cast.InteractionDefinition);
+            if (MagicCasters.IsInnateCaster(sim))
+            {
+                WitchCastingRules innate = MagicCasters.ReadRules(sim);
+                MagicCasters.SpendInnate(sim, innate, innate.FinalCost(entry.Cost, WitchSpell.For(entry), 1f));
+                return;
+            }
             MagicWand wand = WitchCastingContext.NativeWand(cast);
             float multiplier = (wand == null ? 1f : wand.MotiveDrainMultiplier) * WitchCastingContext.SituationalDrain(sim);
             WitchCastingRules rules = WitchCastingContext.ReadRules(sim);

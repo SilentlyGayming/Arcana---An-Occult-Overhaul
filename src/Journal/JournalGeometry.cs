@@ -39,7 +39,6 @@ namespace SupernaturalExpanded.Journal
         private const float SparkleHeight = 5f;
 
         internal readonly Rect Track;
-        internal readonly Rect Interior;
         internal readonly Rect Fill;
         internal readonly Rect SparkleClip;
 
@@ -49,7 +48,6 @@ namespace SupernaturalExpanded.Journal
             float horizontalScale = track.Width / HeaderLayout.BarWidth;
             float innerLeft = track.TopLeft.x + LeftInset * horizontalScale;
             float innerRight = track.BottomRight.x - RightInset * horizontalScale;
-            Interior = new Rect(innerLeft, track.TopLeft.y, innerRight, track.BottomRight.y);
 
             float clamped = fraction > 0f ? Math.Min(fraction, 1f) : 0f;
             float end = clamped == 1f ? innerRight : innerLeft + (innerRight - innerLeft) * clamped;

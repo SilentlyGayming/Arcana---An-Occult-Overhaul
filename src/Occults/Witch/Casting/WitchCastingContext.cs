@@ -8,7 +8,6 @@ using Sims3.Gameplay.Interactions;
 using Sims3.Gameplay.Objects.Alchemy;
 using Sims3.Gameplay.Skills;
 using Sims3.Gameplay.Socializing;
-using Sims3.Gameplay;
 using Sims3.SimIFace;
 using Sims3.UI.Hud;
 
@@ -296,7 +295,8 @@ namespace SupernaturalExpanded.Journal
         }
         internal static WitchCastingRules ReadCapacityRules(Sim sim)
         {
-            // Reads only the rank and Arcane Ascendancy, which decide power capacity and study speed.
+            // Reads only the rank and Arcane Ascendancy, which decide power capacity and study speed; Fairies and Genies use their skill tier.
+            if (!IsWitch(sim)) return MagicCasters.ReadRules(sim);
             Rank rank;
             WitchRecord record = WitchProgressSource.ReadGameplay(sim.SimDescription, out rank);
             WitchCastingRules rules = new WitchCastingRules(rank);

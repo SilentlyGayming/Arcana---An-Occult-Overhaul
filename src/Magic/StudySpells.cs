@@ -58,7 +58,9 @@ namespace SupernaturalExpanded.Journal
 
         private static readonly SpellStudyTrack[] Tracks =
         {
-            new SpellStudyTrack(OccultTypes.Witch, SkillNames.Spellcasting)
+            new SpellStudyTrack(OccultTypes.Witch, SkillNames.Spellcasting),
+            new SpellStudyTrack(OccultTypes.Fairy, SkillNames.FairyMagic),
+            new SpellStudyTrack(OccultTypes.Genie, GenieMagicSkill.GenieGuid)
         };
 
         internal static SpellStudyTrack TrackFor(Sim sim)
@@ -168,14 +170,19 @@ namespace SupernaturalExpanded.Journal
 
         [Persistable(false)]
         private Skill studied;
+        private static readonly MethodInfo ShowMeter = typeof(SkillManager).GetMethod("ShowSkillMeter",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new Type[] { typeof(Skill), typeof(bool) }, null);
+        private static readonly MethodInfo HideMeter = typeof(SkillManager).GetMethod("HideSkillMeter",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
         private SkillNames studiedName;
         private float appliedRate;
+        private bool forcedMeter;
         private float nextResearch;
         private bool discovered;
 
         protected override bool Run()
         {
-            // Studies at the station with the native book animation, awarding Spellcasting XP and rolling for one discovery.
+            // Studies at the station with the native book animation, awarding the caster's skill XP and rolling for one discovery.
             SpellStudyTrack track = SpellStudy.TrackFor(Actor);
             if (track == null)
             {
@@ -188,6 +195,7 @@ namespace SupernaturalExpanded.Journal
                 return false;
             }
             studiedName = track.Skill;
+            if (track.Occult == OccultTypes.Genie) GenieMagicRegistration.Register();
             Actor.SkillManager.AddElement(track.Skill);
             studied = Actor.SkillManager.GetElement(track.Skill);
             if (studied == null || !Actor.RouteToSlot(Target, (Slot)BenchSlot))
@@ -250,8 +258,15 @@ namespace SupernaturalExpanded.Journal
 
         private void BeginStudy()
         {
+            // Starts the study skill gain and shows the progress bar even for Fairy Magic, which the game keeps hidden.
             appliedRate = SpellStudy.SkillPointsPerSimMinute(Actor);
             Actor.SkillManager.StartSkillGain(studiedName, appliedRate);
+            Skill skill = Actor.SkillManager.GetElement(studiedName);
+            if (studiedName == SkillNames.FairyMagic && skill != null && ShowMeter != null && HideMeter != null)
+            {
+                ShowMeter.Invoke(Actor.SkillManager, new object[] { skill, false });
+                forcedMeter = true;
+            }
         }
 
         private void EndStudy()
@@ -264,9 +279,12 @@ namespace SupernaturalExpanded.Journal
 
             float rate = appliedRate;
             appliedRate = 0f;
+            bool hide = forcedMeter;
+            forcedMeter = false;
             if (Actor != null && Actor.SkillManager != null)
             {
                 Actor.SkillManager.StopSkillGain(studiedName, rate);
+                if (hide) HideMeter.Invoke(Actor.SkillManager, null);
             }
         }
 

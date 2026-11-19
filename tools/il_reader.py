@@ -102,6 +102,19 @@ class Module:
         n = self.rows[2]; first = self.row(2, ti)[4]
         last = self.row(2, ti + 1)[4] if ti < n else self.rows[4] + 1
         return [(f, self.s(self.row(4, f)[1])) for f in range(first, last)]
+    def field_type(self, ti, name):
+        # Returns the declared class or interface name of a type's field, or None for other field types.
+        for index, field in self.fields_of(ti):
+            if field != name: continue
+            p = self.blob + self.row(4, index)[2]; size = self.d[p]; sig = self.d[p + 1:p + 1 + size]
+            if len(sig) < 3 or sig[1] not in (0x11, 0x12): return None
+            x = sig[2]
+            if x < 0x80: value = x
+            elif x < 0xC0: value = ((x & 0x3F) << 8) | sig[3]
+            else: value = ((x & 0x1F) << 24) | (sig[3] << 16) | (sig[4] << 8) | sig[5]
+            tag, row = value & 3, value >> 2
+            return self.tdname(row) if tag == 0 else self.trname(row) if tag == 1 else None
+        return None
     def tokname(self, tok):
         t, i = tok >> 24, tok & 0xFFFFFF
         if t == 0x70:

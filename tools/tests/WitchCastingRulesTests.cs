@@ -28,6 +28,7 @@ namespace SupernaturalExpanded.Journal
             RecoveryAndProtection();
             CharmClassification();
             FixedCosts();
+            InnateCasters();
             Console.WriteLine("PASS: " + checks + " deterministic Witch casting and progression checks");
         }
 
@@ -356,9 +357,7 @@ namespace SupernaturalExpanded.Journal
             for (int tier = 0; tier <= 5; tier++)
             {
                 WitchSpell charm = new WitchSpell(tier, WitchSpell.KindOf(SpellCategory.Charm));
-                True(charm.IsCharm && !charm.IsCurse && !charm.IsRitual, "Charm satisfies a Curse or Ritual test");
-                True(!new WitchSpell(tier, WitchSpellKind.Spell).IsCharm && !new WitchSpell(tier, WitchSpellKind.Curse).IsCharm
-                    && !new WitchSpell(tier, WitchSpellKind.Ritual).IsCharm, "Other kinds read as Charm");
+                True(!charm.IsCurse && !charm.IsRitual, "Charm satisfies a Curse or Ritual test");
             }
             float[] wands = { 0f, 5f, 20f, 25f };
             for (int rank = 0; rank <= 4; rank++)
@@ -382,7 +381,7 @@ namespace SupernaturalExpanded.Journal
                 Equal(0.70f, rules.RefundFraction(charm), "Charm refund is not the ordinary spell refund");
                 True(WitchCastingRules.CovenEligible(charm) == (tier <= 2), "Power of Three eligibility for Tier I-III charms");
                 True(WitchCastingRules.CovenEligible(charm) == WitchCastingRules.CovenEligible(spell), "Charm and spell coven eligibility differ");
-                True(rules.Overreaches(charm) == rules.Overreaches(spell), "Charm rank eligibility differs");
+                Equal(rules.AccuracyFor(spell, 0f, 0f, 0f, 0).Overreach, rules.AccuracyFor(charm, 0f, 0f, 0f, 0).Overreach, "Charm rank penalty differs");
                 if (tier == WitchCastingRules.Legendary)
                 {
                     continue;
@@ -458,6 +457,51 @@ namespace SupernaturalExpanded.Journal
             Equal(FullDrain(high, 30f, WitchSpell.For(SpellCatalog.Find("upgrade"))),
                 high.NativeCorrection(30f, WitchSpell.For(SpellCatalog.Find("upgrade")), 0f, 1f, -100f, 100f),
                 "Magically Upgrade receives its whole cost from the correction");
+        }
+
+        private static void InnateCasters()
+        {
+            // Checks Fairy and Genie accuracy, Innate Power, skill tiers, the Tier IV limit, study speed and the fixed power pool.
+            Equal(0f, (float)WitchCastingRules.RankForSkill(0), "skill level 0 is Tier I");
+            Equal(1f, (float)WitchCastingRules.RankForSkill(3), "skill level 3 is Tier II");
+            Equal(4f, (float)WitchCastingRules.RankForSkill(10), "skill level 10 is the top rank");
+            WitchCastingRules witch = new WitchCastingRules(Rank.Novice);
+            WitchCastingRules fairy = new WitchCastingRules(Rank.Novice, CasterKind.Fairy);
+            WitchCastingRules genie = new WitchCastingRules(Rank.Novice, CasterKind.Genie);
+            Equal(50f, witch.AccuracyFor(TierOne, 0f, 0f, 0f, 0).Total, "Witch base accuracy");
+            Equal(60f, genie.AccuracyFor(TierOne, genie.InnateAccuracy, 0f, 0f, 0).Total, "Genie base accuracy");
+            Equal(85f, fairy.AccuracyFor(TierOne, fairy.InnateAccuracy, 0f, 0f, 0).Total, "Fairy base accuracy with Innate Power");
+            Equal(60f, fairy.AccuracyFor(TierOne, 0f, 0f, 0f, 0).Starting, "breakdown reports the innate base");
+            Equal(1f, fairy.CostMultiplier(TierOne), "Fairy pays the fixed cost");
+            Equal(0.85f, genie.CostMultiplier(TierOne), "Genie Innate Power discount");
+            Equal(30f * 0.85f, genie.FinalCost(30f, TierOne, 1f), "Genie Good Luck Charm cost");
+            Equal(100f, fairy.Capacity, "Fairy power pool");
+            Equal(100f, new WitchCastingRules(Rank.HighWitch, CasterKind.Genie).Capacity, "Genie power pool ignores rank");
+            Equal(0.5f, genie.StudySpeed, "half-speed study");
+            Equal(1f, new WitchCastingRules(Rank.Master, CasterKind.Fairy).FizzleDuration, "no Master fizzle reduction");
+            WitchCastingRules top = new WitchCastingRules(Rank.HighWitch, CasterKind.Genie);
+            Equal(0f, top.AccuracyFor(new WitchSpell(3, WitchSpellKind.Curse), 0f, 0f, 0f, 0).Overreach, "Tier IV casts without a penalty");
+            Equal(0f, top.AccuracyFor(new WitchSpell(4, WitchSpellKind.Ritual), 0f, 0f, 0f, 0).Overreach, "Tier V casts without a penalty at the top skill rank");
+            Equal(3f, top.HighestTier, "highest innate tier is IV");
+            Equal(0.85f, top.CostMultiplier(TierTwo), "no Witch rank discounts for a Genie");
+            Equal(20f, top.AccuracyFor(new WitchSpell(3, WitchSpellKind.Curse), 0f, 0f, 0f, 0).RankBonus, "skill rank bonus applies");
+            Equal(90f, top.AccuracyFor(new WitchSpell(3, WitchSpellKind.Curse), 0f, 0f, 0f, 0).Total, "Genie Tier IV accuracy at level 10");
+            Equal(-45f, new WitchCastingRules(Rank.Novice, CasterKind.Fairy).AccuracyFor(TierTwo, 0f, 0f, 0f, 0).Overreach, "skill tier penalizes higher spells");
+            Equal(1f, new WitchCastingRules(Rank.Novice).FirstOverreachTier, "Novice penalty starts at Tier II");
+            Equal(-1f, new WitchCastingRules(Rank.HighWitch).FirstOverreachTier, "High Witch has no penalized learnable tier");
+            Equal(3f, new WitchCastingRules(Rank.Adept, CasterKind.Genie).FirstOverreachTier, "Innate penalty reaches Tier IV");
+            Equal(-1f, new WitchCastingRules(Rank.Master, CasterKind.Fairy).FirstOverreachTier, "Innate casters cannot learn past Tier IV");
+            WitchCastingRules novice = new WitchCastingRules(Rank.Novice);
+            WitchAccuracy reach = novice.AccuracyFor(TierTwo, 0f, 0f, 0f, 0);
+            Equal(-45f, reach.Overreach, "one tier above rank costs 45% accuracy");
+            Equal(5f, reach.Total, "Novice Tier II accuracy is low but possible");
+            Equal(-90f, novice.AccuracyFor(new WitchSpell(2, WitchSpellKind.Spell), 0f, 0f, 0f, 0).Overreach, "penalty scales per tier");
+            Equal(0f, novice.AccuracyFor(new WitchSpell(2, WitchSpellKind.Spell), 0f, 0f, 0f, 0).Total, "accuracy never drops below 0%");
+            Equal(5f + 25f, novice.AccuracyFor(TierTwo, 25f, 0f, 0f, 0).Total, "bonuses still apply above rank");
+            Equal(0f, novice.AccuracyFor(TierOne, 0f, 0f, 0f, 0).Overreach, "no penalty at or below rank");
+            float minimum, maximum;
+            top.CostRange(WitchSpellKind.Spell, out minimum, out maximum);
+            Equal(0.85f, minimum, "innate cost range stops at Tier IV");
         }
 
         private static float FullDrain(WitchCastingRules rules, float cost, WitchSpell spell)

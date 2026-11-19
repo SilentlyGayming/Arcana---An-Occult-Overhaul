@@ -274,6 +274,36 @@ def require_witch_contract(gameplay_types):
         ("Sims3.Gameplay.Interactions.InteractionInstance", "", "InteractionObjectPair"),
         ("Sims3.Gameplay.Actors.Sim", "", "SoloInteractions"),
         ("Sims3.Gameplay.UI.HudModel", "FlashMagicMotiveBar", "MagicMotiveChanged"),
+        (wand + "/CastFireBlast", "OnSpellSuccess OnSpellEpicFailure", "Singleton"),
+        (wand + "/CastToadify", "OnSpellSuccess OnSpellEpicFailure", "Singleton"),
+        (wand + "/CastSpell", "CommonSpellTests", ""),
+        ("Sims3.Gameplay.ActorSystems.Posture", "AllowsNormalSocials", ""),
+        ("Sims3.Gameplay.CAS.SimDescription", "get_IsEP11Bot get_ShowSocialsOnSim get_IsZombie get_ChildOrBelow get_IsPet get_IsGhost get_IsPregnant",
+         "AssignedRole"),
+        ("Sims3.Gameplay.Actors.Sim", "get_CanBeSocializedWith get_Service get_CurrentInteraction", ""),
+        ("Sims3.Gameplay.Socializing.SocialComponent", "IsInServicePreventingSocialization", ""),
+        ("Sims3.Gameplay.Socializing.IPreventSocialization", "SocializationAllowed", ""),
+        ("Sims3.Gameplay.ActorSystems.BuffManager", "HasElement HasAnyElement", ""),
+        ("Sims3.Gameplay.ActorSystems.OccultManager", "HasAnyOccultType HasOccultType", ""),
+        ("Sims3.Gameplay.Utilities.Localization", "LocalizeString", ""),
+        ("Sims3.Gameplay.Skills.Skill/NonPersistableSkillData", "",
+         "Name Description ThoughtBalloonTopicString Commodity MaxSkillLevel PointsForNextLevel LevelUpStrings"),
+        ("Sims3.Gameplay.Skills.SkillManager", "StartSkillGain StopSkillGain ShowSkillMeter HideSkillMeter", ""),
+        ("Sims3.Gameplay.Inventory", "FindAll TryToAdd TryToRemove", ""),
+        ("Sims3.Gameplay.Abstracts.GameObject", "get_Value get_PurchasedPrice get_Cost", "mPurchasedPrice mIntPrice"),
+        ("Sims3.Gameplay.Controllers.FireManager", "UnregisterFire NotifyPlayerOfFireOnLot", "mHouseholdValuePreFire"),
+        ("Sims3.Gameplay.GlobalFunctions", "CreateObject", ""),
+        ("Sims3.Gameplay.Interactions.InteractionGameObjectHit`2", "Init GetInteractionParameters", "Hit"),
+        ("Sims3.Gameplay.Core.FailureObject", "", ""),
+        ("Sims3.Gameplay.Core.LotManager", "GetLotAtPoint", ""),
+        ("Sims3.Gameplay.Core.Lot", "get_LotId", ""),
+        ("Sims3.Gameplay.Interfaces.ISculptureFrozenSim", "GetFrozenSim", ""),
+        ("Sims3.Gameplay.ObjectComponents.UpgradableComponent", "get_Unbreakable", ""),
+        ("Sims3.Gameplay.ObjectComponents.RepairableComponent", "get_Broken HasChanceOfBreaking", ""),
+        ("Sims3.Gameplay.Interfaces.ITelevision", "get_HasAllChannels", ""),
+        ("Sims3.Gameplay.Abstracts.GameObject", "GetContainedObject get_UpgradableComponent get_Repairable", ""),
+        ("Sims3.Gameplay.Interactions.InteractionInstance", "RunInteraction GetInteractionParameters GetIconKey", ""),
+        ("Sims3.Gameplay.ActorSystems.InteractionQueue", "GetCurrentInteraction PushRunningInteraction", ""),
     ]
     for native in NATIVE_DRAINS:
         bindings.append((wand + "/" + native, "", "Singleton"))
@@ -299,6 +329,11 @@ NATIVE_DRAINS = {
     "CastConvert": "CastConvert", "CastRestoration": "CastRestoration", "CastReanimate": "CastReanimate",
 }
 MAGIC_FATIGUE = 17774820
+WRAPPED_SPELLS = ("CastGoodLuckCharm", "CastLoveCharm", "CastSunlightCharm", "CastPestilenceCurse", "CastFireBlast", "CastIceBlast",
+                  "CastToadify", "CastHauntingCurse", "CastMotiveCharm", "CastMotiveCurse", "CastFireBlastTerrain", "CastIceBlastTerrain",
+                  "CastIceBlastPlumbing", "CastFireBlastOnStatue", "CastSunlightCharmOnStatue", "CastReanimate", "CastConvert",
+                  "CastRestoration", "MagicallyUpgrade")
+SINGLETON_TYPES = {"ConjureApple": "Sims3.Gameplay.Interactions.ISoloInteractionDefinition"}
 
 
 def require_native_cost_contract(root_dir):
@@ -322,6 +357,20 @@ def require_native_cost_contract(root_dir):
     upgrade = "\n".join(body(wand + "/MagicallyUpgrade", "Run"))
     if f"ldc.i4 {MAGIC_FATIGUE}" in upgrade or f"callvirt {wand}::DrainMotive" not in upgrade:
         raise ValueError("Magically Upgrade changed how it drains motives")
+    for motive in ("CastMotiveCharm", "CastMotiveCurse"):
+        definition = names[wand + "/" + motive + "/Definition"]
+        fields = [name for _, name in module.fields_of(definition)]
+        constructors = [index for index, name in module.methods_of(definition) if name == ".ctor"]
+        stores = ["\n".join(module.il(index)) for index in constructors]
+        if "mMotiveAffected" not in fields or not any("::mMotiveAffected" in code and "::mSpellLevel" in code for code in stores):
+            raise ValueError(f"{motive}.Definition no longer takes a motive and spell level")
+    for owner in [wand + "/" + name for name in WRAPPED_SPELLS] + ["Sims3.Gameplay.ActorSystems.TraitFunctions/ConjureApple"]:
+        declared = module.field_type(names[owner], "Singleton")
+        allowed = SINGLETON_TYPES.get(owner.split("/")[-1], "Sims3.Gameplay.Interactions.InteractionDefinition")
+        if declared != allowed:
+            raise ValueError(f"{owner}.Singleton is typed {declared}; Arcana's wrapper must implement it")
+    if "SelectedUpgrade" not in [name for _, name in module.fields_of(names[wand + "/MagicallyUpgrade/Definition"])]:
+        raise ValueError("MagicallyUpgrade.Definition no longer has SelectedUpgrade")
     drain = "\n".join(body(wand, "DrainMotive"))
     flash = "\n".join(body("Sims3.Gameplay.UI.HudModel", "FlashMagicMotiveBar"))
     if "Sims3.Gameplay.UI.HudModel::FlashMagicMotiveBar" not in drain or "OccultUpdatedCallback::Invoke" not in flash:

@@ -15,6 +15,7 @@ namespace SupernaturalExpanded.Journal
         private const BindingFlags Methods = BindingFlags.Instance | BindingFlags.NonPublic;
 
         internal readonly InteractionDefinition Stock;
+        internal readonly SpellEntry CatalogEntry;
         internal readonly WitchSpell Category;
         internal readonly MagicWand.SpellType Id;
         internal readonly BuffNames Backfire;
@@ -42,6 +43,7 @@ namespace SupernaturalExpanded.Journal
             SpellEntry entry = SpellCatalog.Find(id);
             if (entry == null) throw new InvalidOperationException("Missing spell catalog entry: " + id);
             Stock = stock;
+            CatalogEntry = entry;
             Category = WitchSpell.For(entry);
             BaseCost = entry.Cost;
             Type type = template.GetType();
@@ -70,7 +72,7 @@ namespace SupernaturalExpanded.Journal
 
             protected override InteractionInstance CreateInstance(ref InteractionInstanceParameters parameters)
             {
-                if (!WitchCastingContext.IsWitch(parameters.Actor as Sim))
+                if (!MagicCasters.IsCaster(parameters.Actor as Sim))
                 {
                     InteractionInstanceParameters original = parameters.CloneForNewInteraction(Spell.Stock);
                     return Spell.Stock.CreateInstanceFromParameters(ref original);
@@ -106,7 +108,11 @@ namespace SupernaturalExpanded.Journal
 
             protected override bool Test(Sim actor, Sim target, bool autonomous, ref GreyedOutTooltipCallback tooltip)
             {
-                // Runs the native availability test, allowing wandless casts with Practically Magic.
+                // Runs the native availability test, allowing wandless casts with Practically Magic; Fairies and Genies use Arcana's test.
+                if (MagicCasters.IsInnateCaster(actor))
+                {
+                    return InnateSpellTests.Allows(Spell, actor, target, ref tooltip);
+                }
                 InteractionInstanceParameters parameters = new InteractionInstanceParameters(new InteractionObjectPair(Spell.Stock, target),
                     actor, new InteractionPriority(InteractionPriorityLevel.UserDirected), autonomous, true);
                 if (actor.OccultManager == null || MagicWand.HasWand(actor) || !WitchCastingContext.HasPracticallyMagic(actor))
@@ -174,6 +180,45 @@ namespace SupernaturalExpanded.Journal
                 new MagicWand.CastHauntingCurse(), BuffNames.Undefined, BuffNames.Haunted);
 
             internal override TargetSpell Spell { get { return value; } }
+        }
+    
+        public sealed class FireBlast : Definition
+        {
+            private static readonly TargetSpell value = new TargetSpell("fire_blast", MagicWand.CastFireBlast.Singleton,
+                new MagicWand.CastFireBlast(), BuffNames.Undefined);
+
+            internal override TargetSpell Spell { get { return value; } }
+        }
+
+        public sealed class Toadify : Definition
+        {
+            private static readonly TargetSpell value = new TargetSpell("toadification", MagicWand.CastToadify.Singleton,
+                new MagicWand.CastToadify(), BuffNames.Undefined);
+
+            internal override TargetSpell Spell { get { return value; } }
+        }
+
+        public sealed class MotiveSpell : Definition
+        {
+            private readonly TargetSpell value;
+
+            internal MotiveSpell(TargetSpell spell)
+            {
+                value = spell;
+            }
+
+            internal override TargetSpell Spell { get { return value; } }
+
+            internal static MotiveSpell Create(SpellEntry entry, CommodityKind motive, int level)
+            {
+                // Builds the Fairy and Genie casting of one motive charm or curse from the native definition for that motive.
+                bool charm = entry.Category == SpellCategory.Charm;
+                Type definition = charm ? typeof(MagicWand.CastMotiveCharm.Definition) : typeof(MagicWand.CastMotiveCurse.Definition);
+                InteractionDefinition stock = (InteractionDefinition)Activator.CreateInstance(definition,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { motive, level }, null);
+                MagicWand.CastSpell template = charm ? (MagicWand.CastSpell)new MagicWand.CastMotiveCharm() : new MagicWand.CastMotiveCurse();
+                return new MotiveSpell(new TargetSpell(entry.Id, stock, template, BuffNames.Undefined));
+            }
         }
     }
 }

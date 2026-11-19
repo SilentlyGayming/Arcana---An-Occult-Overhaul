@@ -347,7 +347,7 @@ namespace SupernaturalExpanded.Journal
             {
                 GrimoireEntry a = current[i], b = incoming[i];
                 if (b == null || a.Id != b.Id || a.Name != b.Name || a.TierName != b.TierName || a.TierOrder != b.TierOrder
-                    || a.EnergyCost != b.EnergyCost || a.Description != b.Description) return false;
+                    || !SameCost(a.EnergyCost, b.EnergyCost) || a.Description != b.Description) return false;
             }
             return true;
         }
@@ -453,7 +453,7 @@ namespace SupernaturalExpanded.Journal
                 GrimoireEntry entry = items[index];
                 rowNames[i].Caption = entry.Name;
                 rowTiers[i].Caption = entry.TierName;
-                rowCosts[i].Caption = entry.EnergyCost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                rowCosts[i].Caption = CostText(entry);
                 rowCosts[i].TextColor = ColorForCost(entry);
                 rowButtons[i].Selected = entry.Id == selectedIds[category];
                 PaintRow(i);
@@ -494,8 +494,7 @@ namespace SupernaturalExpanded.Journal
             descriptionName.Caption = entry == null ? String.Empty : entry.Name;
             descriptionMeta.Caption = entry == null || String.IsNullOrEmpty(entry.TierName) ? String.Empty
                 : JournalText.Format("Arcana.Journal.Grimoire.Details.Tier", entry.TierName);
-            descriptionCost.Caption = entry == null ? String.Empty : JournalText.Format("Arcana.Journal.Grimoire.Details.Cost",
-                entry.EnergyCost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            descriptionCost.Caption = entry == null ? String.Empty : JournalText.Format("Arcana.Journal.Grimoire.Details.Cost", CostText(entry));
             descriptionCost.TextColor = entry == null ? MutedColor : ColorForCost(entry);
             descriptionText.Caption = entry == null ? String.Empty : ShortenDescription(entry.Description);
             bool hint = visible && entry == null;
@@ -524,23 +523,31 @@ namespace SupernaturalExpanded.Journal
 
         private void ReadAvailablePower()
         {
-            // Reads the selected Witch's remaining power in the same units as the displayed energy costs.
+            // Reads the selected caster's remaining power in the same units as the displayed energy costs.
             hasAvailablePower = false;
             Sim actor = journal.CurrentActor;
-            if (!WitchCastingContext.IsWitch(actor) || actor.Motives == null) return;
-            float minimum = actor.Motives.GetMin(CommodityKind.MagicFatigue);
-            float maximum = actor.Motives.GetMax(CommodityKind.MagicFatigue);
-            WitchCastingRules rules = WitchCastingContext.ReadRules(actor);
-            availablePower = rules.Capacity * WitchCastingRules.PowerFraction(
-                actor.Motives.GetValue(CommodityKind.MagicFatigue), minimum, maximum);
+            if (!MagicCasters.IsCaster(actor) || actor.Motives == null) return;
+            availablePower = MagicCasters.AvailablePower(actor, MagicCasters.ReadRules(actor));
             hasAvailablePower = true;
         }
 
         private Color ColorForCost(GrimoireEntry entry)
         {
             // Colors affordable costs green and unaffordable costs red while leaving unavailable readings neutral.
-            if (!hasAvailablePower) return TextColor;
+            if (!hasAvailablePower || float.IsNaN(entry.EnergyCost)) return TextColor;
             return entry.EnergyCost <= availablePower + 0.005f ? AffordableColor : UnaffordableColor;
+        }
+
+        private static string CostText(GrimoireEntry entry)
+        {
+            // Formats an entry's cost, showing a dash for abilities whose cost the game sets.
+            return float.IsNaN(entry.EnergyCost) ? JournalText.Get("Arcana.Common.UnavailableValue")
+                : entry.EnergyCost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private static bool SameCost(float a, float b)
+        {
+            return a == b || (float.IsNaN(a) && float.IsNaN(b));
         }
 
         private static string ShortenDescription(string text)

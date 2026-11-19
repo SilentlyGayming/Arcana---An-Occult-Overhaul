@@ -78,6 +78,16 @@ internal static class SpellKnowledgeTests
         }
         Check(enabled == costIds.Length, "An enabled entry has no fixed cost assertion");
 
+        SpellEntry fire = SpellCatalog.Find("fire_blast");
+        Check(SpellCatalog.InnateDiscoverable(fire, 0, false, true), "Fairies and Genies cannot study starting spells");
+        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("conversion"), 3, false, false), "Uncastable spell entered innate study");
+        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("restoration"), 4, false, true), "Tier V entered innate study");
+        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("love"), 1, false, true), "Innate study ignored the skill tier");
+        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("charm_energy"), 3, false, true), "Cut charm entered innate study");
+        Check(!SpellCatalog.InnateDiscoverable(fire, 3, true, true), "Known spell reentered innate study");
+        Check(SpellCatalog.InnateDiscoverable(SpellCatalog.Find("upgrade"), 3, false, true), "Fairies and Genies cannot learn Magically Upgrade");
+        Check(SpellCatalog.InnateDiscoverable(SpellCatalog.Find("conversion"), 3, false, true), "Fairies and Genies cannot learn Conversion");
+
         float next = 30f;
         Check(!SpellKnowledgeRecord.ResearchDue(29.9f, ref next, 30f), "Research rolled early");
         Check(SpellKnowledgeRecord.ResearchDue(30f, ref next, 30f) && next == 60f, "First research interval failed");
@@ -188,7 +198,7 @@ internal static class SpellKnowledgeTests
         MethodInfo register = cheats.GetMethod("Register", BindingFlags.NonPublic | BindingFlags.Static);
         MethodInfo stop = cheats.GetMethod("Stop", BindingFlags.NonPublic | BindingFlags.Static);
         Check((bool)register.Invoke(null, new object[] { "Unlock spell help" }), "Cheat registration failed");
-        Check(bridge.GetCommandHelp("arcanaunlockallspells") == "Unlock spell help", "Native lowercase help lookup cannot find cheat");
+        Check(bridge.GetCommandHelp("unlockallspells") == "Unlock spell help", "Native lowercase help lookup cannot find cheat");
         CommandHandler rooted = (CommandHandler)cheats.GetField("Handler", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
         Check(object.ReferenceEquals(bridge.Handler, rooted) && rooted.Method.DeclaringType.FullName.EndsWith("SpellUnlockCommand"),
             "Registered callback is not the rooted, tested command handler");
@@ -198,7 +208,7 @@ internal static class SpellKnowledgeTests
         Check((bool)register.Invoke(null, new object[] { "Unlock spell help" }) && bridge.Registrations == 2,
             "Cheat was not re-registered after native startup cleared it");
         stop.Invoke(null, null);
-        Check(bridge.GetCommandHelp("arcanaunlockallspells") == null, "World exit left a registered cheat behind");
+        Check(bridge.GetCommandHelp("unlockallspells") == null, "World exit left a registered cheat behind");
 
         string[] descriptors = { "GoodLuckCharm", "LoveCharm", "SunlightCharm", "PestilenceCurse", "IceBlast", "HauntingCurse" };
         string[] descriptorIds = { "good_luck", "love", "sunlight", "pestilence", "ice_blast", "haunting" };

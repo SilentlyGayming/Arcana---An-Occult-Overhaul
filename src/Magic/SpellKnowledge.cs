@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Reflection;
 using Sims3.Gameplay.Actors;
-using Sims3.Gameplay.Autonomy;
 using Sims3.Gameplay.CAS;
-using Sims3.Gameplay.Objects.Alchemy;
 using Sims3.SimIFace;
 using Sims3.UI;
 
@@ -13,8 +10,6 @@ namespace SupernaturalExpanded.Journal
 {
     internal static class SpellKnowledge
     {
-        private static readonly string[] TierNames = { "I", "II", "III", "IV", "V", "VI" };
-
         internal static event Action<ulong> Changed;
 
         internal static SpellKnowledgeSkill Read(SimDescription sim, bool create)
@@ -52,8 +47,17 @@ namespace SupernaturalExpanded.Journal
 
         internal static List<SpellEntry> Eligible(Sim actor)
         {
-            // Returns the entries a Witch can still discover at the current rank.
+            // Returns the entries a caster can still discover at its current rank or skill tier.
             List<SpellEntry> eligible = new List<SpellEntry>();
+            if (MagicCasters.IsInnateCaster(actor))
+            {
+                int highest = MagicCasters.ReadRules(actor).HighestTier;
+                SpellKnowledgeSkill known = Read(actor.SimDescription, false);
+                foreach (SpellEntry entry in SpellCatalog.Entries)
+                    if (SpellCatalog.InnateDiscoverable(entry, highest, known != null && known.Knows(entry.Id), SpellKnowledgeGates.InnateCastable(entry)))
+                        eligible.Add(entry);
+                return eligible;
+            }
             if (!WitchCastingContext.IsWitch(actor)) return eligible;
             EnsureStarting(actor);
             Rank rank;
@@ -76,7 +80,18 @@ namespace SupernaturalExpanded.Journal
 
         internal static int UnlockAllOrdinary(Sim actor)
         {
-            // Teaches every eligible ordinary entry and returns how many were new.
+            // Teaches every eligible ordinary entry and returns how many were new; Fairies and Genies learn every spell they can cast.
+            if (MagicCasters.IsInnateCaster(actor))
+            {
+                SpellKnowledgeSkill record = Read(actor.SimDescription, true);
+                if (record == null) return -1;
+                int count = 0;
+                foreach (SpellEntry entry in SpellCatalog.Entries)
+                    if (SpellCatalog.InnateDiscoverable(entry, WitchCastingRules.InnateHighestTier, record.Knows(entry.Id),
+                        SpellKnowledgeGates.InnateCastable(entry)) && record.Learn(entry.Id)) count++;
+                RaiseChanged(actor);
+                return count;
+            }
             if (!WitchCastingContext.IsWitch(actor)) return -1;
             EnsureStarting(actor);
             SpellKnowledgeSkill data = Read(actor.SimDescription, true);
@@ -133,10 +148,10 @@ namespace SupernaturalExpanded.Journal
                     if (data == null || !data.Knows(entry.Id) || entry.Learning == SpellLearning.NativeDisabled
                         || entry.Category == SpellCategory.Ability) continue;
                     float cost = quote.For(entry);
-                    categories[(int)entry.Category].Add(new GrimoireEntry(entry.Id, Name(entry), TierNames[entry.Tier], entry.Tier,
+                    categories[(int)entry.Category].Add(new GrimoireEntry(entry.Id, Name(entry), OverviewProviders.GetRomanNumeral(entry.Tier + 1), entry.Tier,
                         cost, Describe(quote, entry, cost)));
                 }
-                categories[(int)SpellCategory.Ability] = WitchAbilities.Entries(identity);
+                categories[(int)SpellCategory.Ability] = InnateAbilities.Entries(identity, quote);
             }
             finally
             {

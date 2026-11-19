@@ -7,7 +7,7 @@ namespace SupernaturalExpanded.Journal
 {
     internal static class ArcanaCheats
     {
-        internal const string UnlockCommand = "arcanaunlockallspells";
+        internal const string UnlockCommand = "unlockallspells";
         private static readonly SpellUnlockCommand Command = new SpellUnlockCommand(UnlockSelected, ShowUsage);
         private static readonly CommandHandler Handler = new CommandHandler(Command.Execute);
         private static bool registered;
@@ -60,11 +60,11 @@ namespace SupernaturalExpanded.Journal
 
         private static int UnlockSelected()
         {
-            // Unlocks every ordinary spell for the selected Witch directly in the command callback.
+            // Unlocks every ordinary spell for the selected Witch, Fairy or Genie directly in the command callback.
             try
             {
                 Sim selected = Sim.ActiveActor;
-                if (selected == null || selected.HasBeenDestroyed || !WitchCastingContext.IsWitch(selected))
+                if (selected == null || selected.HasBeenDestroyed || !MagicCasters.IsCaster(selected))
                 {
                     SimpleMessageDialog.Show(JournalText.Get("Arcana.Journal.Title"), JournalText.Get("Arcana.Cheat.SelectWitch"));
                     return -1;

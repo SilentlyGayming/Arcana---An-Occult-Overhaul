@@ -35,6 +35,13 @@ namespace SupernaturalExpanded.Journal
                 WitchAttributes.ReadRegeneration);
             AttributeSources.Register(OccultTypes.Witch, JournalText.Get("Arcana.Journal.Overview.Attributes.SpellCost"),
                 WitchAttributes.ReadSpellCost);
+            foreach (OccultTypes innate in new OccultTypes[] { OccultTypes.Fairy, OccultTypes.Genie })
+            {
+                AccuracySources.Register(innate, WitchAttributes.ReadAccuracy);
+                AttributeSources.Register(innate, JournalText.Get("Arcana.Journal.Overview.Attributes.PowerRegeneration"),
+                    WitchAttributes.ReadInnateRegeneration);
+                AttributeSources.Register(innate, JournalText.Get("Arcana.Journal.Overview.Attributes.SpellCost"), WitchAttributes.ReadSpellCost);
+            }
             World.OnWorldLoadFinishedEventHandler += OnWorldLoaded;
             World.OnWorldLoadStartedEventHandler += OnWorldStarting;
             World.OnWorldQuitEventHandler += OnWorldExiting;

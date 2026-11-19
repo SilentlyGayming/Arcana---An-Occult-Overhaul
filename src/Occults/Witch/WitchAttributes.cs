@@ -1,19 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Reflection;
 using Sims3.Gameplay.ActorSystems;
 using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.Autonomy;
-using Sims3.Gameplay.CAS;
-using Sims3.Gameplay.Interactions;
 using Sims3.Gameplay.Objects.Alchemy;
-using Sims3.Gameplay.Skills;
-using Sims3.Gameplay.Socializing;
-using Sims3.Gameplay;
-using Sims3.SimIFace;
-using Sims3.UI.Hud;
-using Sims3.UI;
 
 namespace SupernaturalExpanded.Journal
 {
@@ -62,28 +52,47 @@ namespace SupernaturalExpanded.Journal
             return new ModifierReading((regeneration.Rate - 1f) * 100f, "", tip);
         }
 
+        internal static ModifierReading ReadInnateRegeneration(OverviewContext context)
+        {
+            // Reads a Fairy's Faeric Power or a Genie's power recovery, which has no Witch rank or perk modifiers.
+            Sim sim = context.Identity.Description == null ? null : context.Identity.Description.CreatedSim;
+            if (!WitchCastingLifecycle.CastingInstalled || !MagicCasters.IsInnateCaster(sim))
+            {
+                return ModifierReading.None;
+            }
+            List<TooltipModifier> lines = new List<TooltipModifier>();
+            OverviewTip tip = new OverviewTip(JournalText.Get("Arcana.Journal.Overview.Attributes.PowerRegeneration"),
+                JournalText.Get("Arcana.Journal.Overview.Regeneration.Tagline"),
+                JournalText.Get("Arcana.Journal.Overview.Regeneration.Base"), lines.ToArray());
+            return new ModifierReading(0f, "", tip);
+        }
+
         internal static ModifierReading ReadSpellCost(OverviewContext context)
         {
             // Reads the Spell Cost row and its per-category tooltip using the same factors as casting.
             Sim sim = context.Identity.Description == null ? null : context.Identity.Description.CreatedSim;
-            if (!WitchCastingLifecycle.CastingInstalled || !WitchCastingContext.IsWitch(sim))
+            if (!WitchCastingLifecycle.CastingInstalled || !MagicCasters.IsCaster(sim))
             {
                 return ModifierReading.None;
             }
 
-            WitchCastingRules rules = WitchCastingContext.ReadRules(sim);
-            int tier = (int)rules.Rank;
+            WitchCastingRules rules = MagicCasters.ReadRules(sim);
+            int tier = rules.HighestTier;
             WitchSpell current = new WitchSpell(tier, WitchSpellKind.Spell);
             WitchCostFactors ordinary = rules.CostFactors(current);
             List<TooltipModifier> lines = new List<TooltipModifier>();
             AddCostFactor(lines, JournalText.Get("Arcana.Journal.Overview.Cost.HighWitch"), ordinary.HighWitch);
             AddCostFactor(lines, JournalText.Get("Arcana.Witch.Perk.FamiliarBond.Name"), ordinary.Familiar);
+            AddCostFactor(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.InnatePower"), ordinary.Innate);
 
             AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Spells"), rules, current);
             AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Charms"), rules, new WitchSpell(tier, WitchSpellKind.Charm));
             AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Curses"), rules, new WitchSpell(tier, WitchSpellKind.Curse));
             AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Rituals"), rules, new WitchSpell(tier, WitchSpellKind.Ritual));
-            AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Legendary"), rules, new WitchSpell(WitchCastingRules.Legendary, WitchSpellKind.Spell));
+            if (!rules.Innate)
+            {
+                AddCostCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Legendary"), rules, new WitchSpell(WitchCastingRules.Legendary, WitchSpellKind.Spell));
+            }
 
             OverviewTip tip = new OverviewTip(JournalText.Get("Arcana.Journal.Overview.Attributes.SpellCost"),
                 JournalText.Get("Arcana.Journal.Overview.Cost.Tagline"), JournalText.Get("Arcana.Journal.Overview.Cost.Base"), lines.ToArray());
@@ -147,9 +156,9 @@ namespace SupernaturalExpanded.Journal
             // Merges contiguous tiers with equal displayed costs.
             int start = 0;
             string amount = PercentText.Format(rules.CostMultiplier(new WitchSpell(0, kind)) * 100f, false);
-            for (int tier = 1; tier <= (int)rules.Rank + 1; tier++)
+            for (int tier = 1; tier <= rules.HighestTier + 1; tier++)
             {
-                string next = tier <= (int)rules.Rank
+                string next = tier <= rules.HighestTier
                     ? PercentText.Format(rules.CostMultiplier(new WitchSpell(tier, kind)) * 100f, false) : null;
                 if (next == amount)
                 {
@@ -189,29 +198,36 @@ namespace SupernaturalExpanded.Journal
         {
             // Reads the Spell Accuracy row and its per-category breakdown using the casting rules.
             Sim sim = context.Identity.Description == null ? null : context.Identity.Description.CreatedSim;
-            if (!WitchCastingLifecycle.CastingInstalled || !WitchCastingContext.IsWitch(sim))
+            if (!WitchCastingLifecycle.CastingInstalled || !MagicCasters.IsCaster(sim))
             {
                 return null;
             }
 
-            WitchCastingRules rules = WitchCastingContext.ReadRules(sim);
-            MagicWand wand = WitchCastingContext.WandForAccuracy(sim);
-            bool previewMagicHands = wand == null && WitchCastingContext.HasPracticallyMagic(sim);
-            float wandBonus = WitchCastingContext.WandBonus(wand, previewMagicHands);
+            WitchCastingRules rules = MagicCasters.ReadRules(sim);
+            MagicWand wand = rules.Innate ? null : WitchCastingContext.WandForAccuracy(sim);
+            bool previewMagicHands = !rules.Innate && wand == null && WitchCastingContext.HasPracticallyMagic(sim);
+            float wandBonus = rules.Innate ? rules.InnateAccuracy : WitchCastingContext.WandBonus(wand, previewMagicHands);
             float needPenalty;
             int empty;
             List<TooltipModifier> needLines = new List<TooltipModifier>();
             WitchCastingContext.CountNeeds(sim, out needPenalty, out empty, needLines);
             float emotions = WitchCastingContext.EmotionPenalty(sim);
-            WitchSpell currentRank = new WitchSpell((int)rules.Rank, WitchSpellKind.Spell);
+            WitchSpell currentRank = new WitchSpell(rules.HighestTier, WitchSpellKind.Spell);
             WitchAccuracy accuracy = rules.AccuracyFor(currentRank, wandBonus, emotions, needPenalty, empty);
             List<TooltipModifier> lines = new List<TooltipModifier>();
             string baseLine = JournalText.Format("Arcana.Common.ModifierLine",
-                JournalText.Get("Arcana.Journal.Overview.Accuracy.Base"), PercentText.Format(WitchAccuracy.Base, false));
-            string wandName = previewMagicHands || wand is MagicHands
+                JournalText.Get("Arcana.Journal.Overview.Accuracy.Base"), PercentText.Format(rules.BaseAccuracy, false));
+            string wandName = rules.Innate ? JournalText.Get("Arcana.Journal.Overview.Accuracy.InnatePower")
+                : previewMagicHands || wand is MagicHands
                 ? JournalText.Get("Arcana.Journal.Overview.Accuracy.MagicHands")
                 : wand != null && accuracy.Wand != 0f ? wand.GetLocalizedName() : null;
-            AddPercentModifier(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Rank"), accuracy.RankBonus);
+            if (rules.FirstOverreachTier >= 0)
+            {
+                string above = JournalText.Format("Arcana.Journal.Overview.Accuracy.AboveRank",
+                    OverviewProviders.GetRomanNumeral(rules.FirstOverreachTier + 1));
+                AddPercentModifier(lines, above, -WitchCastingRules.OverreachPenaltyPerTier);
+            }
+            AddPercentModifier(lines, RankLabel(rules), accuracy.RankBonus);
             AddPercentModifier(lines, string.IsNullOrEmpty(wandName)
                 ? JournalText.Get("Arcana.Journal.Overview.Accuracy.Wand") : wandName, accuracy.Wand);
             AddPercentModifier(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Mood"), accuracy.Mood);
@@ -225,7 +241,7 @@ namespace SupernaturalExpanded.Journal
             AddPercentModifier(lines, JournalText.Get("Arcana.Witch.Perk.ArcaneAscendancy.Name"), accuracy.Ascendancy);
             AddCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Spells"), accuracy.Total);
             AddCategoryModifiers(lines, accuracy, rules.SpecialtyAccuracyBonus(currentRank));
-            int tier = (int)rules.Rank;
+            int tier = rules.HighestTier;
             WitchSpell charmSpell = new WitchSpell(tier, WitchSpellKind.Charm);
             WitchSpell curseSpell = new WitchSpell(tier, WitchSpellKind.Curse);
             WitchSpell ritualSpell = new WitchSpell(tier, WitchSpellKind.Ritual);
@@ -240,9 +256,18 @@ namespace SupernaturalExpanded.Journal
             AddCategoryModifiers(lines, curse, rules.SpecialtyAccuracyBonus(curseSpell));
             AddCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Rituals"), ritual.Total);
             AddCategoryModifiers(lines, ritual, rules.SpecialtyAccuracyBonus(ritualSpell));
-            AddCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Legendary"), legendary.Total);
-            AddPercentModifier(lines, JournalText.Get("Arcana.Witch.Perk.TheOldWays.Name"), rules.SpecialtyAccuracyBonus(legendarySpell));
+            if (!rules.Innate)
+            {
+                AddCategory(lines, JournalText.Get("Arcana.Journal.Overview.Accuracy.Legendary"), legendary.Total);
+                AddPercentModifier(lines, JournalText.Get("Arcana.Witch.Perk.TheOldWays.Name"), rules.SpecialtyAccuracyBonus(legendarySpell));
+            }
             return new AccuracyReading(accuracy.Total, baseLine, lines.ToArray());
+        }
+
+        private static string RankLabel(WitchCastingRules rules)
+        {
+            // Names what sets the rank bonus: Witch rank, or Innate Magic for Fairies and Genies.
+            return JournalText.Get(rules.Innate ? "Arcana.Journal.Overview.Accuracy.InnateMagic" : "Arcana.Journal.Overview.Accuracy.Rank");
         }
 
         private static void AddCategory(List<TooltipModifier> lines, string label, float value)
@@ -298,7 +323,7 @@ namespace SupernaturalExpanded.Journal
 
     internal sealed class SpellPowerQuote
     {
-        private readonly bool witch;
+        private readonly bool caster;
         private readonly WitchCastingRules rules;
         private readonly float wandDrain;
         private readonly float handsDrain;
@@ -307,12 +332,18 @@ namespace SupernaturalExpanded.Journal
         internal SpellPowerQuote(Sim actor)
         {
             // Reads the caster's rules, wand and situational multipliers once so a whole Grimoire refresh shares them.
-            witch = WitchCastingContext.IsWitch(actor);
-            if (!witch)
+            CasterKind kind;
+            caster = MagicCasters.TryKind(actor, out kind);
+            if (!caster)
             {
                 return;
             }
-            rules = WitchCastingContext.ReadRules(actor);
+            rules = MagicCasters.ReadRules(actor);
+            if (kind != CasterKind.Witch)
+            {
+                wandDrain = handsDrain = situational = 1f;
+                return;
+            }
             MagicWand wand = WitchCastingContext.EquippedWand(actor);
             wandDrain = wand == null ? 1f : wand.MotiveDrainMultiplier;
             handsDrain = wand == null && WitchCastingContext.HasPracticallyMagic(actor) ? WitchCastingContext.HandsDrain : wandDrain;
@@ -334,7 +365,7 @@ namespace SupernaturalExpanded.Journal
 
         private float Quote(SpellEntry entry, float drain)
         {
-            if (!witch) return entry.Cost;
+            if (!caster) return entry.Cost;
             return rules.FinalCost(entry.Cost, WitchSpell.For(entry), drain * situational);
         }
     }

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Sims3.Gameplay.CAS;
 using Sims3.Gameplay.Skills;
-using Sims3.Gameplay.Utilities;
 using Sims3.SimIFace.CAS;
 using Sims3.SimIFace;
 

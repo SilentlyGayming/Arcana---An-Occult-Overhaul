@@ -20,7 +20,9 @@ namespace SupernaturalExpanded.Journal
         private static readonly Dictionary<ulong, WeakReference> practice = new Dictionary<ulong, WeakReference>();
         private static EventListener instantiated;
         private static EventListener practiced;
+        private static EventListener bought;
         private static AlarmHandle recovery = AlarmHandle.kInvalidHandle;
+        private static AlarmHandle upkeep = AlarmHandle.kInvalidHandle;
 
         internal static bool CastingInstalled { get { return SpellKnowledgeGates.Installed; } }
 
@@ -46,13 +48,17 @@ namespace SupernaturalExpanded.Journal
 
             instantiated = EventTracker.AddListener(EventTypeId.kSimInstantiated, OnInstantiated);
             practiced = EventTracker.AddListener(EventTypeId.kPracticedSpellcasting, OnPractice);
+            bought = EventTracker.AddListener(EventTypeId.kBoughtObject, OnBought);
             foreach (Sims3.Gameplay.Abstracts.GameObject target in Sims3.Gameplay.Queries.GetObjects<Sims3.Gameplay.Abstracts.GameObject>())
             {
                 SpellKnowledgeGates.InstallFor(target);
             }
+            SpellKnowledgeGates.InstallFor(Sims3.Gameplay.Core.Terrain.Singleton);
             WitchMagicRecovery.RefreshAll();
             recovery = AlarmManager.Global.AddAlarmRepeating(5f, TimeUnit.Minutes,
                 WitchMagicRecovery.RefreshAll, 5f, TimeUnit.Minutes, "Arcana Witch regeneration", AlarmType.NeverPersisted, null);
+            upkeep = AlarmManager.Global.AddAlarmRepeating(5f, TimeUnit.Minutes, RunUpkeep, 5f, TimeUnit.Minutes,
+                "Arcana magic upkeep", AlarmType.NeverPersisted, null);
         }
 
         internal static void Stop()
@@ -68,6 +74,11 @@ namespace SupernaturalExpanded.Journal
                 EventTracker.RemoveListener(practiced);
                 practiced = null;
             }
+            if (bought != null)
+            {
+                EventTracker.RemoveListener(bought);
+                bought = null;
+            }
             if (recovery != AlarmHandle.kInvalidHandle)
             {
                 AlarmManager manager = AlarmManager.Global;
@@ -77,9 +88,36 @@ namespace SupernaturalExpanded.Journal
                 }
                 recovery = AlarmHandle.kInvalidHandle;
             }
+            if (upkeep != AlarmHandle.kInvalidHandle)
+            {
+                AlarmManager manager = AlarmManager.Global;
+                if (manager != null)
+                {
+                    manager.RemoveAlarm(upkeep);
+                }
+                upkeep = AlarmHandle.kInvalidHandle;
+            }
             WitchMagicRecovery.RestoreAll();
             WitchNativeCosts.Stop();
             practice.Clear();
+        }
+
+        private static void RunUpkeep()
+        {
+            // Restores Genie power and keeps Magic Hands in step with each Sim's magic every five Sim minutes, reporting a failure once.
+            try
+            {
+                GeniePower.RegenerateAll(5f);
+                MagicCasters.UpdateAllHands();
+            }
+            catch (ResetException)
+            {
+                throw;
+            }
+            catch (Exception error)
+            {
+                JournalBootstrap.ReportOnce("Arcana magic upkeep", error);
+            }
         }
 
         private static ListenerAction OnInstantiated(Event e)
@@ -88,6 +126,17 @@ namespace SupernaturalExpanded.Journal
             if (sim != null)
             {
                 JournalBootstrap.RunLater(delegate { InstallFor(sim); });
+            }
+            return ListenerAction.Keep;
+        }
+
+        private static ListenerAction OnBought(Event e)
+        {
+            // Gives a newly bought or built object the gated spell interactions with their native tuning.
+            Sims3.Gameplay.Abstracts.GameObject target = e.TargetObject as Sims3.Gameplay.Abstracts.GameObject;
+            if (target != null)
+            {
+                JournalBootstrap.RunLater(delegate { SpellKnowledgeGates.InstallFor(target); });
             }
             return ListenerAction.Keep;
         }

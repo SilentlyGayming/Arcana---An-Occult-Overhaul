@@ -84,6 +84,13 @@ namespace SupernaturalExpanded.Journal
                 && entry.Tier < LegendaryTier;
         }
 
+        internal static bool InnateDiscoverable(SpellEntry entry, int highestTier, bool known, bool castable)
+        {
+            // Returns whether a Fairy or Genie may discover an entry: any enabled spell it can cast, starting spells included, up to its tier.
+            return entry != null && castable && entry.Learning != SpellLearning.NativeDisabled && !known && entry.Tier >= 0
+                && entry.Tier < LegendaryTier && entry.Tier <= highestTier;
+        }
+
         internal static bool Discoverable(SpellEntry entry, int highestTier, bool known)
         {
             // Returns whether Study Spells may discover an unknown entry at the given highest tier.

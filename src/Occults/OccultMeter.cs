@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.CAS;
-using Sims3.Gameplay;
 using Sims3.SimIFace;
 using Sims3.UI.Hud;
 using Sims3.UI;
@@ -413,16 +413,20 @@ namespace SupernaturalExpanded.Journal
 
         internal static readonly OccultEnergy Vampire = new OccultEnergy(100f);
         internal static readonly OccultEnergy Werewolf = new OccultEnergy(100f);
-        internal static readonly OccultEnergy Genie = new OccultEnergy(100f);
+        internal static readonly OccultEnergy Genie = new OccultEnergy(100f, true);
         internal static readonly OccultEnergy Mermaid = new OccultEnergy(100f);
         internal static readonly OccultEnergy Ghost = new OccultEnergy(100f);
 
         private readonly float start;
+        private readonly bool genie;
         private readonly Dictionary<ObjectGuid, float> levels = new Dictionary<ObjectGuid, float>();
 
-        private OccultEnergy(float start)
+        private OccultEnergy(float start) : this(start, false) { }
+
+        private OccultEnergy(float start, bool genie)
         {
             this.start = start;
+            this.genie = genie;
         }
 
         internal static OccultEnergy For(OccultTypes type)
@@ -449,6 +453,13 @@ namespace SupernaturalExpanded.Journal
 
         internal float Get(ObjectGuid id)
         {
+            // Returns the Sim's pool; a Genie's comes from its saved Genie power.
+            if (genie)
+            {
+                IScriptProxy proxy = Simulator.GetProxy(id);
+                Sim sim = proxy == null ? null : proxy.Target as Sim;
+                if (sim != null) return GeniePower.Get(sim.SimDescription) / GeniePower.Maximum * Max;
+            }
             float level;
             return levels.TryGetValue(id, out level) ? level : start;
         }

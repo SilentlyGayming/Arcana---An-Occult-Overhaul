@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
-using Sims3.Gameplay.ActorSystems;
 using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.Autonomy;
 using Sims3.Gameplay.Skills;
@@ -339,30 +337,16 @@ namespace SupernaturalExpanded.Journal
 
     internal sealed class GenieStatus : OccultStatusProvider
     {
-        private const string MaximumPointsName = "mMaxMagicPoints";
-        private const string CurrentPointsName = "mCurrentMagicPointValue";
-        private static readonly FieldInfo MaximumPoints = typeof(OccultMagicPointSystem).GetField(MaximumPointsName, NativeReflection.Instance);
-        private static readonly FieldInfo CurrentPoints = typeof(OccultMagicPointSystem).GetField(CurrentPointsName, NativeReflection.Instance);
-
         internal GenieStatus() : base(OccultTypes.Genie) { }
 
-        internal override void ReadProgress(StatusSource source, StatusField field) { }
+        internal override void ReadProgress(StatusSource source, StatusField field)
+        {
+            StatusReaders.ReadSkill(source, GenieMagicSkill.GenieGuid, JournalText.Get("Arcana.Status.Label.GenieMagic"), field);
+        }
 
         internal override void ReadPower(StatusSource source, StatusField field)
         {
-            Sim sim = source.LiveSim;
-            OccultManager occults = sim == null ? null : sim.OccultManager;
-            OccultGenie genie = occults == null ? null : occults.GetOccultType(OccultTypes.Genie) as OccultGenie;
-            OccultMagicPointSystem points = genie == null ? null : genie.MagicPoints;
-            int maximum = points == null ? 0 : (int)NativeReflection.Field(MaximumPoints, points, MaximumPointsName);
-            if (maximum > 0)
-            {
-                int nativeValue = (int)NativeReflection.Field(CurrentPoints, points, CurrentPointsName);
-                int current = Math.Max(0, Math.Min(maximum, nativeValue));
-                field.Set(JournalText.Get("Arcana.Status.Label.MagicPoints"), JournalText.Format("Arcana.Common.Ratio", current, maximum),
-                    current / (float)maximum, OccultMeter.MeterIcon(Type));
-                return;
-            }
+            // Shows the Genie's saved power pool, which Genie spells spend.
             StatusReaders.ReadEnergy(source, Type, JournalText.Get("Arcana.Status.Label.MagicPoints"), field);
         }
     }

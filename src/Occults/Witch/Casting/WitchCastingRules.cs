@@ -11,6 +11,13 @@ namespace SupernaturalExpanded.Journal
         Charm = 4
     }
 
+    internal enum CasterKind
+    {
+        Witch,
+        Fairy,
+        Genie
+    }
+
     internal struct WitchSpell
     {
         internal readonly int Tier;
@@ -24,7 +31,6 @@ namespace SupernaturalExpanded.Journal
 
         internal bool IsCurse { get { return (Kind & WitchSpellKind.Curse) != 0; } }
         internal bool IsRitual { get { return (Kind & WitchSpellKind.Ritual) != 0; } }
-        internal bool IsCharm { get { return (Kind & WitchSpellKind.Charm) != 0; } }
 
         internal static WitchSpell For(SpellEntry entry)
         {
@@ -50,7 +56,9 @@ namespace SupernaturalExpanded.Journal
         internal const float Minimum = 0f;
         internal const float Maximum = 95f;
 
+        internal float Starting;
         internal float RankBonus;
+        internal float Overreach;
         internal float Wand;
         internal float Mood;
         internal float Needs;
@@ -86,11 +94,11 @@ namespace SupernaturalExpanded.Journal
 
     internal struct WitchCostFactors
     {
-        internal float Apprentice, Lessons, HighWitch, Familiar, Hexweaver, OldWays, Eidetic;
+        internal float Apprentice, Lessons, HighWitch, Familiar, Hexweaver, OldWays, Eidetic, Innate;
 
         internal float Multiplier
         {
-            get { return Apprentice * Lessons * HighWitch * Familiar * Hexweaver * OldWays * Eidetic; }
+            get { return Apprentice * Lessons * HighWitch * Familiar * Hexweaver * OldWays * Eidetic * Innate; }
         }
     }
 
@@ -128,6 +136,13 @@ namespace SupernaturalExpanded.Journal
         internal const float AscendancyAccuracyBonus = 10f;
         internal const float OldWaysDiscount = 0.25f;
         internal const float OldWaysAccuracyBonus = 15f;
+        internal const float OverreachPenaltyPerTier = 45f;
+        internal const float InnateBaseAccuracy = 60f;
+        internal const float FairyInnateAccuracy = 25f;
+        internal const float GenieInnateDiscount = 0.15f;
+        internal const float InnateStudySpeed = 0.5f;
+        internal const float InnateCapacity = 100f;
+        internal const int InnateHighestTier = 3;
 
         internal static float EideticDiscount(int upgrade)
         {
@@ -157,6 +172,7 @@ namespace SupernaturalExpanded.Journal
         }
 
         internal readonly Rank Rank;
+        internal readonly CasterKind Caster;
         internal bool Lessons;
         internal bool Familiar;
         internal bool Hexweaver;
@@ -174,11 +190,27 @@ namespace SupernaturalExpanded.Journal
             Rank = rank;
         }
 
+        internal WitchCastingRules(Rank rank, CasterKind caster) : this()
+        {
+            Rank = rank;
+            Caster = caster;
+        }
+
+        internal bool Innate { get { return Caster != CasterKind.Witch; } }
+        internal float BaseAccuracy { get { return Innate ? InnateBaseAccuracy : WitchAccuracy.Base; } }
+        internal float InnateAccuracy { get { return Caster == CasterKind.Fairy ? FairyInnateAccuracy : 0f; } }
+
+        internal static Rank RankForSkill(int level)
+        {
+            // Maps a Fairy Magic or Genie Magic skill level to the tier rank it unlocks, two levels per tier.
+            return (Rank)Math.Max(0, Math.Min((int)Rank.HighWitch, level / 2));
+        }
+
         internal const float NoviceCapacity = 50f;
         internal float RankCapacity { get { return NoviceCapacity + 25f * (int)Rank; } }
-        internal float Capacity { get { return RankCapacity * (Ascendancy ? 1f + AscendancyCapacityBonus : 1f); } }
-        internal float StudySpeed { get { return Rank >= Rank.Master ? MasterStudySpeed : 1f; } }
-        internal float FizzleDuration { get { return Rank >= Rank.Master ? MasterFizzleDuration : 1f; } }
+        internal float Capacity { get { return Innate ? InnateCapacity : RankCapacity * (Ascendancy ? 1f + AscendancyCapacityBonus : 1f); } }
+        internal float StudySpeed { get { return Innate ? InnateStudySpeed : Rank >= Rank.Master ? MasterStudySpeed : 1f; } }
+        internal float FizzleDuration { get { return !Innate && Rank >= Rank.Master ? MasterFizzleDuration : 1f; } }
 
         internal float Regeneration(bool asleep, bool witchingHour)
         {
@@ -210,12 +242,6 @@ namespace SupernaturalExpanded.Journal
             return Math.Max(0f, Math.Min(1f, (nativeMaximum - fatigue) / (nativeMaximum - nativeMinimum)));
         }
 
-        internal bool Overreaches(WitchSpell spell)
-        {
-            // Returns whether an ordinary spell's tier is above the caster's rank.
-            return spell.Tier < Legendary && spell.Tier > (int)Rank;
-        }
-
         internal float Accuracy(WitchSpell spell, float wand, float emotionPenalty, float needPenalty, int emptyNeeds)
         {
             return AccuracyFor(spell, wand, emotionPenalty, needPenalty, emptyNeeds).Total;
@@ -225,10 +251,7 @@ namespace SupernaturalExpanded.Journal
         {
             // Returns the accuracy breakdown for a spell from rank, tier, wand, mood, needs and perks.
             WitchAccuracy result = new WitchAccuracy();
-            if (Overreaches(spell))
-            {
-                return result;
-            }
+            result.Starting = BaseAccuracy;
             result.RankBonus = 5f * (int)Rank;
             result.Wand = wand;
             result.Mood = -Math.Max(0f, Math.Min(MaxEmotionPenalty, emotionPenalty));
@@ -241,9 +264,11 @@ namespace SupernaturalExpanded.Journal
                 result.Total = float.NaN;
                 return result;
             }
-            float tierBonus = 10f * ((int)Rank - spell.Tier);
+            int above = spell.Tier - (int)Rank;
+            float tierBonus = above > 0 ? 0f : 10f * -above;
+            result.Overreach = above > 0 ? -OverreachPenaltyPerTier * above : 0f;
             float curseOrRitual = SpecialtyAccuracyBonus(spell);
-            float raw = WitchAccuracy.Base + result.RankBonus + tierBonus + wand;
+            float raw = result.Starting + result.RankBonus + tierBonus + result.Overreach + wand;
             raw += result.Mood + result.DarkArts + result.Needs;
             raw += result.Ascendancy + curseOrRitual;
             float bounded = Math.Max(WitchAccuracy.Minimum, Math.Min(WitchAccuracy.Maximum, raw));
@@ -265,13 +290,14 @@ namespace SupernaturalExpanded.Journal
             // Returns the cost factors shared by the actual drain and the cost tooltip.
             bool earlyTier = spell.Tier <= (int)Rank.Apprentice;
             WitchCostFactors factors = new WitchCostFactors();
-            factors.Apprentice = earlyTier && Rank >= Rank.Apprentice ? 1f - ApprenticeDiscount : 1f;
+            factors.Apprentice = !Innate && earlyTier && Rank >= Rank.Apprentice ? 1f - ApprenticeDiscount : 1f;
             factors.Lessons = earlyTier && Lessons ? 1f - LessonsDiscount : 1f;
-            factors.HighWitch = Rank == Rank.HighWitch ? 1f - HighWitchDiscount : 1f;
+            factors.HighWitch = !Innate && Rank == Rank.HighWitch ? 1f - HighWitchDiscount : 1f;
             factors.Familiar = Familiar ? 1f - FamiliarDiscount : 1f;
             factors.Hexweaver = Hexweaver && spell.IsCurse ? 1f - HexweaverDiscount : 1f;
             factors.OldWays = OldWays && !Ascendancy && (spell.IsRitual || spell.Tier == Legendary) ? 1f - OldWaysDiscount : 1f;
             factors.Eidetic = spell.Tier < (int)Rank && Eidetic > 0 ? 1f - EideticDiscount(Eidetic) : 1f;
+            factors.Innate = Caster == CasterKind.Genie ? 1f - GenieInnateDiscount : 1f;
             return factors;
         }
 
@@ -297,12 +323,27 @@ namespace SupernaturalExpanded.Journal
         {
             // Returns display-only cost bounds across the tiers up to the caster's rank.
             minimum = maximum = CostMultiplier(new WitchSpell(0, kind));
-            for (int tier = 1; tier <= (int)Rank; tier++)
+            for (int tier = 1; tier <= HighestTier; tier++)
             {
                 float cost = CostMultiplier(new WitchSpell(tier, kind));
                 minimum = Math.Min(minimum, cost);
                 maximum = Math.Max(maximum, cost);
             }
+        }
+
+        internal int FirstOverreachTier
+        {
+            // Returns the lowest learnable tier above the caster's rank, or -1 when every learnable tier is within rank.
+            get
+            {
+                int tier = (int)Rank + 1;
+                return tier <= (Innate ? InnateHighestTier : Legendary - 1) ? tier : -1;
+            }
+        }
+
+        internal int HighestTier
+        {
+            get { return Innate ? Math.Min((int)Rank, InnateHighestTier) : (int)Rank; }
         }
 
         internal float RefundFraction(WitchSpell spell)

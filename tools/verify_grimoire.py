@@ -246,6 +246,7 @@ def main():
     check_r72(root, root_dir, layout)
     check_charms(root_dir)
     check_fixed_costs(root_dir)
+    check_innate_casters(root_dir)
     print('PASS: every 0x53E control constant exists in a packaged layout; no index-based donor lookup')
     print('PASS: no reflection in GrimoirePage; typed wheel/cursor/capture calls present')
     print('PASS: sample entries compile only with --grimoire-test, which build.bat does not pass')
@@ -1358,7 +1359,7 @@ def check_attributes(root_dir, data):
     assert 'reading.Text, reading.Tip' in sources and 'power.Caption, power.Tip' in data
     assert 'field.Tip = WitchAttributes.PowerTooltip(field.Label, rules)' in cs_source.class_code(root_dir, 'WitchStatus')
     assert 'rules.FatigueDrain(logicalCost, Actor.Motives.GetMin' in gameplay
-    assert 'MagicWand wand = WitchCastingContext.WandForAccuracy(sim)' in witch and 'return arcanaCast.ActiveWand;' in witch
+    assert 'MagicWand wand = rules.Innate ? null : WitchCastingContext.WandForAccuracy(sim)' in witch and 'return arcanaCast.ActiveWand;' in witch
     assert 'data.mBuffName = FizzleName;' in cs_source.class_code(root_dir, 'WitchMagicRecovery')
     test = cs_source.file_code(root_dir, 'AttributeTestData')
     assert test.startswith('#if ARCANA_GRIMOIRE_TEST') and test.rstrip().endswith('#endif'), 'The sample figures are fenced behind the test flag'
@@ -1407,7 +1408,7 @@ def check_attributes(root_dir, data):
     assert 2 + 5 + 4 * 3 + 5 + 4 * 3 + 1 <= jl.TOOLTIP_MODIFIERS
     assert 'rules.CostRange(WitchSpellKind.Spell, out minimum, out maximum)' in cost_body
     assert 'AddCostTierGroups(lines, rules, spell.Kind)' in category
-    assert 'tier <= (int)rules.Rank + 1' in category and 'next == amount' in category
+    assert 'tier <= rules.HighestTier + 1' in category and 'next == amount' in category
     assert 'if (a == b) return a;' in category and 'JournalText.Format("Arcana.Journal.Overview.Cost.Range", a, b)' in category
     assert english()['Arcana.Journal.Overview.Cost.Range'] == '{0} - {1}'
     assert english()['Arcana.Witch.Benefit.Redirect'] == '{0} Chance to Redirect Spell Fizzle Effects'
@@ -1418,9 +1419,9 @@ def check_attributes(root_dir, data):
     check_text(witch, 'Arcana.Journal.Overview.Cost.Base', 'Base Spell Cost: 100%')
     assert 'before wand and other casting effects' in english()['Arcana.Journal.Overview.Cost.Tagline']
 
-    assert 'new WitchSpell((int)rules.Rank, WitchSpellKind.Spell)' in witch
+    assert 'new WitchSpell(rules.HighestTier, WitchSpellKind.Spell)' in witch
     assert 'rules.AccuracyFor(currentRank' in witch and 'rules.Accuracy(' in gameplay
-    assert 'previewMagicHands = wand == null && WitchCastingContext.HasPracticallyMagic(sim);' in witch
+    assert 'previewMagicHands = !rules.Innate && wand == null && WitchCastingContext.HasPracticallyMagic(sim);' in witch
     assert 'WandBonus(wand, previewMagicHands)' in witch
     assert 'WandBonus(mWand, false)' in gameplay
     assert 'wand is MagicHands || (wand == null && previewMagicHands)' in witch
@@ -1916,6 +1917,95 @@ def catalog_entries(root_dir):
     return entries
 
 
+def check_innate_casters(root_dir):
+    rules = cs_source.file_code(root_dir, 'WitchCastingRules')
+    for name, value in (('InnateBaseAccuracy', '60f'), ('FairyInnateAccuracy', '25f'), ('GenieInnateDiscount', '0.15f'),
+                        ('InnateStudySpeed', '0.5f'), ('InnateCapacity', '100f'), ('InnateHighestTier', '3')):
+        assert f'internal const {"int" if value == "3" else "float"} {name} = {value};' in rules, name
+    assert 'if (Innate && spell.Tier > InnateHighestTier) return true;' not in rules, 'Rank must never block a cast'
+    assert 'internal const float OverreachPenaltyPerTier = 45f;' in rules
+    assert 'result.Overreach = above > 0 ? -OverreachPenaltyPerTier * above : 0f;' in rules
+    assert 'float raw = result.Starting + result.RankBonus + tierBonus + result.Overreach + wand;' in rules
+    assert 'factors.Innate = Caster == CasterKind.Genie ? 1f - GenieInnateDiscount : 1f;' in rules
+    assert '!Innate && earlyTier && Rank >= Rank.Apprentice' in rules and '!Innate && Rank == Rank.HighWitch' in rules
+    casters = cs_source.file_code(root_dir, 'MagicCasters')
+    assert 'CommodityKind.AuraPower' in casters and 'GeniePower.Change(' in casters
+    assert casters.index('OccultTypes.Witch') < casters.index('OccultTypes.Fairy') < casters.index('OccultTypes.Genie')
+    gates = cs_source.file_code(root_dir, 'SpellKnowledgeGates')
+    assert 'return casting != null && InnateSpellTests.Allows(casting.Spell, actor, target, ref tooltip);' in gates
+    assert 'if (IsSimSpell(native)) return SimCasting(entry);' in gates and 'return TestInnate(native, actor, ref parameters, ref tooltip)' in gates
+    assert 'Guard("Registering Genie Magic", GenieMagicRegistration.Register);' in gates
+    assert 'if (simCastings.Count == 0) Guard("Preparing Sim spell castings", PrepareSimCastings);' in gates
+    assert gates.index('Guard("Preparing Sim spell castings", PrepareSimCastings)') < gates.index('PrepareWrappers();')
+    assert 'availability.OccultRestrictions |= innate;' in gates and 'availability.SkillThresholdType = SkillNames.None;' in gates
+    assert 'AddInnateMotives(charms ? SpellCategory.Charm : SpellCategory.Curse, pair.Target, expanded);' in gates
+    assert 'MemberwiseClone' not in cs_source.file_code(root_dir, 'GeniePower')
+    assert 'class InnateAbilityDefinition : InteractionDefinition, ISoloInteractionDefinition,' in gates
+    assert 'return new NativeSpellCast.Definition(native);' in gates and 'MagicCasters.EnsureHands(Actor)' in cs_source.file_code(root_dir, 'NativeSpellCast')
+    innate_cast = cs_source.file_code(root_dir, 'NativeSpellCast')
+    assert 'SpellKnowledgeGates.TestNative(Native, ref parameters, ref tooltip)' in innate_cast
+    assert '"w_cast_spell"' in innate_cast and 'return Running.RunInteraction();' in innate_cast
+    assert 'return entry == null ? native : new NativeSpellCast.Definition(native);' in gates, 'Witch native casts must survive the queue re-test'
+    assert 'if (known != null) cast = known.Running;' in cs_source.file_code(root_dir, 'WitchNativeCosts')
+    assert 'class NativeSpellCast : InteractionGameObjectHit<Sim, GameObject>' in innate_cast, 'The queue re-test needs the click point'
+    assert 'Magic Hands could not be placed' in innate_cast
+    assert '"magicHandsLHR"' in cs_source.file_code(root_dir, 'MagicCasters')
+    casters_code = cs_source.file_code(root_dir, 'MagicCasters')
+    assert 'PurchasedPrice.SetValue(hands, 0);' in casters_code and 'CatalogPrice.SetValue(hands, 0);' in casters_code, 'Magic Hands must never count toward fire insurance'
+    assert 'IsInnateCaster(sim) || (WitchCastingContext.IsWitch(sim) && WitchCastingContext.HasPracticallyMagic(sim))' in casters_code
+    assert 'sim.Inventory.TryToRemove(hands);' in casters_code and 'if (!IsArcanaHands(hands)) continue;' in casters_code
+    sim_cast = cs_source.file_code(root_dir, 'WitchSimCast')
+    assert 'MagicCasters.MakeWorthless(temporaryHands);' in sim_cast and 'Actor.Inventory.TryToRemove(temporaryHands);' in sim_cast
+    assert 'MagicCasters.UpdateAllHands();' in cs_source.file_code(root_dir, 'WitchCastingLifecycle')
+    assert 'if (sim != null) Guard("Updating Magic Hands", delegate { MagicCasters.UpdateHands(sim); });' in gates
+    objects = cs_source.file_code(root_dir, 'InnateObjectTests')
+    for native_name in ('CastFireBlastTerrain', 'CastIceBlastTerrain', 'CastIceBlastPlumbing', 'CastFireBlastOnStatue', 'CastSunlightCharmOnStatue', 'MagicallyUpgrade', 'CastConvert'):
+        assert f'case "{native_name}":' in objects, native_name
+    assert 'if (MagicCasters.IsInnateCaster(sim))' in cs_source.file_code(root_dir, 'WitchNativeCosts')
+    assert 'InteractionTuning tuning = new InteractionObjectPair(native, pair.Target).Tuning;' in gates and 'pair is KnowledgePair' in gates
+    lifecycle_code = cs_source.file_code(root_dir, 'WitchCastingLifecycle')
+    assert 'EventTracker.AddListener(EventTypeId.kBoughtObject, OnBought)' in lifecycle_code and 'EventTracker.RemoveListener(bought);' in lifecycle_code
+    assert 'SpellKnowledgeGates.InstallFor(Sims3.Gameplay.Core.Terrain.Singleton);' in lifecycle_code
+    assert 'internal const string UnlockCommand = "unlockallspells";' in cs_source.file_code(root_dir, 'ArcanaCheats')
+    assert english()['Arcana.Journal.Overview.Accuracy.InnateMagic'] == 'Innate Magic'
+    assert 'if (WrapSingleton(original.Key, original.Value)) wrapped++;' in gates and 'ReportOnce("Wrapping " + native.GetType().FullName, error);' in gates
+    tests = cs_source.file_code(root_dir, 'InnateSpellTests')
+    assert 'MagicCasters.AvailablePower(actor, rules) + 0.005f < rules.FinalCost(' in tests and 'Overreaches' not in tests
+    for name in ('WitchSimCast', 'SpellKnowledgeGates', 'NativeSpellCast', 'InnateObjectTests'):
+        assert 'Overreaches' not in cs_source.file_code(root_dir, name), name + ' must not gate casting on rank'
+    assert 'if (casting == null && IsSimSpell(native)) casting = SimCasting(entry);' in gates, 'Witch Sim spells use Arcana accuracy'
+    assert english()['Arcana.Journal.Overview.Accuracy.AboveRank'] == 'Each Tier Above Your Rank (Tier {0}+)'
+    assert 'Arcana.Journal.Overview.Accuracy.AboveSkill' not in english(), 'Every caster shares the rank wording'
+    attributes = cs_source.file_code(root_dir, 'WitchAttributes')
+    above = attributes.index('AddPercentModifier(lines, above, -WitchCastingRules.OverreachPenaltyPerTier);')
+    assert above < attributes.index('AddPercentModifier(lines, RankLabel(rules), accuracy.RankBonus);'), 'Overreach line sits directly under Base Accuracy'
+    assert 'return tier <= (Innate ? InnateHighestTier : Legendary - 1) ? tier : -1;' in rules
+    cast = cs_source.file_code(root_dir, 'WitchSimCast')
+    assert 'spent = MagicCasters.SpendInnate(Actor, rules, rules.FinalCost(spell.BaseCost, spell.Category, 1f));' in cast
+    assert 'rules.Innate ? rules.InnateAccuracy : WitchCastingContext.WandBonus(mWand, false)' in cast
+    study = cs_source.file_code(root_dir, 'StudySpells')
+    assert 'studiedName == SkillNames.FairyMagic' in study and 'ShowMeter.Invoke(Actor.SkillManager, new object[] { skill, false });' in study and 'if (hide) HideMeter.Invoke(Actor.SkillManager, null);' in study
+    assert 'new SpellStudyTrack(OccultTypes.Fairy, SkillNames.FairyMagic)' in study and 'new SpellStudyTrack(OccultTypes.Genie, GenieMagicSkill.GenieGuid)' in study
+    bootstrap = cs_source.file_code(root_dir, 'JournalBootstrap')
+    assert 'new OccultTypes[] { OccultTypes.Fairy, OccultTypes.Genie }' in bootstrap and 'AccuracySources.Register(innate, WitchAttributes.ReadAccuracy);' in bootstrap
+    assert 'WitchAttributes.ReadInnateRegeneration' in bootstrap and 'RefundInnate' not in cs_source.file_code(root_dir, 'MagicCasters')
+    attributes = cs_source.file_code(root_dir, 'WitchAttributes')
+    assert 'JournalText.Get("Arcana.Journal.Overview.Accuracy.InnatePower")' in attributes
+    assert english()['Arcana.Journal.Overview.Accuracy.InnatePower'] == 'Innate Power'
+    abilities = cs_source.file_code(root_dir, 'InnateAbilities')
+    assert abilities.count('"Arcana.Ability.fairy_') == 10 and abilities.count('"Arcana.Ability.genie_') == 10 and 'float.NaN' in abilities
+    page = cs_source.file_code(root_dir, 'GrimoirePage')
+    assert 'float.IsNaN(entry.EnergyCost) ? JournalText.Get("Arcana.Common.UnavailableValue")' in page
+    assert 'availablePower = MagicCasters.AvailablePower(actor, MagicCasters.ReadRules(actor));' in page
+    genie = cs_source.file_code(root_dir, 'GeniePower')
+    assert '[Persistable]\n    public sealed class GenieMagicSkill : Skill' in genie.replace('\r\n', '\n')
+    assert 'internal const float RegenerationPerHour = 10f;' in genie
+    lifecycle = cs_source.file_code(root_dir, 'WitchCastingLifecycle')
+    assert '"Arcana magic upkeep"' in lifecycle and 'manager.RemoveAlarm(upkeep);' in lifecycle
+    print('PASS: Fairies and Genies: 60% base accuracy, Innate Power (+25% Fairy accuracy, -15% Genie cost), skill tiers capped at Tier IV, '
+          'half-speed study, Faeric Power and saved Genie power, shared Overview rows, Grimoire abilities and costs')
+
+
 def check_fixed_costs(root_dir):
     catalog = cs_source.file_code(root_dir, 'SpellCatalog')
     expected = {'good_luck': 30, 'love': 48, 'sunlight': 72, 'pestilence': 88, 'fire_blast': 12, 'ice_blast': 16, 'toadification': 52,
@@ -1943,7 +2033,7 @@ def check_fixed_costs(root_dir):
     for path in (root_dir / 'src').rglob('*.cs'):
         text = path.read_text(encoding='utf-8')
         uses = text.count('Capacity * ') - text.count('availablePower = rules.Capacity * WitchCastingRules.PowerFraction(')
-        assert uses == 0 or path.stem == 'WitchCastingRules', f'{path.name}: capacity-scaled cost'
+        assert uses == 0 or path.stem in ('WitchCastingRules', 'MagicCasters'), f'{path.name}: capacity-scaled cost'
     print('PASS: fixed base costs in one catalog; Grimoire quote, Arcana cast, native correction and Conjure Apple share FinalCost; Grimoire refreshes on HUD and moodlet changes')
 
 
@@ -1987,7 +2077,8 @@ def check_charms(root_dir):
     assert 'new List<GrimoireEntry>[GrimoirePage.CategoryCount]' in populate_source
     assert 'categories[(int)entry.Category].Add(' in populate_source and 'entry.Category == SpellCategory.Ability' in populate_source
     assert 'entry.Learning == SpellLearning.NativeDisabled' in populate_source and '!data.Knows(entry.Id)' in populate_source
-    assert 'categories[(int)SpellCategory.Ability] = WitchAbilities.Entries(identity);' in populate_source
+    assert 'categories[(int)SpellCategory.Ability] = InnateAbilities.Entries(identity, quote);' in populate_source
+    assert 'return WitchAbilities.Entries(identity);' in cs_source.file_code(root_dir, 'InnateAbilities')
     assert 'internal static List<GrimoireEntry> Entries(SimIdentity identity)' in cs_source.file_code(root_dir, 'WitchAbilities')
     rules = cs_source.file_code(root_dir, 'WitchCastingRules')
     assert re.search(r'Spell = 0,\s*Curse = 1,\s*Ritual = 2,\s*Charm = 4\s*\}', rules), 'Charm must be an independent flag'
