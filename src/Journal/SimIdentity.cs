@@ -83,7 +83,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static OccultTypes ReadOccults(IHudModel model, out ObjectGuid id)
         {
-            // Reads just the supported occult flags for frequent HUD refreshes.
             SimInfo info = model == null ? null : model.GetCurrentSimInfo();
             if (info == null || !info.mGuid.IsValid)
             {
@@ -140,25 +139,29 @@ namespace SupernaturalExpanded.Journal
     {
         internal static bool HasLadder(OccultTypes types)
         {
-            // Returns whether the life state's rank ladder is implemented.
-            return OccultAssetData.Primary(types) == OccultTypes.Witch;
+            OccultTypes primary = OccultAssetData.Primary(types);
+            return primary == OccultTypes.Witch || primary == OccultTypes.Genie;
         }
 
-        internal static string Rank(OccultTypes types, PowerSelection witchProgress)
+        internal static string Rank(SimIdentity identity, PowerSelection witchProgress)
         {
-            // Returns the rank name when the Sim has a readable progression ladder.
-            if (HasLadder(types) && witchProgress != null && witchProgress.Available)
+            OccultTypes primary = OccultAssetData.Primary(identity.Occults);
+            SupernaturalExpanded.Journal.Rank genieRank;
+            if (primary == OccultTypes.Genie && GenieRanks.TryRead(identity.Description, out genieRank))
+            {
+                return GenieRanks.FullName(genieRank);
+            }
+            if (primary == OccultTypes.Witch && witchProgress != null && witchProgress.Available)
             {
                 return WitchTree.Tree.RankLabel((int)witchProgress.Rank);
             }
             return "";
         }
 
-        internal static string For(OccultTypes types, PowerSelection witchProgress)
+        internal static string For(SimIdentity identity, PowerSelection witchProgress)
         {
-            // Returns the primary life state name with its rank when available.
-            OccultTypes primary = OccultAssetData.Primary(types);
-            string rank = Rank(types, witchProgress);
+            OccultTypes primary = OccultAssetData.Primary(identity.Occults);
+            string rank = Rank(identity, witchProgress);
             string lifeState = LifeStateNames.For(primary);
             return rank.Length == 0 ? lifeState : JournalText.Format("Arcana.Common.WithQualifier", lifeState, rank);
         }

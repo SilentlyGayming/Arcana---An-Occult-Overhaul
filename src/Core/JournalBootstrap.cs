@@ -8,7 +8,7 @@ using Sims3.UI;
 [assembly: Tunable]
 [assembly: PersistableStatic]
 [assembly: AssemblyVersion("0.9.0.0")]
-[assembly: AssemblyFileVersion("0.9.2.0")]
+[assembly: AssemblyFileVersion("0.9.3.2")]
 
 namespace SupernaturalExpanded.Journal
 {
@@ -20,6 +20,12 @@ namespace SupernaturalExpanded.Journal
         [Tunable] public static float kStudyExperienceFraction = 0.40f;
         [Tunable] public static float kStudyResearchIntervalMinutes = 30f;
         [Tunable] public static float kStudyDiscoveryChancePercent = 25f;
+        [Tunable] public static float kStudyWitchSpeed = 1f;
+        [Tunable] public static float kStudyFairySpeed = 0.5f;
+        [Tunable] public static float kStudyGenieSpeed = 0.5f;
+        [Tunable] public static float kStudyWitchMasterBonusPercent = 10f;
+        [Tunable] public static float kStudyGenieAscendantBonusPercent = 25f;
+        [Tunable] public static float kStudyWitchingHourBonusPercent = 20f;
 
         private static SimologyEntry entry;
         private static OccultMeter meter;
@@ -30,29 +36,34 @@ namespace SupernaturalExpanded.Journal
 
         static JournalBootstrap()
         {
-            AccuracySources.Register(OccultTypes.Witch, WitchAttributes.ReadAccuracy);
+            AccuracySources.Register(OccultTypes.Witch, CasterAttributes.ReadAccuracy);
             AttributeSources.Register(OccultTypes.Witch, JournalText.Get("Arcana.Journal.Overview.Attributes.PowerRegeneration"),
-                WitchAttributes.ReadRegeneration);
+                CasterAttributes.ReadRegeneration);
             AttributeSources.Register(OccultTypes.Witch, JournalText.Get("Arcana.Journal.Overview.Attributes.SpellCost"),
-                WitchAttributes.ReadSpellCost);
+                CasterAttributes.ReadSpellCost);
             foreach (OccultTypes innate in new OccultTypes[] { OccultTypes.Fairy, OccultTypes.Genie })
             {
-                AccuracySources.Register(innate, WitchAttributes.ReadAccuracy);
+                AccuracySources.Register(innate, CasterAttributes.ReadAccuracy);
                 AttributeSources.Register(innate, JournalText.Get("Arcana.Journal.Overview.Attributes.PowerRegeneration"),
-                    WitchAttributes.ReadInnateRegeneration);
-                AttributeSources.Register(innate, JournalText.Get("Arcana.Journal.Overview.Attributes.SpellCost"), WitchAttributes.ReadSpellCost);
+                    CasterAttributes.ReadInnateRegeneration);
+                AttributeSources.Register(innate, JournalText.Get("Arcana.Journal.Overview.Attributes.SpellCost"), CasterAttributes.ReadSpellCost);
             }
+            AttributeSources.Register(OccultTypes.Genie, JournalText.Get("Arcana.Journal.Overview.Attributes.BacklashChance"),
+                CasterAttributes.ReadBacklash);
             World.OnWorldLoadFinishedEventHandler += OnWorldLoaded;
             World.OnWorldLoadStartedEventHandler += OnWorldStarting;
-            World.OnWorldQuitEventHandler += OnWorldExiting;
+            World.OnWorldQuitEventHandler += OnWorldQuit;
         }
 
         private static void OnWorldStarting(object sender, EventArgs args)
         {
             OnWorldExiting(sender, args);
+            reportedOperations.Clear();
+            foreach (PerkProgressSource source in PerkProgressSource.All) source.ResetThresholds();
             try
             {
-                SpellKnowledgeGates.Prepare();
+                WishState.Prepare();
+                if (GameUtils.IsInstalled(ProductVersion.EP7)) SpellKnowledgeGates.Prepare();
                 WitchCastingLifecycle.Prepare();
             }
             catch (ResetException)
@@ -70,6 +81,9 @@ namespace SupernaturalExpanded.Journal
             OnWorldExiting(sender, args);
             worldReady = true;
             ArcanaCheats.Start();
+            try { WishState.Start(); }
+            catch (ResetException) { throw; }
+            catch (Exception error) { Report("Starting Genie wishes", error); }
             entry = new SimologyEntry();
             entry.Refresh();
             meter = new OccultMeter();
@@ -102,11 +116,34 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
+        private static void OnWorldQuit(object sender, EventArgs args)
+        {
+            try { OnWorldExiting(sender, args); }
+            finally
+            {
+                StatusReaders.ClearIcons();
+                MagicCasters.GeneratedHands = null;
+                HeartsDesireLedger.Clear();
+                RisingTide.Clear();
+                GeniePerks.Clear();
+                WitchProgressStore.sRecords = null;
+                GenieProgressStore.sRecords = null;
+                GenieRain.ResetSaved();
+                WishLamp.ResetSaved();
+                WishRepossession.ResetSaved();
+                SpellKnowledgeGates.Restore();
+                SpellKnowledgeRegistration.Restore();
+                WishDeath.Restore();
+                GenieWishMenu.Restore();
+            }
+        }
+
         private static void OnWorldExiting(object sender, EventArgs args)
         {
             worldReady = false;
             generation++;
             ArcanaCheats.Stop();
+            WishState.Stop();
             WitchCastingLifecycle.Stop();
             SpellStudyStations.Stop();
             UiAnimationClock.Shutdown();
@@ -247,7 +284,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static void ReportOnce(string operation, Exception error)
         {
-            // Reports only the first failure of each operation, for fallbacks that can fire on every hover or click.
             if (reportedOperations.ContainsKey(operation))
             {
                 return;
@@ -261,14 +297,6 @@ namespace SupernaturalExpanded.Journal
             WriteLog("<Operation>" + Escape(operation) + "</Operation><Exception>"
                 + Escape(error.ToString()) + "</Exception>");
         }
-
-#if ARCANA_ANIMATION_LOG
-        internal static void TraceAnimation(string name, int frames, int elapsed)
-        {
-            WriteLog("<Animation name=\"" + name + "\" paintedFrames=\"" + frames
-                + "\" elapsedMilliseconds=\"" + elapsed + "\" />");
-        }
-#endif
 
         private static void WriteLog(string payload)
         {

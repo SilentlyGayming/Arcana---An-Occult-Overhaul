@@ -26,7 +26,6 @@ CACHE_VERSION = 2
 
 
 def decode_s3sa(blob):
-    # Unwraps the game's XOR-chained S3SA script resource.
     if not blob:
         raise ValueError("empty S3SA resource")
     p = 0
@@ -70,7 +69,6 @@ def decode_s3sa(blob):
 
 
 def installed_game_bin(candidate):
-    # Resolves an install root, Game/Bin or Steam folder to the core packages.
     candidate = Path(candidate).expanduser()
     for folder in (candidate, candidate / "Game" / "Bin", candidate / "Bin",
                    candidate / "The Sims 3" / "Game" / "Bin"):
@@ -126,7 +124,6 @@ def steam_libraries(steam_root):
 
 
 def install_candidates(explicit=None):
-    # Searches standard install roots, registry entries and Steam libraries.
     seen = set()
 
     def add(path):
@@ -179,7 +176,6 @@ def install_candidates(explicit=None):
 
 
 def validated_references(folder):
-    # Returns the paths and hashes of one complete, compatible reference set.
     paths, hashes = {}, {}
     if folder.is_dir():
         for path in folder.iterdir():
@@ -236,7 +232,6 @@ def load_manifest(output):
 
 
 def extract(bin_dir, staging):
-    # Decodes each required assembly directly from the installed core packages.
     missing = set(REQUIRED)
     for package_name in PACKAGES:
         package = bin_dir / package_name
@@ -258,7 +253,6 @@ def extract(bin_dir, staging):
 
 
 def extract_reference_set(bin_dir, output, stamp):
-    # Stages a complete reference set.
     target = output.resolve()
     game_root = bin_dir.parent.parent if bin_dir.parent.name.casefold() == "game" else bin_dir
     if target == game_root or game_root in target.parents:

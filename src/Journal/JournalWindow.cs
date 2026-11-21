@@ -52,6 +52,8 @@ namespace SupernaturalExpanded.Journal
         private SimIdentity identity;
         private PowerSelection selection;
         private PowerPage perkPage;
+        private readonly List<PowerPage> perkPages = new List<PowerPage>();
+        private PerkProgressSource perkSource;
         private GrimoirePage grimoirePage;
         private OverviewPage overviewPage;
         private StatusHeader header;
@@ -93,6 +95,23 @@ namespace SupernaturalExpanded.Journal
         internal WindowBase RootWindow { get { return root; } }
         internal Sim CurrentActor { get { return identity == null || identity.Description == null ? null : identity.Description.CreatedSim; } }
         internal float LayoutScale { get { return scale; } }
+
+        internal bool TryGetCursor(out float x, out float y)
+        {
+            x = 0f;
+            y = 0f;
+            if (root == null || root.Disposed) return false;
+            Vector2 cursor = root.ScreenToWindow(UIManager.GetCursorPosition());
+            x = cursor.x / Math.Max(0.01f, scale);
+            y = cursor.y / Math.Max(0.01f, scale);
+            return true;
+        }
+
+        internal bool TryGetCursorY(out float y)
+        {
+            float x;
+            return TryGetCursor(out x, out y);
+        }
 
         internal void Open(SimIdentity selected)
         {
@@ -138,7 +157,16 @@ namespace SupernaturalExpanded.Journal
                 return new SimpleTextTooltip(active != null && active.PendingCount > 0 ? JournalText.Get("Arcana.Journal.Perks.Tooltip.Confirm") : JournalText.Get("Arcana.Common.Close"));
             };
             Bind(close, RequestClose);
-            perkPage = PowerPage.Create(this, WitchTree.Tree);
+            foreach (PerkProgressSource source in PerkProgressSource.All)
+            {
+                PowerPage created = PowerPage.Create(this, source.Tree);
+                if (created != null)
+                {
+                    perkPages.Add(created);
+                    created.Show(null);
+                }
+            }
+            perkPage = perkPages.Count > 0 ? perkPages[0] : null;
             grimoirePage = GrimoirePage.Create(this);
             overviewPage = OverviewPage.Create(this);
             grimoirePage.EntriesChanged += OnKnowledgeChanged;
@@ -186,7 +214,6 @@ namespace SupernaturalExpanded.Journal
 
         private static float GetFitScale(float width, float height)
         {
-            // Returns one scale for the window so switching pages never rescales it.
             Rect screen = UIManager.ScreenArea;
             return Math.Min(NativeLayouts.UIScale(), Math.Min(Math.Max(1f, screen.Width - 30f) / width,
                 Math.Max(1f, screen.Height - 72f) / height));
@@ -200,7 +227,6 @@ namespace SupernaturalExpanded.Journal
 
         private void PlaceWindow()
         {
-            // Sizes and centers the window and places the header, footer and content panel.
             float width = WindowGeometry.Width;
             float height = WindowGeometry.Height;
             float fit = GetFitScale(width, height);
@@ -247,7 +273,6 @@ namespace SupernaturalExpanded.Journal
 
         private void LayoutActivePage()
         {
-            // Places the controls of the page being shown.
             content.Visible = ActiveSelection == null;
             if (page == JournalPages.Overview && overviewPage != null)
             {
@@ -278,7 +303,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void PlaceSnapped(WindowBase control, float x, float y, float width, float height)
         {
-            // Places a control like Place but rounds its scaled bounds to whole pixels.
             Rect area = NativeLayouts.Box(x, y, width, height);
             placements[control] = area;
             snapped[control] = true;
@@ -514,30 +538,29 @@ namespace SupernaturalExpanded.Journal
             {
                 DismissPerkConfirmation();
             }
-            if (!JournalPages.IsAvailable(JournalPages.Perks, types))
+            perkSource = JournalPages.IsAvailable(JournalPages.Perks, types) ? PerkProgressSource.For(OccultAssetData.Primary(types)) : null;
+            if (perkSource == null)
             {
                 selection = null;
             }
-            else if (changed || selection == null || selection.SimDescriptionId != next.SimDescriptionId)
+            else if (changed || selection == null || selection.SimDescriptionId != next.SimDescriptionId || selection.Tree != perkSource.Tree)
             {
-                selection = new PowerSelection(next.SimDescriptionId, WitchProgressSource.Read(next), WitchTree.Tree);
+                selection = new PowerSelection(next.SimDescriptionId, perkSource.Read(next), perkSource.Tree);
             }
             else
             {
-                selection.Update(WitchProgressSource.Read(next));
+                selection.Update(perkSource.Read(next));
             }
             if (selection != null)
             {
                 selection.SimName = next.FirstName;
+                UsePerkPage(selection.Tree);
             }
 
             identity = next;
             if (changed && grimoirePage != null)
             {
                 grimoirePage.Reset();
-#if ARCANA_GRIMOIRE_TEST
-                GrimoireTestData.Apply(grimoirePage);
-#endif
             }
             if (changed && grimoirePage != null) SpellKnowledge.Populate(grimoirePage, identity);
             RefreshHeader();
@@ -569,15 +592,13 @@ namespace SupernaturalExpanded.Journal
 
         private void RefreshOccultRank()
         {
-            // Refreshes the rank label shown below the Sim name.
-            string caption = OccultRankLabel.For(identity.Occults, selection);
+            string caption = OccultRankLabel.For(identity, selection);
             occultRank.Caption = caption;
             occultRank.Visible = caption.Length != 0;
         }
 
         private void RefreshHeader()
         {
-            // Refreshes the status panel, hiding it after a reported failure instead of closing the Journal.
             if (header == null)
             {
                 return;
@@ -628,7 +649,6 @@ namespace SupernaturalExpanded.Journal
 
         private void OnMinuteChanged()
         {
-            // Checks for new experience on the minute tick because skill changes below level 1 raise no event.
             if (RefreshProgression())
             {
                 UpdateHeaderFromHud();
@@ -639,10 +659,26 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
+        private void UsePerkPage(OccultTree tree)
+        {
+            PowerPage chosen = null;
+            foreach (PowerPage candidate in perkPages)
+            {
+                if (candidate.Tree == tree)
+                {
+                    chosen = candidate;
+                }
+                else
+                {
+                    candidate.Show(null);
+                }
+            }
+            perkPage = chosen;
+        }
+
         private bool RefreshProgression()
         {
-            // Returns true when the native skill or Witch progression changes the Journal display.
-            if (!IsOpen || identity == null || selection == null)
+            if (!IsOpen || identity == null || selection == null || perkSource == null)
             {
                 return false;
             }
@@ -659,7 +695,7 @@ namespace SupernaturalExpanded.Journal
                     return true;
                 }
 
-                PowerProgress progress = WitchProgressSource.Read(identity, selection);
+                PowerProgress progress = perkSource.Read(identity, selection);
                 if (progress == null || !selection.Update(progress))
                 {
                     return false;
@@ -702,7 +738,6 @@ namespace SupernaturalExpanded.Journal
 
         private void RefreshGrimoireCosts()
         {
-            // Recomputes the shown Grimoire costs and their affordability colors when power, perks or conditions change.
             if (grimoirePage == null || page != JournalPages.Grimoire || identity == null)
             {
                 return;
@@ -718,7 +753,6 @@ namespace SupernaturalExpanded.Journal
 
         private void RequestPage(int index)
         {
-            // Handles user navigation to a page.
             if (index == page || !tabs[index].Visible || perkConfirmation != null)
             {
                 return;
@@ -878,7 +912,6 @@ namespace SupernaturalExpanded.Journal
 
         private void RefreshOverview()
         {
-            // Rebuilds the dashboard data while reusing its controls.
             if (overviewPage == null || page != JournalPages.Overview)
             {
                 return;
@@ -919,25 +952,21 @@ namespace SupernaturalExpanded.Journal
 
         private void RequestClose()
         {
-            // Buys staged perks, plays the matching sound and closes the Journal.
             Close(CloseMode.Confirm, keyActivation);
         }
 
         private void RequestCancel()
         {
-            // Drops staged perks, plays the close sound and closes the Journal.
             Close(CloseMode.Cancel, keyActivation);
         }
 
         private void Abandon()
         {
-            // Closes without sounds, effects or purchases when an error occurs or the game removes the window.
             Close(CloseMode.Abandon, false);
         }
 
         private void Close(CloseMode mode, bool keyboard)
         {
-            // Closes the Journal through the single shared close path.
             if (closing)
             {
                 return;
@@ -996,9 +1025,9 @@ namespace SupernaturalExpanded.Journal
             {
                 try
                 {
-                    if (perkPage != null)
+                    foreach (PowerPage each in perkPages)
                     {
-                        perkPage.StopAnimations();
+                        each.StopAnimations();
                     }
                     if (header != null)
                     {
@@ -1039,9 +1068,9 @@ namespace SupernaturalExpanded.Journal
                     SpellKnowledge.Changed -= OnSpellLearned;
                     grimoirePage.Release();
                 }
-                if (perkPage != null)
+                foreach (PowerPage each in perkPages)
                 {
-                    perkPage.Release();
+                    each.Release();
                 }
                 if (header != null)
                 {
@@ -1073,6 +1102,41 @@ namespace SupernaturalExpanded.Journal
             {
                 NativeLayouts.Release(layout, gone);
             }
+        }
+    }
+
+    internal sealed class JournalPage
+    {
+        internal readonly OccultTypes Occult;
+        internal readonly string Title;
+        internal readonly string Body;
+
+        internal JournalPage(OccultTypes occult, string title, string body)
+        {
+            Occult = occult;
+            Title = title;
+            Body = body;
+        }
+    }
+
+    internal static class JournalPages
+    {
+        internal const int Overview = 0;
+        internal const int Perks = 1;
+        internal const int Grimoire = 2;
+
+        private static readonly string MissingLayout = JournalText.Get("Arcana.Journal.Perks.MissingLayout");
+
+        internal static readonly JournalPage[] All =
+        {
+            new JournalPage(OccultAssetData.SupportedTypes, JournalText.Get("Arcana.Journal.Tab.Overview"), ""),
+            new JournalPage(OccultTypes.Witch | OccultTypes.Genie, JournalText.Get("Arcana.Journal.Tab.Perks"), MissingLayout),
+            new JournalPage(OccultTypes.Witch | OccultTypes.Fairy | OccultTypes.Genie, JournalText.Get("Arcana.Journal.Tab.Grimoire"), "")
+        };
+
+        internal static bool IsAvailable(int page, OccultTypes flags)
+        {
+            return (flags & All[page].Occult) != OccultTypes.None;
         }
     }
 }

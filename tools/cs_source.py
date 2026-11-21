@@ -23,7 +23,6 @@ def file_text(root_dir, name):
 
 
 def class_text(root_dir, name):
-    # Returns a declaration through its closing brace, without sibling types.
     _, text, match = _definition(root_dir, name)
     depth, index = 0, text.index('{', match.end())
     while True:
@@ -37,7 +36,6 @@ def class_text(root_dir, name):
 
 
 def without_comments(text):
-    # Removes the full-line function comments so checks can match the code itself.
     return re.sub(r'(?m)^[ \t]*//[^\n]*\n', '', text)
 
 

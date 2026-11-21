@@ -16,7 +16,7 @@ namespace SupernaturalExpanded.Journal
 
         internal readonly InteractionDefinition Stock;
         internal readonly SpellEntry CatalogEntry;
-        internal readonly WitchSpell Category;
+        internal readonly MagicSpell Category;
         internal readonly MagicWand.SpellType Id;
         internal readonly BuffNames Backfire;
         internal readonly BuffNames TimedCurse;
@@ -39,12 +39,11 @@ namespace SupernaturalExpanded.Journal
         internal TargetSpell(string id, InteractionDefinition stock, MagicWand.CastSpell template,
             BuffNames backfire, BuffNames timedCurse)
         {
-            // Reads the native spell's hooks and takes its tier and casting kind from the shared catalog.
             SpellEntry entry = SpellCatalog.Find(id);
             if (entry == null) throw new InvalidOperationException("Missing spell catalog entry: " + id);
             Stock = stock;
             CatalogEntry = entry;
-            Category = WitchSpell.For(entry);
+            Category = MagicSpell.For(entry);
             BaseCost = entry.Cost;
             Type type = template.GetType();
             Backfire = backfire;
@@ -93,22 +92,21 @@ namespace SupernaturalExpanded.Journal
 
             public InteractionVisualTypes GetVisualType
             {
-                get { return ((IOverridesVisualType)Spell.Stock).GetVisualType; }
+                get { IOverridesVisualType provider = Spell.Stock as IOverridesVisualType; return provider == null ? InteractionVisualTypes.Standard : provider.GetVisualType; }
             }
 
             public ResourceKey GetTraitIcon(Sim sim, Sims3.Gameplay.Abstracts.GameObject target)
             {
-                return ((IHasTraitIcon)Spell.Stock).GetTraitIcon(sim, target);
+                IHasTraitIcon provider = Spell.Stock as IHasTraitIcon; return provider == null ? new ResourceKey() : provider.GetTraitIcon(sim, target);
             }
 
             public ResourceKey GetPathIcon(Sim sim, Sims3.Gameplay.Abstracts.GameObject target)
             {
-                return ((IHasMenuPathIcon)Spell.Stock).GetPathIcon(sim, target);
+                IHasMenuPathIcon provider = Spell.Stock as IHasMenuPathIcon; return provider == null ? new ResourceKey() : provider.GetPathIcon(sim, target);
             }
 
             protected override bool Test(Sim actor, Sim target, bool autonomous, ref GreyedOutTooltipCallback tooltip)
             {
-                // Runs the native availability test, allowing wandless casts with Practically Magic; Fairies and Genies use Arcana's test.
                 if (MagicCasters.IsInnateCaster(actor))
                 {
                     return InnateSpellTests.Allows(Spell, actor, target, ref tooltip);
@@ -181,7 +179,7 @@ namespace SupernaturalExpanded.Journal
 
             internal override TargetSpell Spell { get { return value; } }
         }
-    
+
         public sealed class FireBlast : Definition
         {
             private static readonly TargetSpell value = new TargetSpell("fire_blast", MagicWand.CastFireBlast.Singleton,
@@ -211,7 +209,6 @@ namespace SupernaturalExpanded.Journal
 
             internal static MotiveSpell Create(SpellEntry entry, CommodityKind motive, int level)
             {
-                // Builds the Fairy and Genie casting of one motive charm or curse from the native definition for that motive.
                 bool charm = entry.Category == SpellCategory.Charm;
                 Type definition = charm ? typeof(MagicWand.CastMotiveCharm.Definition) : typeof(MagicWand.CastMotiveCurse.Definition);
                 InteractionDefinition stock = (InteractionDefinition)Activator.CreateInstance(definition,

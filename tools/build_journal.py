@@ -16,7 +16,7 @@ from journal_layouts import layouts
 from localization import generate as generate_english, read_table, resources as locale_resources
 from prepare_sims3_deps import REQUIRED, prepare_references, validated_references
 from station import resources as station_resources
-from trees import IMAGE, icons
+from trees import IMAGE, TREES, icons
 from ui_resources import resources as ui_image_resources
 from vampire_bitemark import replacement_payloads, thumbnail_payloads
 
@@ -100,9 +100,9 @@ def verify(package, assembly, tuning, resources):
 
 
 def content_resources():
-    # Collects layouts, artwork, language tables and default replacements.
     resources = [(Key(LAYO, 0, fnv64(name)), data) for name, data in layouts()]
-    resources.extend((Key(IMAGE, 0, instance), data) for _, instance, data in icons().values())
+    for tree in TREES:
+        resources.extend((Key(IMAGE, 0, instance), data) for _, instance, data in icons(tree).values())
     resources.extend((Key(IMAGE, 0, instance), data) for instance, data in ui_image_resources())
     resources.extend(hud_resources())
     resources.extend(status_resources())
@@ -160,7 +160,6 @@ def run_stage(name, command):
 
 
 def build(args):
-    # Compiles the assembly and builds the verified package.
     replacement_payloads()
     thumbnail_payloads()
     if args.game_assemblies:
@@ -175,13 +174,6 @@ def build(args):
                "/target:library", "/optimize+", "/warnaserror+", "/codepage:65001"]
     if roslyn:
         options.append("/deterministic+")
-    if args.grimoire_test:
-        options.append("/define:ARCANA_GRIMOIRE_TEST")
-        print("WARNING: building with the Grimoire sample entries. Do not release this build.")
-    if args.animation_log:
-        options.append("/define:ARCANA_ANIMATION_LOG")
-    if args.localization_log:
-        options.append("/define:ARCANA_LOCALIZATION_LOG")
     source_root = PROJECT / "src"
     sources = {path.relative_to(source_root): path for path in source_root.rglob("*.cs")}
 
@@ -223,12 +215,6 @@ def main():
     parser.add_argument("--refresh-deps", action="store_true", help="Re-extract the local references from the game.")
     parser.add_argument("--output", type=Path, default=PROJECT / "build")
     parser.add_argument("--dotnet", help="Use a specific .NET SDK executable.")
-    parser.add_argument("--grimoire-test", action="store_true",
-                        help="Development only: fill the Grimoire with sample entries. Never use for a release.")
-    parser.add_argument("--animation-log", action="store_true",
-                        help="Development only: log up to three successful frames per activation.")
-    parser.add_argument("--localization-log", action="store_true",
-                        help="Development only: log missing or invalid locale text once per key.")
     args = parser.parse_args()
     if args.game_assemblies and args.refresh_deps:
         parser.error("--refresh-deps needs an installation. Use --game-dir or SIMS3_GAME_DIR.")

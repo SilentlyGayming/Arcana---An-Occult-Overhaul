@@ -21,18 +21,33 @@ namespace SupernaturalExpanded.Journal
     {
         private const BindingFlags StaticFields = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         private static bool installed;
+        private static readonly Dictionary<FieldInfo, InteractionDefinition> originalsByField = new Dictionary<FieldInfo, InteractionDefinition>();
+        private static readonly Dictionary<FieldInfo, InteractionDefinition> installedByField = new Dictionary<FieldInfo, InteractionDefinition>();
         private static readonly Dictionary<Type, InteractionDefinition> wrappers = new Dictionary<Type, InteractionDefinition>();
         private static readonly Dictionary<string, TargetSpell.Definition> arcana = new Dictionary<string, TargetSpell.Definition>();
         private static readonly Dictionary<string, TargetSpell.Definition> simCastings = new Dictionary<string, TargetSpell.Definition>();
         private static readonly List<string> SimSpellNames = new List<string>(new string[] { "CastGoodLuckCharm", "CastLoveCharm",
             "CastSunlightCharm", "CastPestilenceCurse", "CastFireBlast", "CastIceBlast", "CastToadify", "CastHauntingCurse",
             "CastMotiveCharm", "CastMotiveCurse" });
-        private static readonly Dictionary<InteractionTuning, bool> openedTunings = new Dictionary<InteractionTuning, bool>();
+        private static readonly Dictionary<InteractionTuning, InteractionTuning> openedTunings = new Dictionary<InteractionTuning, InteractionTuning>();
         private static readonly CommodityKind[] Motives = { CommodityKind.Bladder, CommodityKind.Hunger, CommodityKind.Energy,
             CommodityKind.Hygiene, CommodityKind.Fun, CommodityKind.Social };
         private static readonly FieldInfo SpellLevels = typeof(MagicWand).GetField("kSpellLevels", StaticFields);
         private static readonly FieldInfo CharmLevels = typeof(MagicWand).GetField("kMotiveCharmUnlockLevels", StaticFields);
         private static readonly FieldInfo CurseLevels = typeof(MagicWand).GetField("kMotiveCurseUnlockLevels", StaticFields);
+
+        internal static void Restore()
+        {
+            foreach (KeyValuePair<FieldInfo, InteractionDefinition> entry in originalsByField)
+                if (entry.Key.GetValue(null) == installedByField[entry.Key]) entry.Key.SetValue(null, entry.Value);
+            originalsByField.Clear();
+            installedByField.Clear();
+            wrappers.Clear();
+            arcana.Clear();
+            simCastings.Clear();
+            openedTunings.Clear();
+            installed = false;
+        }
 
         internal static bool Installed { get { return installed; } }
 
@@ -40,7 +55,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static TargetSpell.Definition SimCasting(SpellEntry entry)
         {
-            // Returns Arcana's casting of an entry's Sim-targeted spell, used by every caster, or null when it has none.
             TargetSpell.Definition definition;
             return entry != null && simCastings.TryGetValue(entry.Id, out definition) ? definition : null;
         }
@@ -58,10 +72,9 @@ namespace SupernaturalExpanded.Journal
 
         internal static void Prepare()
         {
-            // Captures the native spell definitions and replaces their singletons with knowledge-gated wrappers.
             SpellKnowledgeRegistration.Register();
             Guard("Registering Genie Magic", GenieMagicRegistration.Register);
-            if (installed) return;
+            if (installed) { PrepareGenieAbilities(); return; }
             if (arcana.Count == 0)
             {
                 arcana.Add("CastGoodLuckCharm", new TargetSpell.GoodLuckCharm());
@@ -81,7 +94,6 @@ namespace SupernaturalExpanded.Journal
 
         private static void PrepareSimCastings()
         {
-            // Builds Arcana's casting for every Sim-targeted spell, after the Witch castings and before the native singletons are wrapped.
             Dictionary<string, TargetSpell.Definition> built = new Dictionary<string, TargetSpell.Definition>();
             foreach (TargetSpell.Definition definition in arcana.Values) built[definition.Spell.CatalogEntry.Id] = definition;
             TargetSpell.Definition fire = new TargetSpell.FireBlast();
@@ -101,7 +113,6 @@ namespace SupernaturalExpanded.Journal
 
         private static void Guard(string operation, Sims3.UI.Function action)
         {
-            // Runs optional Fairy and Genie setup so a failure there is logged and never stops Witch casting.
             try
             {
                 action();
@@ -118,7 +129,6 @@ namespace SupernaturalExpanded.Journal
 
         private static void PrepareWrappers()
         {
-            // Replaces the native spell singletons with knowledge-gated wrappers.
             List<string> names = new List<string>(SimSpellNames);
             names.AddRange(new string[] { "CastFireBlastTerrain", "CastIceBlastTerrain", "CastIceBlastPlumbing", "CastFireBlastOnStatue",
                 "CastSunlightCharmOnStatue", "CastReanimate", "CastConvert", "CastRestoration", "MagicallyUpgrade" });
@@ -136,19 +146,31 @@ namespace SupernaturalExpanded.Journal
             int wrapped = 0;
             foreach (KeyValuePair<FieldInfo, InteractionDefinition> original in originals)
             {
-                if (WrapSingleton(original.Key, original.Value)) wrapped++;
+                if (original.Value != null && original.Value.GetType().DeclaringType == original.Key.DeclaringType &&
+                    WrapSingleton(original.Key, original.Value)) wrapped++;
             }
             if (wrapped == 0) throw new InvalidOperationException("No native spell could be wrapped.");
             installed = true;
+            PrepareGenieAbilities();
+        }
+
+        private static void PrepareGenieAbilities()
+        {
+            Guard("Wrapping Genie abilities", delegate
+            {
+                foreach (KeyValuePair<FieldInfo, InteractionDefinition> ability in GenieAbilities.Singletons())
+                    if (!(ability.Value is GenieAbilityDefinition) && GenieAbilities.For(ability.Value) != null) WrapSingleton(ability.Key, ability.Value);
+            });
         }
 
         private static bool WrapSingleton(FieldInfo singleton, InteractionDefinition native)
         {
-            // Wraps one native singleton, leaving it native and logging its name if the wrapper cannot be built or installed.
             try
             {
                 InteractionDefinition wrapper = Wrap(native);
                 singleton.SetValue(null, wrapper);
+                originalsByField[singleton] = native;
+                installedByField[singleton] = wrapper;
                 wrappers[native.GetType()] = wrapper;
                 return true;
             }
@@ -173,8 +195,8 @@ namespace SupernaturalExpanded.Journal
 
         internal static InteractionDefinition Wrap(InteractionDefinition native)
         {
-            // Wraps a native spell in a knowledge gate, keeping its fire-usable marker, and Conjure Apple in its fixed-cost wrapper.
-            if (native is KnowledgeSpellDefinition) return native;
+            if (native is KnowledgeSpellDefinition || native is GenieAbilityDefinition) return native;
+            if (GenieAbilities.For(native) != null) return GenieAbilities.Wrap(native);
             if (native.GetType().DeclaringType == typeof(TraitFunctions.ConjureApple)) return WrapAbility(native);
             return native is IUsableDuringFire ? WrapFireSpell(native) : WrapSpell(native);
         }
@@ -196,8 +218,8 @@ namespace SupernaturalExpanded.Journal
 
         internal static void InstallFor(GameObject target)
         {
-            // Swaps an object's spell interactions for gated wrappers and cancels queued casts of unknown spells.
             if (target == null || target.HasBeenDestroyed) return;
+            GenieRain.Install(target as Sims3.Gameplay.Objects.Environment.WeatherStone);
             Replace(target.Interactions);
             if (target.ItemComp != null) Replace(target.ItemComp.InteractionsInventory);
             Sim sim = target as Sim;
@@ -205,6 +227,7 @@ namespace SupernaturalExpanded.Journal
             SpellKnowledge.EnsureStarting(sim);
             if (MagicCasters.IsInnateCaster(sim)) Guard("Adding Genie Magic", delegate { MagicCasters.EnsureSkill(sim); });
             if (sim != null) Guard("Updating Magic Hands", delegate { MagicCasters.UpdateHands(sim); });
+            if (sim != null) Guard("Adding Genie verbs", delegate { AddGenieVerbs(sim); });
             if (MagicCasters.IsCaster(sim) && sim.InteractionQueue != null)
             {
                 List<InteractionInstance> queued = new List<InteractionInstance>(sim.InteractionQueue.InteractionList);
@@ -217,9 +240,17 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
+        private static void AddGenieVerbs(Sim sim)
+        {
+            sim.AddInteraction(DelicateCasting.Singleton, true);
+            sim.AddInteraction(LampRetreat.Singleton, true);
+            sim.AddInteraction(HeartsDesire.Singleton, true);
+            GenieWishMenu.Install(sim);
+            foreach (InteractionDefinition favor in GeniesFavor.Singletons) sim.AddInteraction(favor, true);
+        }
+
         private static void Replace(List<InteractionObjectPair> pairs)
         {
-            // Swaps native spell pairs for wrappers and gives wrapper pairs created at object startup the native spell's tuning.
             if (pairs == null) return;
             for (int i = 0; i < pairs.Count; i++)
             {
@@ -230,48 +261,52 @@ namespace SupernaturalExpanded.Journal
                 if (native != null)
                 {
                     InteractionTuning tuning = new InteractionObjectPair(native, pair.Target).Tuning;
-                    if (InnateCastable(EntryFor(native))) OpenTuning(tuning);
+                    if (InnateCastable(EntryFor(native))) tuning = OpenTuning(tuning);
                     pairs[i] = new KnowledgePair(pair.InteractionDefinition, pair.Target, tuning);
                 }
                 else if (wrappers.TryGetValue(pair.InteractionDefinition.GetType(), out wrapper))
                 {
-                    if (InnateCastable(EntryFor(pair.InteractionDefinition))) OpenTuning(pair.Tuning);
-                    pairs[i] = new KnowledgePair(wrapper, pair.Target, pair.Tuning);
+                    InteractionTuning tuning = pair.Tuning;
+                    if (InnateCastable(EntryFor(pair.InteractionDefinition))) tuning = OpenTuning(tuning);
+                    pairs[i] = new KnowledgePair(wrapper, pair.Target, tuning);
                 }
             }
         }
 
-        private static void OpenTuning(InteractionTuning tuning)
+        private static InteractionTuning OpenTuning(InteractionTuning tuning)
         {
-            // Lets Fairies and Genies pass a spell's tuning: adds them to its occult list and drops the Spellcasting skill floor.
-            if (tuning == null || tuning.Availability == null || openedTunings.ContainsKey(tuning)) return;
-            openedTunings[tuning] = true;
-            Availability availability = tuning.Availability;
+            if (tuning == null || tuning.Availability == null) return tuning;
+            InteractionTuning copy;
+            if (openedTunings.TryGetValue(tuning, out copy)) return copy;
+            copy = (InteractionTuning)WitchNativeCosts.CloneMethod.Invoke(tuning, null);
+            Availability availability = (Availability)WitchNativeCosts.CloneMethod.Invoke(tuning.Availability, null);
+            copy.Availability = availability;
             OccultTypes innate = OccultTypes.Fairy | OccultTypes.Genie;
             if (availability.OccultRestrictionType == OccultRestrictionType.Inclusive) availability.OccultRestrictions |= innate;
             else if (availability.OccultRestrictionType == OccultRestrictionType.Exclusive) availability.OccultRestrictions &= ~innate;
             if (availability.SkillThresholdType == SkillNames.Spellcasting) availability.SkillThresholdType = SkillNames.None;
+            openedTunings.Add(tuning, copy);
+            return copy;
         }
 
         private static bool IsSimSpell(InteractionDefinition native)
         {
-            // Returns whether a native spell definition targets a Sim, which every caster casts through Arcana for Arcana's accuracy.
             Type owner = native == null ? null : native.GetType().DeclaringType;
             return owner != null && SimSpellNames.Contains(owner.Name);
         }
 
         private static InteractionDefinition NativeOf(InteractionDefinition definition)
         {
-            // Returns the native definition inside an Arcana spell or ability wrapper, or null for anything else.
             KnowledgeSpellDefinition spell = definition as KnowledgeSpellDefinition;
             if (spell != null) return spell.Native;
             InnateAbilityDefinition ability = definition as InnateAbilityDefinition;
-            return ability == null ? null : ability.Native;
+            if (ability != null) return ability.Native;
+            GenieAbilityDefinition genie = definition as GenieAbilityDefinition;
+            return genie == null ? null : genie.Native;
         }
 
         internal static SpellEntry EntryFor(InteractionDefinition definition)
         {
-            // Resolves a native spell definition, including target and motive variants, to its catalog entry.
             KnowledgeSpellDefinition wrapper = definition as KnowledgeSpellDefinition;
             if (wrapper != null) definition = wrapper.Native;
             NativeSpellCast.Definition innateCast = definition as NativeSpellCast.Definition;
@@ -299,7 +334,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static InteractionDefinition Implementation(InteractionDefinition native, Sim actor)
         {
-            // Picks the casting for a known spell: Arcana's for every Sim-targeted spell, otherwise the game's own through NativeSpellCast.
             SpellEntry entry = EntryFor(native);
             if (MagicCasters.IsInnateCaster(actor))
             {
@@ -325,7 +359,6 @@ namespace SupernaturalExpanded.Journal
         internal static InteractionTestResult TestNative(InteractionDefinition native, ref InteractionInstanceParameters parameters,
             ref GreyedOutTooltipCallback tooltip)
         {
-            // Runs the native availability test for known spells with the old skill-level unlocks lifted.
             Sim actor = parameters.Actor as Sim;
             if (MagicCasters.IsInnateCaster(actor))
             {
@@ -352,7 +385,6 @@ namespace SupernaturalExpanded.Journal
         private static bool TestInnate(InteractionDefinition native, Sim actor, ref InteractionInstanceParameters parameters,
             ref GreyedOutTooltipCallback tooltip)
         {
-            // Tests a Fairy's or Genie's cast: Arcana's own test on Sims, the game's ground and object tests without its Witch checks elsewhere.
             SpellEntry entry = EntryFor(native);
             Sim target = parameters.Target as Sim;
             if (target != null)
@@ -361,8 +393,8 @@ namespace SupernaturalExpanded.Journal
                 return casting != null && InnateSpellTests.Allows(casting.Spell, actor, target, ref tooltip);
             }
             if (!NativeSpellCastable(entry) || !SpellKnowledge.Knows(actor, entry)) return false;
-            WitchCastingRules rules = MagicCasters.ReadRules(actor);
-            WitchSpell spell = WitchSpell.For(entry);
+            CastingRules rules = MagicCasters.ReadRules(actor);
+            MagicSpell spell = MagicSpell.For(entry);
             if (MagicCasters.AvailablePower(actor, rules) + 0.005f < rules.FinalCost(entry.Cost, spell, 1f))
             {
                 tooltip = delegate { return JournalText.Get("Arcana.Cast.NotEnoughPower"); };
@@ -373,7 +405,6 @@ namespace SupernaturalExpanded.Journal
 
         private static bool NativeSpellCastable(SpellEntry entry)
         {
-            // Returns whether a Fairy or Genie may cast the game's own ground, object or ritual version of an entry.
             if (entry == null) return false;
             return entry.Id == "fire_blast" || entry.Id == "ice_blast" || entry.Id == "sunlight" || entry.Id == "upgrade" || entry.Id == "conversion";
         }
@@ -382,27 +413,33 @@ namespace SupernaturalExpanded.Journal
         {
             private readonly FieldInfo[] fields;
             private readonly int[][] originals;
+            private int replaced;
             internal AvailabilityScope(bool motives)
             {
-                // Zeroes the native unlock levels for one synchronous availability check.
                 fields = motives ? new FieldInfo[] { SpellLevels, CharmLevels, CurseLevels } : new FieldInfo[] { SpellLevels };
                 originals = new int[fields.Length][];
-                for (int i = 0; i < fields.Length; i++)
+                try
                 {
-                    originals[i] = (int[])fields[i].GetValue(null);
-                    fields[i].SetValue(null, new int[originals[i].Length]);
+                    for (; replaced < fields.Length; replaced++)
+                    {
+                        originals[replaced] = (int[])fields[replaced].GetValue(null);
+                        fields[replaced].SetValue(null, new int[originals[replaced].Length]);
+                    }
                 }
+                catch { Dispose(); throw; }
             }
             public void Dispose()
             {
-                // Restores the native unlock level arrays.
-                for (int i = fields.Length - 1; i >= 0; i--) fields[i].SetValue(null, originals[i]);
+                while (replaced > 0)
+                {
+                    replaced--;
+                    fields[replaced].SetValue(null, originals[replaced]);
+                }
             }
         }
 
         internal static void Expand(InteractionDefinition native, InteractionObjectPair pair, IActor actor, List<InteractionObjectPair> results)
         {
-            // Expands native motive spells and keeps only learned variants with their real difficulty.
             List<InteractionObjectPair> expanded = new List<InteractionObjectPair>();
             Sim sim = actor as Sim;
             bool caster = MagicCasters.IsCaster(sim);
@@ -434,7 +471,6 @@ namespace SupernaturalExpanded.Journal
 
         private static void AddInnateMotives(SpellCategory category, IGameObject target, List<InteractionObjectPair> expanded)
         {
-            // Lists every motive charm or curse a Fairy or Genie can cast, since the game only lists them by Spellcasting level.
             foreach (SpellEntry entry in SpellCatalog.Entries)
             {
                 if (entry.MotiveIndex < 0 || entry.Category != category) continue;
@@ -454,9 +490,9 @@ namespace SupernaturalExpanded.Journal
     {
         internal InteractionDefinition Native;
         internal KnowledgeSpellDefinition(InteractionDefinition native) { Native = native; }
-        public InteractionVisualTypes GetVisualType { get { return ((IOverridesVisualType)Native).GetVisualType; } }
-        public ResourceKey GetTraitIcon(Sim sim, GameObject target) { return ((IHasTraitIcon)Native).GetTraitIcon(sim, target); }
-        public ResourceKey GetPathIcon(Sim sim, GameObject target) { return ((IHasMenuPathIcon)Native).GetPathIcon(sim, target); }
+        public InteractionVisualTypes GetVisualType { get { IOverridesVisualType provider = Native as IOverridesVisualType; return provider == null ? InteractionVisualTypes.Standard : provider.GetVisualType; } }
+        public ResourceKey GetTraitIcon(Sim sim, GameObject target) { IHasTraitIcon provider = Native as IHasTraitIcon; return provider == null ? new ResourceKey() : provider.GetTraitIcon(sim, target); }
+        public ResourceKey GetPathIcon(Sim sim, GameObject target) { IHasMenuPathIcon provider = Native as IHasMenuPathIcon; return provider == null ? new ResourceKey() : provider.GetPathIcon(sim, target); }
         public string[] GetPath(bool female) { return Native.GetPath(female); }
         public string GetInteractionName(IActor actor, IGameObject target, InteractionObjectPair pair)
         { return Native.GetInteractionName(actor, target, new InteractionObjectPair(Native, target)); }
@@ -468,7 +504,6 @@ namespace SupernaturalExpanded.Journal
         { SpellKnowledgeGates.Expand(Native, pair, actor, results); }
         public InteractionInstance CreateInstanceFromParameters(ref InteractionInstanceParameters parameters)
         {
-            // Creates the Arcana or native cast for a known spell.
             Sim actor = parameters.Actor as Sim;
             InteractionDefinition implementation = SpellKnowledgeGates.Implementation(Native, actor);
             if (implementation == null) return null;
@@ -485,7 +520,6 @@ namespace SupernaturalExpanded.Journal
         public InteractionInstance CreateInstanceWithCallbacks(IGameObject target, IActor actor, InteractionPriority priority, bool autonomous,
             bool cancellable, Callback started, Callback completed, Callback failed)
         {
-            // Creates the Arcana or native cast for a known spell with callbacks and the native tuning.
             InteractionDefinition implementation = SpellKnowledgeGates.Implementation(Native, actor as Sim);
             if (implementation == null) return null;
             if (!(implementation is NativeSpellCast.Definition))
@@ -512,8 +546,8 @@ namespace SupernaturalExpanded.Journal
     {
         internal InteractionDefinition Native;
         internal InnateAbilityDefinition(InteractionDefinition native) { Native = native; }
-        public InteractionVisualTypes GetVisualType { get { return ((IOverridesVisualType)Native).GetVisualType; } }
-        public ResourceKey GetTraitIcon(Sim sim, GameObject target) { return ((IHasTraitIcon)Native).GetTraitIcon(sim, target); }
+        public InteractionVisualTypes GetVisualType { get { IOverridesVisualType provider = Native as IOverridesVisualType; return provider == null ? InteractionVisualTypes.Standard : provider.GetVisualType; } }
+        public ResourceKey GetTraitIcon(Sim sim, GameObject target) { IHasTraitIcon provider = Native as IHasTraitIcon; return provider == null ? new ResourceKey() : provider.GetTraitIcon(sim, target); }
         public string[] GetPath(bool female) { return Native.GetPath(female); }
         public string GetInteractionName(IActor actor, IGameObject target, InteractionObjectPair pair)
         { return Native.GetInteractionName(actor, target, new InteractionObjectPair(Native, target)); }
@@ -523,7 +557,6 @@ namespace SupernaturalExpanded.Journal
         { InteractionInstanceParameters original = parameters.CloneForNewInteraction(Native); return Native.Test(ref original, ref tooltip); }
         public void AddInteractions(InteractionObjectPair pair, IActor actor, List<InteractionObjectPair> results)
         {
-            // Lists the native ability under this wrapper so the fixed cost applies wherever the menu creates it.
             List<InteractionObjectPair> expanded = new List<InteractionObjectPair>();
             Native.AddInteractions(new InteractionObjectPair(Native, pair.Target), actor, expanded);
             foreach (InteractionObjectPair item in expanded)
@@ -531,7 +564,6 @@ namespace SupernaturalExpanded.Journal
         }
         public InteractionInstance CreateInstanceFromParameters(ref InteractionInstanceParameters parameters)
         {
-            // Creates the native ability with its own tuning copy that charges the fixed Magical Power cost.
             InteractionInstanceParameters original = parameters.CloneForNewInteraction(Native);
             original.SetInteractionObjectPair(new KnowledgePair(Native, parameters.Target, new InteractionObjectPair(Native, parameters.Target).Tuning));
             InteractionInstance instance = Native.CreateInstanceFromParameters(ref original);
@@ -546,7 +578,6 @@ namespace SupernaturalExpanded.Journal
         public InteractionInstance CreateInstanceWithCallbacks(IGameObject target, IActor actor, InteractionPriority priority, bool autonomous,
             bool cancellable, Callback started, Callback completed, Callback failed)
         {
-            // Creates the native ability with callbacks and the fixed Magical Power cost.
             InteractionInstance instance = Native.CreateInstanceWithCallbacks(target, actor, priority, autonomous, cancellable, started, completed, failed);
             WitchNativeCosts.UseFixedAppleCost(instance, actor as Sim);
             return instance;

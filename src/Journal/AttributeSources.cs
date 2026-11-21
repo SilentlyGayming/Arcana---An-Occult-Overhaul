@@ -66,13 +66,6 @@ namespace SupernaturalExpanded.Journal
         private const string RegenerationKey = "Arcana.Journal.Overview.Attributes.PowerRegeneration";
         private static readonly List<Entry> entries = new List<Entry>();
 
-        static AttributeSources()
-        {
-#if ARCANA_GRIMOIRE_TEST
-            AttributeTestData.Register();
-#endif
-        }
-
         internal static void Register(OccultTypes species, string label, ModifierSource source)
         {
             entries.Add(new Entry(species, label, source));
@@ -80,7 +73,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static void AddRows(OverviewContext context, OverviewData data)
         {
-            // Appends a row for every source registered for the Sim's species that has a figure, in registration order.
             UIImage icon = context.Power == null ? null : context.Power.Icon;
             string regenerationLabel = JournalText.Get(RegenerationKey);
             string englishRegeneration = JournalText.English(RegenerationKey);
@@ -164,13 +156,11 @@ namespace SupernaturalExpanded.Journal
 
         private static bool Casts(OccultTypes species)
         {
-            // Returns whether the species casts spells.
             return species == OccultTypes.Witch || species == OccultTypes.Genie || species == OccultTypes.Fairy;
         }
 
         internal static OverviewRow Row(OverviewContext context)
         {
-            // The Accuracy row describes the Sim's current rank when its gameplay source is available.
             if (!Casts(context.Primary))
             {
                 return null;

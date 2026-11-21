@@ -5,5 +5,11 @@
     <kStudyExperienceFraction value="0.40" />
     <kStudyResearchIntervalMinutes value="30" />
     <kStudyDiscoveryChancePercent value="25" />
+    <kStudyWitchSpeed value="1" />
+    <kStudyFairySpeed value="0.5" />
+    <kStudyGenieSpeed value="0.5" />
+    <kStudyWitchMasterBonusPercent value="10" />
+    <kStudyGenieAscendantBonusPercent value="25" />
+    <kStudyWitchingHourBonusPercent value="20" />
   </Current_Tuning>
 </base>

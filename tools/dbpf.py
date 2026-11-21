@@ -80,7 +80,6 @@ def index(package):
 
 
 def refpack(data, expected_size):
-    # Decompresses a RefPack resource in either Sims 3 header variant.
     if len(data) < 2 or data[1] != 0xFB or data[0] & 0x3E != 0x10:
         raise ValueError("Unsupported RefPack header " + data[:4].hex())
     width = 4 if data[0] & 0x80 else 3

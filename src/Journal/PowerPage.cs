@@ -18,11 +18,6 @@ namespace SupernaturalExpanded.Journal
         private const uint FadedAlpha = 0x66000000;
         private const int MostFlights = 4;
         private static readonly string[] Numerals = { "I", "II", "III", "IV", "V" };
-        private static readonly string[] RankUnlocks =
-        {
-            "Arcana.Witch.Rank.Unlock.1", "Arcana.Witch.Rank.Unlock.2", "Arcana.Witch.Rank.Unlock.3",
-            "Arcana.Witch.Rank.Unlock.4", "Arcana.Witch.Rank.Unlock.5"
-        };
         private static readonly Color LitIcon = new Color(0xFFFFFFFF);
         private static readonly Color FadedIcon = new Color(0x80A0A8B4);
         private static readonly Color UnaffordableCost = new Color(0xFFC02828);
@@ -62,9 +57,10 @@ namespace SupernaturalExpanded.Journal
 
         internal static PowerPage Create(JournalWindow journal, OccultTree tree)
         {
-            // Creates the Perks page, or returns null when the installed layout lacks the tree's controls.
             return journal.HasControl(tree.Id(PageControl.Page, (int)PageSlot.RankTrack)) ? new PowerPage(journal, tree) : null;
         }
+
+        internal OccultTree Tree { get { return tree; } }
 
         private PowerPage(JournalWindow journal, OccultTree tree)
         {
@@ -119,13 +115,24 @@ namespace SupernaturalExpanded.Journal
             journal.Place(Add(journal.Control<Window>(Slot(PageSlot.PowersPanel))), PowerLayout.PowersPanelLeft,
                 PowerLayout.PanelTop, PowerLayout.PowersPanelRight - PowerLayout.PowersPanelLeft,
                 PowerLayout.PanelBottom - PowerLayout.PanelTop);
+            CreateConnections(journal);
+            if (tree.Paths != null)
+            {
+                for (int i = 0; i < tree.Paths.Length; i++)
+                {
+                    PerkPath path = tree.Paths[i];
+                    Text caption = Add(journal.Label(tree.Id(PageControl.PathCaption, i), path.Name,
+                        PerkCenter(path.Entry) - 150f, PowerLayout.PanelTop + 5f, 300f, 25f));
+                    caption.TextColor = new Color(path.Entry.Face);
+                }
+            }
 
             for (int i = 0; i < ranks.Length; i++)
             {
                 int rank = i;
                 ranks[i] = Add(journal.Button(tree.Id(PageControl.RankMarker, i), Numerals[i], barCenter - PowerLayout.RankMarker / 2f,
                     PowerLayout.RankY(ranks.Length - 1 - i), PowerLayout.RankMarker, PowerLayout.RankMarker, delegate { }));
-                if (tree == WitchTree.Tree)
+                if (tree.RankUnlocks != null)
                 {
                     ranks[i].CreateTooltipCallbackFunction = delegate(Vector2 mouse, WindowBase window, ref Vector2 position)
                     {
@@ -197,6 +204,67 @@ namespace SupernaturalExpanded.Journal
             feedback = new PerkFeedback(journal, overlay);
         }
 
+        private static float PerkCenter(Perk perk)
+        {
+            return PowerLayout.LaneX(perk.Column + perk.Shift) + PowerLayout.TileSize / 2f;
+        }
+
+        private void CreateConnections(JournalWindow journal)
+        {
+            if (tree.Connections == null) return;
+            int slot = 0;
+            foreach (PerkConnection connection in tree.Connections)
+            {
+                if (connection.Side)
+                {
+                    SideConnection(journal, ref slot, connection);
+                    continue;
+                }
+                float lower = PowerLayout.RowY(ranks.Length - 1 - (int)connection.Lower[0].Rank);
+                float upper = PowerLayout.RowY(ranks.Length - 1 - (int)connection.Upper[0].Rank) + PowerLayout.CellHeight;
+                float middle = (lower + upper) / 2f;
+                float left = float.MaxValue;
+                float right = float.MinValue;
+                foreach (Perk perk in connection.Lower)
+                {
+                    float x = PerkCenter(perk);
+                    left = Math.Min(left, x);
+                    right = Math.Max(right, x);
+                    ConnectionSegment(journal, ref slot, x, middle, x, lower, connection.Color);
+                }
+                foreach (Perk perk in connection.Upper)
+                {
+                    float x = PerkCenter(perk);
+                    left = Math.Min(left, x);
+                    right = Math.Max(right, x);
+                    ConnectionSegment(journal, ref slot, x, upper, x, middle, connection.Color);
+                }
+                if (right > left) ConnectionSegment(journal, ref slot, left, middle, right, middle, connection.Color);
+            }
+            for (int i = slot; i < PowerLayout.ConnectionSlots; i++)
+                journal.Control<Window>(tree.Id(PageControl.Connection, i)).Visible = false;
+        }
+
+        private void SideConnection(JournalWindow journal, ref int slot, PerkConnection connection)
+        {
+            Perk first = connection.Lower[0];
+            Perk second = connection.Upper[0];
+            float y = PowerLayout.RowY(ranks.Length - 1 - (int)first.Rank) + PowerLayout.IconTop + PowerLayout.IconSize / 2f;
+            float left = Math.Min(PerkCenter(first), PerkCenter(second)) + PowerLayout.TileSize / 2f;
+            float right = Math.Max(PerkCenter(first), PerkCenter(second)) - PowerLayout.TileSize / 2f;
+            ConnectionSegment(journal, ref slot, left, y, right, y, connection.Color);
+        }
+
+        private void ConnectionSegment(JournalWindow journal, ref int slot, float x1, float y1, float x2, float y2, uint color)
+        {
+            if (slot >= PowerLayout.ConnectionSlots) throw new InvalidOperationException("Too many perk connection segments.");
+            const float width = 3f;
+            Window line = Add(journal.Control<Window>(tree.Id(PageControl.Connection, slot++)));
+            journal.Place(line, Math.Min(x1, x2) - width / 2f, Math.Min(y1, y2) - width / 2f,
+                Math.Abs(x2 - x1) + width, Math.Abs(y2 - y1) + width);
+            line.FillColor = new Color(color);
+        }
+
         private static void PlaceHelp(JournalWindow journal, WindowBase control, float left,
             float size, float xOffset, float yOffset)
         {
@@ -251,7 +319,6 @@ namespace SupernaturalExpanded.Journal
 
         private void QueueRankLabelRepaint()
         {
-            // Repaints the rank markers once after the page appears so their numerals are drawn.
             if (repaintQueued)
             {
                 return;
@@ -276,7 +343,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void Discard()
         {
-            // Drops what is staged without buying it, so the points stay unspent and no purchase effect plays.
             if (selection != null)
             {
                 selection.DiscardStaged();
@@ -285,7 +351,6 @@ namespace SupernaturalExpanded.Journal
 
         internal bool Commit(bool celebrate)
         {
-            // Buys what is staged and returns whether anything was bought.
             if (selection == null)
             {
                 return false;
@@ -342,7 +407,6 @@ namespace SupernaturalExpanded.Journal
 
         internal UIImage PerkIcon(Perk perk)
         {
-            // Returns the perk's icon, caching it so the Overview can reuse the art.
             if (perk.Index < 0 || perk.Index >= icons.Length)
             {
                 return null;
@@ -403,7 +467,7 @@ namespace SupernaturalExpanded.Journal
             for (int i = 0; i < ranks.Length; i++)
             {
                 ranks[i].Selected = selection.Available && i <= (int)selection.Rank;
-                if (tree != WitchTree.Tree)
+                if (tree.RankUnlocks == null)
                 {
                     ranks[i].TooltipText = RankTooltipTitle(i);
                 }
@@ -449,7 +513,6 @@ namespace SupernaturalExpanded.Journal
 
         private void SetEdge(int index, Perk perk, bool fade)
         {
-            // Colours a specialization's outline with its tree colour.
             if (edges[index] == null)
             {
                 return;
@@ -475,7 +538,6 @@ namespace SupernaturalExpanded.Journal
 
         private void SetPerkFaded(int index, bool fade, bool unaffordable)
         {
-            // Greys out a perk that cannot be selected: its icon, cost and rank counter fade, and the disabled tile supplies the grey face.
             if (styled && faded[index] == fade && unaffordableCost[index] == unaffordable)
             {
                 return;
@@ -508,12 +570,11 @@ namespace SupernaturalExpanded.Journal
         private Tooltip BuildRankTooltip(int rank)
         {
             return PerkTooltip.Create(RankTooltipTitle(rank), JournalText.Get("Arcana.Status.Label.MagicalProficiency"),
-                JournalText.Get(RankUnlocks[rank]), null);
+                SpellStudy.RankUnlockText(tree.RankUnlocks[rank]), null);
         }
 
         private WindowBase.CreateTooltipCallback TooltipFor(Perk perk)
         {
-            // Builds a tile's tooltip from the current owned and staged ranks.
             return delegate(Vector2 mouse, WindowBase window, ref Vector2 position)
             {
                 return BuildTooltip(perk);
@@ -534,12 +595,11 @@ namespace SupernaturalExpanded.Journal
                 text += "\n" + requirement;
             }
             return PerkTooltip.Create(perk.Name, perk.Tagline, text, ConflictLine(perk),
-                WitchPerkBenefits.For(perk, selection.Tier(perk)));
+                tree.BenefitsFor(perk, selection.Tier(perk)));
         }
 
         private string ConflictLine(Perk perk)
         {
-            // Returns the red conflict line for a perk that excludes or is excluded by another.
             Perk other = perk.Conflict;
             if (other == null)
             {

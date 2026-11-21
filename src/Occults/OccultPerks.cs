@@ -22,7 +22,10 @@ namespace SupernaturalExpanded.Journal
         internal string Tagline;
         internal string[] Descriptions;
         internal Perk Conflict;
+        internal Perk Requires;
+        internal Perk[] RequiresAny;
         internal int Index;
+        internal bool PreviewOnly;
 
         internal uint Face;
 
@@ -40,7 +43,6 @@ namespace SupernaturalExpanded.Journal
 
         internal string Describe(int tier, string simName)
         {
-            // Returns the description of the rank a click would buy.
             int shown = PreviewIndex(tier);
             return Descriptions[shown].Replace("{name}", simName);
         }
@@ -51,24 +53,60 @@ namespace SupernaturalExpanded.Journal
         }
     }
 
+    internal delegate TooltipModifier[] PerkBenefits(Perk perk, int descriptionIndex);
+
+    internal sealed class PerkConnection
+    {
+        internal readonly Perk[] Lower;
+        internal readonly Perk[] Upper;
+        internal readonly uint Color;
+        internal readonly bool Side;
+
+        internal PerkConnection(Perk[] lower, Perk[] upper, uint color)
+        {
+            Lower = lower;
+            Upper = upper;
+            Color = color;
+        }
+
+        internal PerkConnection(Perk from, Perk to, uint color) : this(new[] { from }, new[] { to }, color)
+        {
+            Side = true;
+        }
+    }
+
+    internal sealed class PerkPath
+    {
+        internal readonly string Name;
+        internal readonly Perk Entry;
+
+        internal PerkPath(string name, Perk entry)
+        {
+            Name = name;
+            Entry = entry;
+        }
+    }
+
     internal sealed class OccultTree
     {
-        private const uint IdBase = 0x53E12000;
-
         internal readonly string Name;
         internal readonly string PointsName;
         internal readonly string PointsHelp;
         internal readonly string[] RankNames;
         private readonly string[] rankTitles;
         internal readonly Perk[] Perks;
+        internal readonly uint IdBase;
+        internal readonly PerkLedger Ledger;
+        internal string[] RankUnlocks;
+        internal PerkBenefits Benefits;
+        internal PerkConnection[] Connections;
+        internal PerkPath[] Paths;
 
-        internal OccultTree(string name, string pointsName, string pointsHelp, string[] rankNames, Perk[] perks)
-            : this(name, pointsName, pointsHelp, rankNames, null, perks)
+        internal OccultTree(uint idBase, string textPrefix, PerkLedger ledger, string name, string pointsName, string pointsHelp,
+            string[] rankNames, string[] rankTitles, Perk[] perks)
         {
-        }
-
-        internal OccultTree(string name, string pointsName, string pointsHelp, string[] rankNames, string[] rankTitles, Perk[] perks)
-        {
+            IdBase = idBase;
+            Ledger = ledger;
             Name = name;
             PointsName = pointsName;
             PointsHelp = pointsHelp;
@@ -78,11 +116,16 @@ namespace SupernaturalExpanded.Journal
             for (int i = 0; i < perks.Length; i++)
             {
                 perks[i].Index = i;
-                string[] entry = WitchText.Entry(perks[i].Key) ?? new[] { "", "" };
+                string[] entry = PerkText.Entry(textPrefix, perks[i].Key, perks[i].Tiers);
                 perks[i].Tagline = entry[0];
                 perks[i].Descriptions = new string[entry.Length - 1];
                 Array.Copy(entry, 1, perks[i].Descriptions, 0, entry.Length - 1);
             }
+        }
+
+        internal TooltipModifier[] BenefitsFor(Perk perk, int descriptionIndex)
+        {
+            return Benefits == null ? new TooltipModifier[0] : Benefits(perk, descriptionIndex);
         }
 
         internal string RankTitle(int rank)
@@ -99,7 +142,6 @@ namespace SupernaturalExpanded.Journal
 
         internal string RankLabel(int rank)
         {
-            // Returns the short rank name for narrow labels.
             rank = ClampRank(rank);
             return rank == RankNames.Length - 1 ? RankTitle(rank) : RankNames[rank];
         }
@@ -118,7 +160,6 @@ namespace SupernaturalExpanded.Journal
 
         internal uint Id(PageControl kind, int index)
         {
-            // Returns a control ID that matches Tree.id in tools/trees.py.
             return IdBase + (uint)kind * 0x100 + (uint)index;
         }
     }
@@ -134,6 +175,8 @@ namespace SupernaturalExpanded.Journal
         Page = 6,
         CostIcon = 7,
         Icon = 8,
-        Edge = 9
+        Edge = 9,
+        Connection = 10,
+        PathCaption = 11
     }
 }

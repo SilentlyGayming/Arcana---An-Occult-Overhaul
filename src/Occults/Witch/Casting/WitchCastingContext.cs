@@ -33,12 +33,11 @@ namespace SupernaturalExpanded.Journal
             return sim != null && sim.OccultManager != null && sim.OccultManager.HasOccultType(OccultTypes.Witch);
         }
 
-        internal static WitchCastingRules ReadRules(Sim sim)
+        internal static CastingRules ReadRules(Sim sim)
         {
-            // Reads the Witch's rank and purchased perks into the casting rules.
             Rank rank;
-            WitchRecord record = WitchProgressSource.ReadGameplay(sim.SimDescription, out rank);
-            WitchCastingRules rules = new WitchCastingRules(rank);
+            PerkRecord record = PerkProgressSource.Witch.ReadGameplay(sim.SimDescription, out rank);
+            CastingRules rules = new CastingRules(rank);
             if (record == null)
             {
                 return rules;
@@ -66,7 +65,6 @@ namespace SupernaturalExpanded.Journal
 
         private static bool HasCoven(Sim sim)
         {
-            // Returns whether two friendly Witches are nearby for The Power of Three.
             if (sim.LotCurrent == null)
             {
                 return false;
@@ -90,7 +88,6 @@ namespace SupernaturalExpanded.Journal
 
         private static bool HasFamiliar(Sim sim)
         {
-            // Returns whether a friendly cat familiar is nearby for Familiar Bond.
             if (sim.LotCurrent == null || sim.BuffManager == null || !sim.BuffManager.HasElement(BuffNames.AnimalFamiliar))
             {
                 return false;
@@ -115,7 +112,7 @@ namespace SupernaturalExpanded.Journal
             {
                 return false;
             }
-            WitchRecord record = WitchProgressStore.ReadCommitted(sim.SimDescription.SimDescriptionId);
+            PerkRecord record = WitchProgressStore.Ledger.ReadCommitted(sim.SimDescription.SimDescriptionId);
             return record != null && record.TierOf("PracticallyMagic") > 0;
         }
 
@@ -128,7 +125,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static MagicWand WandForAccuracy(Sim sim)
         {
-            // Returns the wand the current cast uses, falling back to the equipped wand.
             InteractionInstance interaction = sim.CurrentInteraction;
             WitchSimCast arcanaCast = interaction as WitchSimCast;
             if (arcanaCast != null && arcanaCast.ActiveWand != null)
@@ -141,7 +137,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static MagicWand NativeWand(InteractionInstance interaction)
         {
-            // Returns the wand a native MagicWand interaction stored for its cast, or null.
             if (interaction == null)
             {
                 return null;
@@ -169,7 +164,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static float SituationalDrain(Sim sim)
         {
-            // Returns the moon phase and familiar multipliers MagicWand.DrainMotive applies to every wand drain.
             float result = 1f;
             float[] lunar = (float[])LunarDrain.GetValue(null);
             int phase = (int)World.GetLunarPhase();
@@ -191,10 +185,9 @@ namespace SupernaturalExpanded.Journal
 
         internal static float WandBonus(MagicWand wand, bool previewMagicHands)
         {
-            // Returns the accuracy bonus of a wand or Magic Hands.
             if (wand is MagicHands || (wand == null && previewMagicHands))
             {
-                return WitchCastingRules.MagicHandsAccuracyBonus;
+                return CastingRules.MagicHandsAccuracyBonus;
             }
             if (wand is ElegantWand) return 25f;
             if (wand is IvoryWand || wand is IridescentWand) return 20f;
@@ -205,7 +198,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static float EmotionPenalty(Sim sim)
         {
-            // Sums negative moodlets not caused by needs, capped at the maximum emotion penalty.
             float penalty = 0f;
             if (sim.BuffManager == null)
             {
@@ -221,9 +213,9 @@ namespace SupernaturalExpanded.Journal
                     continue;
                 }
                 penalty -= instance.EffectValue;
-                if (penalty >= WitchCastingRules.MaxEmotionPenalty)
+                if (penalty >= CastingRules.MaxEmotionPenalty)
                 {
-                    return WitchCastingRules.MaxEmotionPenalty;
+                    return CastingRules.MaxEmotionPenalty;
                 }
             }
             return penalty;
@@ -231,7 +223,6 @@ namespace SupernaturalExpanded.Journal
 
         private static bool IsNeedMoodlet(BuffInstance buff, Motives motives)
         {
-            // Returns whether a moodlet comes from a need.
             foreach (CommodityKind need in Needs)
             {
                 if (buff.mBuff.SolveCommodity == need)
@@ -256,7 +247,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static void CountNeeds(Sim sim, out float penalty, out int empty, List<TooltipModifier> details)
         {
-            // Totals the low-need accuracy penalty and counts empty needs, optionally listing each need.
             penalty = 0f;
             empty = 0;
             Motives motives = sim.Motives;
@@ -281,7 +271,7 @@ namespace SupernaturalExpanded.Journal
                 }
 
                 float aboveMinimum = motives.GetValue(need) - min;
-                float amount = WitchCastingRules.NeedPenalty(aboveMinimum / span);
+                float amount = CastingRules.NeedPenalty(aboveMinimum / span);
                 penalty += amount;
                 if (aboveMinimum <= 0f)
                 {
@@ -289,18 +279,18 @@ namespace SupernaturalExpanded.Journal
                 }
                 if (amount > 0f && details != null)
                 {
-                    WitchAttributes.AddPercentModifier(details, WitchAttributes.NeedName(need), -amount);
+                    CasterAttributes.AddPercentModifier(details, CasterAttributes.NeedName(need), -amount);
                 }
             }
         }
-        internal static WitchCastingRules ReadCapacityRules(Sim sim)
+        internal static CastingRules ReadCapacityRules(Sim sim)
         {
-            // Reads only the rank and Arcane Ascendancy, which decide power capacity and study speed; Fairies and Genies use their skill tier.
             if (!IsWitch(sim)) return MagicCasters.ReadRules(sim);
             Rank rank;
-            WitchRecord record = WitchProgressSource.ReadGameplay(sim.SimDescription, out rank);
-            WitchCastingRules rules = new WitchCastingRules(rank);
+            PerkRecord record = PerkProgressSource.Witch.ReadGameplay(sim.SimDescription, out rank);
+            CastingRules rules = new CastingRules(rank);
             rules.Ascendancy = record != null && record.TierOf("ArcaneAscendancy") > 0;
+            rules.WitchingHour = record != null && record.TierOf("TheWitchingHour") > 0;
             return rules;
         }
     }

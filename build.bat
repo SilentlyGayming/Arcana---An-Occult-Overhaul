@@ -9,8 +9,6 @@ if errorlevel 1 (
 )
 set "ARCANA_PROJECT_OPEN=1"
 
-rem Set SIMS3_GAME_DIR to the base game's folder for a custom install.
-
 if not exist "tools\build_journal.py" goto :missing_builder
 if not exist "tools\prepare_sims3_deps.py" goto :missing_builder
 if not exist "tools\dbpf.py" goto :missing_builder
@@ -58,7 +56,6 @@ if "%ARCANA_BUILD_RESULT%"=="0" (
 )
 echo ========================================
 echo.
-echo Press any key to close the build window.
-pause >nul
+if not defined CI if not defined ARCANA_NO_PAUSE pause
 if defined ARCANA_PROJECT_OPEN popd
 exit /b %ARCANA_BUILD_RESULT%

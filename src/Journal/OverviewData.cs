@@ -100,16 +100,16 @@ namespace SupernaturalExpanded.Journal
     {
         internal readonly SimIdentity Identity;
         internal readonly OccultTypes Primary;
-        internal readonly PowerSelection Witch;
+        internal readonly PowerSelection Selection;
         internal readonly StatusField Power;
         private readonly PowerPage perkPage;
         private readonly GrimoirePage grimoire;
 
-        internal OverviewContext(SimIdentity identity, PowerSelection witch, StatusField power, PowerPage perkPage, GrimoirePage grimoire)
+        internal OverviewContext(SimIdentity identity, PowerSelection selection, StatusField power, PowerPage perkPage, GrimoirePage grimoire)
         {
             Identity = identity;
             Primary = OccultAssetData.Primary(identity.Occults);
-            Witch = witch;
+            Selection = selection;
             Power = power;
             this.perkPage = perkPage;
             this.grimoire = grimoire;
@@ -117,7 +117,6 @@ namespace SupernaturalExpanded.Journal
 
         internal UIImage KnowledgeIcon(int category)
         {
-            // Returns the tab icon of a Grimoire category for its knowledge row.
             return grimoire == null ? null : grimoire.GetCategoryIcon(category);
         }
 
@@ -142,17 +141,18 @@ namespace SupernaturalExpanded.Journal
         private static readonly IOverviewProvider common = new CommonOverview();
         private static readonly IOverviewProvider witch = new WitchOverview();
         private static readonly IOverviewProvider magical = new MagicalOverview();
+        private static readonly IOverviewProvider genie = new GenieOverview();
 
         private static IOverviewProvider For(OccultTypes primary)
         {
-            // Returns the Overview provider registered for a species.
             switch (primary)
             {
                 case OccultTypes.Witch:
                     return witch;
                 case OccultTypes.Fairy:
-                case OccultTypes.Genie:
                     return magical;
+                case OccultTypes.Genie:
+                    return genie;
                 default:
                     return null;
             }
@@ -187,7 +187,7 @@ namespace SupernaturalExpanded.Journal
                 data.LifeStateIcon = OverviewIcons.Species(context.Primary);
                 data.LifeStateArt = OverviewIcons.Art(context.Primary);
 
-                string rank = OccultRankLabel.Rank(identity.Occults, context.Witch);
+                string rank = OccultRankLabel.Rank(identity, context.Selection);
                 if (rank.Length != 0)
                 {
                     data.RankTitle = JournalText.Format("Arcana.Journal.Overview.Rank.Header", rank);
@@ -225,7 +225,6 @@ namespace SupernaturalExpanded.Journal
 
         private static void AddKnowledge(OverviewContext context, OverviewData data)
         {
-            // Adds one knowledge row per Grimoire category with the number of entries the Sim has unlocked.
             for (int category = 0; category < KnowledgeNames.Length; category++)
             {
                 data.Knowledge.Add(new OverviewRow(context.KnowledgeIcon(category), KnowledgeNames[category], "",
@@ -247,48 +246,69 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
+        private sealed class GenieOverview : IOverviewProvider
+        {
+            public void Fill(OverviewContext context, OverviewData data)
+            {
+                AddKnowledge(context, data);
+                Rank rank;
+                if (!GenieRanks.TryRead(context.Identity.Description, out rank)) return;
+                data.RankDescription = GenieRanks.Description(rank, context.Identity.FirstName);
+                data.RankLevel = (int)rank + 1;
+                AddPerks(context, data);
+            }
+        }
+
         private sealed class WitchOverview : IOverviewProvider
         {
             public void Fill(OverviewContext context, OverviewData data)
             {
                 AddKnowledge(context, data);
 
-                PowerSelection selection = context.Witch;
+                PowerSelection selection = context.Selection;
                 if (selection == null || !selection.Available)
                 {
                     return;
                 }
 
-                OccultTree tree = WitchTree.Tree;
                 int rank = (int)selection.Rank;
-                int top = WitchProgression.RankCount - 1;
                 data.RankDescription = WitchRankDescriptions.For(rank, context.Identity.FirstName);
                 data.RankLevel = rank + 1;
-
-                for (int unlock = top; unlock >= 0; unlock--)
-                {
-                    foreach (Perk perk in tree.Perks)
-                    {
-                        int bought = selection.Acquired(perk);
-                        if ((int)perk.Rank != unlock || bought <= 0)
-                        {
-                            continue;
-                        }
-                        data.Perks.Add(new OverviewRow(context.PerkIcon(perk), perk.Name,
-                            perk.Tiers > 1 ? JournalText.Format("Arcana.Common.CompactRatio", bought, perk.Tiers) : "",
-                            JournalText.Format("Arcana.Journal.Overview.Perks.UnlockRank", GetRomanNumeral(unlock + 1)), PerkTip(perk, bought, selection.SimName)));
-                    }
-                }
-                data.PerkCount = data.Perks.Count;
+                AddPerks(context, data);
             }
+        }
 
-            private static OverviewTip PerkTip(Perk perk, int bought, string simName)
+        private static void AddPerks(OverviewContext context, OverviewData data)
+        {
+            PowerSelection selection = context.Selection;
+            if (selection == null || !selection.Available)
             {
-                // Builds a perk's tooltip from the Perks page text for the rank bought so both pages agree.
-                string description = perk.Describe(bought - 1, simName);
-                string body = perk.Tiers > 1 ? JournalText.Format("Arcana.Journal.Overview.Perks.OwnedRank", bought, perk.Tiers, description) : description;
-                return new OverviewTip(perk.Name, perk.Tagline, body, WitchPerkBenefits.For(perk, bought - 1));
+                return;
             }
+
+            OccultTree tree = selection.Tree;
+            for (int unlock = PerkProgression.RankCount - 1; unlock >= 0; unlock--)
+            {
+                foreach (Perk perk in tree.Perks)
+                {
+                    int bought = selection.Acquired(perk);
+                    if ((int)perk.Rank != unlock || bought <= 0)
+                    {
+                        continue;
+                    }
+                    data.Perks.Add(new OverviewRow(context.PerkIcon(perk), perk.Name,
+                        perk.Tiers > 1 ? JournalText.Format("Arcana.Common.CompactRatio", bought, perk.Tiers) : "",
+                        JournalText.Format("Arcana.Journal.Overview.Perks.UnlockRank", GetRomanNumeral(unlock + 1)), PerkTip(tree, perk, bought, selection.SimName)));
+                }
+            }
+            data.PerkCount = data.Perks.Count;
+        }
+
+        private static OverviewTip PerkTip(OccultTree tree, Perk perk, int bought, string simName)
+        {
+            string description = perk.Describe(bought - 1, simName);
+            string body = perk.Tiers > 1 ? JournalText.Format("Arcana.Journal.Overview.Perks.OwnedRank", bought, perk.Tiers, description) : description;
+            return new OverviewTip(perk.Name, perk.Tagline, body, tree.BenefitsFor(perk, bought - 1));
         }
     }
 
@@ -306,7 +326,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static string For(int rank, string firstName)
         {
-            // Returns the rank description, clamping unknown ranks to the five Witch ranks.
             int index = Math.Max(0, Math.Min(Descriptions.Length - 1, rank));
             string name = string.IsNullOrEmpty(firstName) ? JournalText.Get("Arcana.Common.ThisSim") : firstName;
             return JournalText.Get(Descriptions[index]).Replace(Placeholder, name);
@@ -317,14 +336,12 @@ namespace SupernaturalExpanded.Journal
     {
         internal static UIImage Art(OccultTypes primary)
         {
-            // Returns a species' large life state art, or null to show its glyph instead.
             ulong instance = OccultAssetData.LifeStateArt(primary);
             return instance == 0ul ? null : StatusReaders.StatusIcon(instance);
         }
 
         internal static UIImage Species(OccultTypes primary)
         {
-            // Returns the icon that identifies a life state.
             if (primary == OccultTypes.None)
             {
                 return null;

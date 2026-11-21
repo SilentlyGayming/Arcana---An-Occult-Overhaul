@@ -95,6 +95,7 @@ namespace SupernaturalExpanded.Journal
         internal const float PitchX = 140f;
         internal const float PitchY = 114f;
         internal const float GridTop = 178f;
+        internal const int ConnectionSlots = 48;
 
         internal const float RankMarker = 40f;
         internal const float RankTrackWidth = 13f;
@@ -135,7 +136,7 @@ namespace SupernaturalExpanded.Journal
         internal const float HelpGap = 14f;
         internal const float PointsLeft = PowersPanelLeft;
 
-        private const int TopRank = WitchProgression.RankCount - 1;
+        private const int TopRank = PerkProgression.RankCount - 1;
 
         internal const float LanesLeft = (PowerLeft + PowersPanelRight - 24f) / 2f - (3f * PitchX + TileSize) / 2f;
 
@@ -144,7 +145,6 @@ namespace SupernaturalExpanded.Journal
         internal static float RankY(int row) { return RowY(row) + (CellHeight - RankMarker) / 2f; }
         internal static float NotchTop(int rank, int notch)
         {
-            // Returns the top edge of a notch above a rank marker, splitting the gap between markers evenly.
             float upperBottom = RankY(TopRank - rank - 1) + RankMarker;
             float lowerTop = RankY(TopRank - rank);
             float gaps = (lowerTop - upperBottom) - NotchesPerRank * NotchHeight;
@@ -153,7 +153,6 @@ namespace SupernaturalExpanded.Journal
         }
         internal static float RankFillFraction(int rank, float progress)
         {
-            // Returns the fill's share of the track so its tip meets each notch at its milestone.
             if (rank >= TopRank)
             {
                 return 1f;

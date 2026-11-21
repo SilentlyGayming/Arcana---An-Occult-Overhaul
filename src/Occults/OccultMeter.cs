@@ -252,7 +252,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static UIImage MeterIcon(OccultTypes type)
         {
-            // Returns the image the HUD meter shows for an occult, or null when none is found.
             if (type == OccultTypes.None)
             {
                 return null;
@@ -392,7 +391,6 @@ namespace SupernaturalExpanded.Journal
             {
                 if (custom && shown != null && !shown.Disposed) shown.Visible = false;
                 Restore();
-                OccultEnergy.ClearAll();
                 icons.Clear();
                 nativeIcon = null;
             }
@@ -419,7 +417,6 @@ namespace SupernaturalExpanded.Journal
 
         private readonly float start;
         private readonly bool genie;
-        private readonly Dictionary<ObjectGuid, float> levels = new Dictionary<ObjectGuid, float>();
 
         private OccultEnergy(float start) : this(start, false) { }
 
@@ -442,32 +439,17 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        internal static void ClearAll()
-        {
-            Vampire.levels.Clear();
-            Werewolf.levels.Clear();
-            Genie.levels.Clear();
-            Mermaid.levels.Clear();
-            Ghost.levels.Clear();
-        }
 
         internal float Get(ObjectGuid id)
         {
-            // Returns the Sim's pool; a Genie's comes from its saved Genie power.
             if (genie)
             {
                 IScriptProxy proxy = Simulator.GetProxy(id);
                 Sim sim = proxy == null ? null : proxy.Target as Sim;
-                if (sim != null) return GeniePower.Get(sim.SimDescription) / GeniePower.Maximum * Max;
+                if (sim != null) return GeniePower.Get(sim.SimDescription) / GeniePower.CapacityOf(sim.SimDescription) * Max;
             }
-            float level;
-            return levels.TryGetValue(id, out level) ? level : start;
+            return start;
         }
 
-        internal void Set(ObjectGuid id, float level)
-        {
-            levels[id] = level < 0f ? 0f : (level > Max ? Max : level);
-            JournalBootstrap.RefreshMeter();
-        }
     }
 }

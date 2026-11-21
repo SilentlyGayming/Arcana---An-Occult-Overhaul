@@ -120,7 +120,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void ApplyInk()
         {
-            // Restores the layout's ink colours after theming.
             for (int i = 0; i < titles.Length; i++)
             {
                 titles[i].TextColor = Ink;
@@ -162,7 +161,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void Refresh(OverviewData next)
         {
-            // Shows new data by updating captions, images and pooled rows only.
             data = next ?? new OverviewData();
             Apply();
         }
@@ -209,7 +207,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void Layout()
         {
-            // Places every panel inside the content region.
             float left = WindowGeometry.ContentLeft + WindowGeometry.ContentInset;
             float paneWidth = WindowGeometry.ContentWidth - 2f * WindowGeometry.ContentInset;
             float leftWidth = (float)Math.Floor((paneWidth - Gap) * LeftShare + 0.5f);
@@ -237,14 +234,12 @@ namespace SupernaturalExpanded.Journal
 
         private void PlaceFrame(int panel, float x, float y, float width, float height)
         {
-            // Places a bordered panel with its outline on the panel's edge.
             journal.Place(outlines[panel], x - OutlineInset, y, width + 2f * OutlineInset, height);
             journal.Place(bodies[panel], x - OutlineInset + 1f, y + 1f, width + 2f * OutlineInset - 2f, height - 2f);
         }
 
         private void PlaceRank()
         {
-            // Places the rank numeral, title, description and optional artwork.
             float x = rankLeft, y = rankTop, width = rankWidth, height = rankHeight;
             PlaceFrame(Rank, x, y, width, height);
 
@@ -276,7 +271,6 @@ namespace SupernaturalExpanded.Journal
 
         private void PlaceTable(int panel, int list, float x, float y, float width, float height)
         {
-            // Places a list panel built like the Grimoire table.
             float listTop = y + HeaderHeight - 1f;
             float outlineHeight = y + height + OutlineBottomExtra - listTop;
             journal.Place(outlines[panel], x - OutlineInset, listTop, width + 2f * OutlineInset, outlineHeight);
@@ -288,7 +282,6 @@ namespace SupernaturalExpanded.Journal
 
         private void PlaceLifeState(float x, float y, float width, float height)
         {
-            // Places the life state icon, title and description.
             PlaceFrame(LifeState, x, y, width, height);
             float iconLeft = x + (LifeIconColumn - LifeIconSize) / 2f;
             float iconTop = y + (float)Math.Floor((height - LifeIconSize) / 2f);

@@ -21,6 +21,7 @@ namespace SupernaturalExpanded.Journal
         private static EventListener instantiated;
         private static EventListener practiced;
         private static EventListener bought;
+        private static EventListener fulfilled;
         private static AlarmHandle recovery = AlarmHandle.kInvalidHandle;
         private static AlarmHandle upkeep = AlarmHandle.kInvalidHandle;
 
@@ -36,7 +37,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static void Start()
         {
-            // Installs the knowledge gates, event listeners and regeneration alarm for Witch casting.
             if (!GameUtils.IsInstalled(ProductVersion.EP7))
             {
                 return;
@@ -49,11 +49,13 @@ namespace SupernaturalExpanded.Journal
             instantiated = EventTracker.AddListener(EventTypeId.kSimInstantiated, OnInstantiated);
             practiced = EventTracker.AddListener(EventTypeId.kPracticedSpellcasting, OnPractice);
             bought = EventTracker.AddListener(EventTypeId.kBoughtObject, OnBought);
+            fulfilled = EventTracker.AddListener(EventTypeId.kPromisedDreamCompleted, HeartsDesireLedger.OnFulfilled);
             foreach (Sims3.Gameplay.Abstracts.GameObject target in Sims3.Gameplay.Queries.GetObjects<Sims3.Gameplay.Abstracts.GameObject>())
             {
                 SpellKnowledgeGates.InstallFor(target);
             }
             SpellKnowledgeGates.InstallFor(Sims3.Gameplay.Core.Terrain.Singleton);
+            GenieRain.Restore();
             WitchMagicRecovery.RefreshAll();
             recovery = AlarmManager.Global.AddAlarmRepeating(5f, TimeUnit.Minutes,
                 WitchMagicRecovery.RefreshAll, 5f, TimeUnit.Minutes, "Arcana Witch regeneration", AlarmType.NeverPersisted, null);
@@ -63,52 +65,36 @@ namespace SupernaturalExpanded.Journal
 
         internal static void Stop()
         {
-            // Removes the casting listeners and alarm and restores native regeneration.
-            if (instantiated != null)
-            {
-                EventTracker.RemoveListener(instantiated);
-                instantiated = null;
-            }
-            if (practiced != null)
-            {
-                EventTracker.RemoveListener(practiced);
-                practiced = null;
-            }
-            if (bought != null)
-            {
-                EventTracker.RemoveListener(bought);
-                bought = null;
-            }
-            if (recovery != AlarmHandle.kInvalidHandle)
-            {
-                AlarmManager manager = AlarmManager.Global;
-                if (manager != null)
-                {
-                    manager.RemoveAlarm(recovery);
-                }
-                recovery = AlarmHandle.kInvalidHandle;
-            }
-            if (upkeep != AlarmHandle.kInvalidHandle)
-            {
-                AlarmManager manager = AlarmManager.Global;
-                if (manager != null)
-                {
-                    manager.RemoveAlarm(upkeep);
-                }
-                upkeep = AlarmHandle.kInvalidHandle;
-            }
+            RemoveListener(ref instantiated);
+            RemoveListener(ref practiced);
+            RemoveListener(ref bought);
+            RemoveListener(ref fulfilled);
+            RemoveAlarm(ref recovery);
+            RemoveAlarm(ref upkeep);
             WitchMagicRecovery.RestoreAll();
             WitchNativeCosts.Stop();
             practice.Clear();
+            GenieRain.Clear();
+        }
+        internal static void RemoveListener(ref EventListener listener)
+        {
+            if (listener != null) EventTracker.RemoveListener(listener);
+            listener = null;
+        }
+
+        internal static void RemoveAlarm(ref AlarmHandle alarm)
+        {
+            if (alarm != AlarmHandle.kInvalidHandle && AlarmManager.Global != null) AlarmManager.Global.RemoveAlarm(alarm);
+            alarm = AlarmHandle.kInvalidHandle;
         }
 
         private static void RunUpkeep()
         {
-            // Restores Genie power and keeps Magic Hands in step with each Sim's magic every five Sim minutes, reporting a failure once.
             try
             {
-                GeniePower.RegenerateAll(5f);
-                MagicCasters.UpdateAllHands();
+                Sim[] sims = Sims3.Gameplay.Queries.GetObjects<Sim>();
+                GeniePower.RegenerateAll(5f, sims);
+                MagicCasters.UpdateAllHands(sims);
             }
             catch (ResetException)
             {
@@ -125,14 +111,13 @@ namespace SupernaturalExpanded.Journal
             Sim sim = e.Actor as Sim ?? e.TargetObject as Sim;
             if (sim != null)
             {
-                JournalBootstrap.RunLater(delegate { InstallFor(sim); });
+                JournalBootstrap.RunLater(delegate { SpellKnowledgeGates.InstallFor(sim); });
             }
             return ListenerAction.Keep;
         }
 
         private static ListenerAction OnBought(Event e)
         {
-            // Gives a newly bought or built object the gated spell interactions with their native tuning.
             Sims3.Gameplay.Abstracts.GameObject target = e.TargetObject as Sims3.Gameplay.Abstracts.GameObject;
             if (target != null)
             {
@@ -141,14 +126,8 @@ namespace SupernaturalExpanded.Journal
             return ListenerAction.Keep;
         }
 
-        private static void InstallFor(Sim sim)
-        {
-            SpellKnowledgeGates.InstallFor(sim);
-        }
-
         private static ListenerAction OnPractice(Event e)
         {
-            // Applies the Practice Magic experience bonus once per practice interaction.
             Sim sim = e.Actor as Sim;
             if (!WitchCastingContext.IsWitch(sim) || SkillMultipliers == null)
             {
@@ -172,7 +151,7 @@ namespace SupernaturalExpanded.Journal
             float current;
             if (multipliers != null && multipliers.TryGetValue(SkillNames.Spellcasting, out current))
             {
-                interaction.AlterSkillUpdateMultiplier(CommodityKind.SkillSpellcasting, current * (WitchCastingRules.PracticeExperience - 1f));
+                interaction.AlterSkillUpdateMultiplier(CommodityKind.SkillSpellcasting, current * (CastingRules.PracticeExperience - 1f));
                 practice[id] = new WeakReference(interaction);
             }
             return ListenerAction.Keep;

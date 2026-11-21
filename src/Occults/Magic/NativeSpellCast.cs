@@ -14,7 +14,6 @@ namespace SupernaturalExpanded.Journal
 
         protected override bool Run()
         {
-            // Runs the game's own spell for a caster who knows it, after a queue test that respects Arcana's knowledge instead of Spellcasting level.
             Definition definition = InteractionDefinition as Definition;
             if (definition == null || definition.Native == null) return Fail("it has no native spell");
             if (MagicCasters.NeedsHands(Actor) && !MagicCasters.EnsureHands(Actor) && !MagicWand.HasWand(Actor))
@@ -25,7 +24,9 @@ namespace SupernaturalExpanded.Journal
             if (Running == null) return Fail("the game did not create " + definition.Native.GetType().FullName);
             try
             {
-                return Running.RunInteraction();
+                bool completed = Running.RunInteraction();
+                if (completed) WitchNativeCosts.Charge(Actor);
+                return completed;
             }
             finally
             {
@@ -35,14 +36,12 @@ namespace SupernaturalExpanded.Journal
 
         public override ThumbnailKey GetIconKey()
         {
-            // Shows the game's spellcasting icon in the action queue.
             return new ThumbnailKey(ResourceKey.CreatePNGKey("w_cast_spell", ResourceUtils.ProductVersionToGroupId(ProductVersion.EP7)),
                 ThumbnailSize.Large);
         }
 
         private bool Fail(string reason)
         {
-            // Logs why a native spell cast could not start, once per reason, and ends the interaction.
             JournalBootstrap.ReportOnce("Native spell cast", new InvalidOperationException("The cast stopped because " + reason + "."));
             return false;
         }
@@ -58,7 +57,6 @@ namespace SupernaturalExpanded.Journal
 
             public override InteractionTestResult Test(ref InteractionInstanceParameters parameters, ref GreyedOutTooltipCallback tooltip)
             {
-                // Lets the queue re-test the cast with Arcana's knowledge test instead of the game's Witch and Spellcasting-level checks.
                 return SpellKnowledgeGates.TestNative(Native, ref parameters, ref tooltip);
             }
 
@@ -80,17 +78,17 @@ namespace SupernaturalExpanded.Journal
 
             public InteractionVisualTypes GetVisualType
             {
-                get { return ((IOverridesVisualType)Native).GetVisualType; }
+                get { IOverridesVisualType provider = Native as IOverridesVisualType; return provider == null ? InteractionVisualTypes.Standard : provider.GetVisualType; }
             }
 
             public ResourceKey GetTraitIcon(Sim sim, GameObject target)
             {
-                return ((IHasTraitIcon)Native).GetTraitIcon(sim, target);
+                IHasTraitIcon provider = Native as IHasTraitIcon; return provider == null ? new ResourceKey() : provider.GetTraitIcon(sim, target);
             }
 
             public ResourceKey GetPathIcon(Sim sim, GameObject target)
             {
-                return ((IHasMenuPathIcon)Native).GetPathIcon(sim, target);
+                IHasMenuPathIcon provider = Native as IHasMenuPathIcon; return provider == null ? new ResourceKey() : provider.GetPathIcon(sim, target);
             }
         }
     }

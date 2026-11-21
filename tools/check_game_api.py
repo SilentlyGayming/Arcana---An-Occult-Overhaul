@@ -8,7 +8,6 @@ CLR_V2 = b"v2.0.50727"
 
 
 def metadata(data):
-    # Locates the CLR metadata tables and string heap in a managed PE32 image.
     if len(data) < 512 or data[:2] != b"MZ":
         raise ValueError("not a PE image")
     pe = struct.unpack_from("<I", data, 0x3C)[0]
@@ -164,7 +163,6 @@ def load(root_dir):
 
 
 def find(found, qualified, allow_private_nested=False):
-    # Looks up a top-level type or a named nested type on a public owner.
     owner, _, nested = qualified.partition("/")
     namespace, _, name = owner.rpartition(".")
     for assembly in found.values():
@@ -216,7 +214,6 @@ NAMESPACES = {
 
 
 def require_ui_contract(ui_types):
-    # Verifies the native dialog override contract and the reflected UI entry points.
     types = {"UI": ui_types}
     modal = find(types, "Sims3.UI.ModalDialog")
     if modal is None or modal.methods.get("EndDialog") not in ({4}, {5}):
@@ -247,13 +244,33 @@ def require_ui_contract(ui_types):
 
 
 def require_genie_contract(gameplay_types):
-    points = find({"Sims3GameplaySystems": gameplay_types}, "Sims3.Gameplay.ActorSystems.OccultMagicPointSystem")
-    if points is None or not {"mMaxMagicPoints", "mCurrentMagicPointValue"} <= points.fields.keys():
+    types = {"Sims3GameplaySystems": gameplay_types}
+    points = find(types, "Sims3.Gameplay.ActorSystems.OccultMagicPointSystem")
+    if points is None or not {"mMaxMagicPoints", "mCurrentMagicPointValue", "mPowerShortageBuff", "mPowerFailureBuff"} <= points.fields.keys():
         raise ValueError("Sims3GameplaySystems.dll is missing the native Genie magic point fields")
+    genie = "Sims3.Gameplay.ActorSystems.OccultGenie"
+    bindings = [(genie, "get_MagicPoints", ""), ("Sims3.Gameplay.Actors.Sim", "PlaySoloAnimation", ""),
+                ("Sims3.Gameplay.Interactions.InteractionInstance", "get_SelectedObjects set_SelectedObjects", "")]
+    bindings += [(genie + "/" + name, "", "Singleton")
+                 for name in ("CleanSim", "SummonFood", "EnchantHouse", "RemoveSim", "EnsorcelInteraction", "ReleaseSim")]
+    bindings += [(genie + "/RemoveSim", "", "kLTRHitFromRemoving"),
+                 ("Sims3.Gameplay.ActorSystems.BuffInstance", "get_TimeoutCount set_TimeoutCount", ""),
+                 ("Sims3.Gameplay.ActorSystems.BuffNames", "", "Ensorcelled"),
+                 ("Sims3.Gameplay.Utilities.SimClock", "get_CurrentTicks ConvertToTicks", ""),
+                 ("Sims3.Gameplay.Socializing.Relationship", "Get get_LTR", ""),
+                 ("Sims3.Gameplay.Socializing.LongTermRelationship", "UpdateLiking", ""),
+                 ("Sims3.Gameplay.Skills.Skill", "get_SkillOwner", ""),
+                 ("Sims3.Gameplay.Actors.Sim", "get_LotHome", ""),
+                 ("Sims3.Gameplay.Interactions.ImmediateInteraction`2", "", ""),
+                 ("Sims3.Gameplay.Interactions.ImmediateInteractionDefinition`3", "", "")]
+    for owner, methods, fields in bindings:
+        info = find(types, owner, allow_private_nested=True)
+        missing = None if info is None else (set(methods.split()) - info.methods.keys()) | (set(fields.split()) - info.fields.keys())
+        if info is None or missing:
+            raise ValueError("Sims3GameplaySystems.dll is missing " + owner + ("." + ", ".join(sorted(missing)) if missing else ""))
 
 
 def require_witch_contract(gameplay_types):
-    # Checks the reflected Witch bindings used by the cast and motive adapters.
     types = {"Sims3GameplaySystems": gameplay_types}
     wand = "Sims3.Gameplay.Objects.Alchemy.MagicWand"
     bindings = [
@@ -337,7 +354,6 @@ SINGLETON_TYPES = {"ConjureApple": "Sims3.Gameplay.Interactions.ISoloInteraction
 
 
 def require_native_cost_contract(root_dir):
-    # Checks in the game's IL that native spells drain their kMotiveDrain through MagicWand.DrainMotive, which raises MagicMotiveChanged.
     import il_reader
     module = il_reader.Module(root_dir / ".deps" / "Sims3" / "Sims3GameplaySystems.dll")
     names = {name: index for index, name in module.typedefs().items()}
@@ -378,7 +394,6 @@ def require_native_cost_contract(root_dir):
 
 
 def require_station_contract(objects_types):
-    # Checks the native Alchemy Station types that Study Spells builds on.
     types = {"Sims3GameplayObjects": objects_types}
     station = "Sims3.Gameplay.Objects.Alchemy.AlchemyStation"
     bindings = (

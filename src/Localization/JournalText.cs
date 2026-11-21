@@ -10,16 +10,11 @@ namespace SupernaturalExpanded.Journal
 
         internal static string Get(string key)
         {
-            // Looks up a localized string by key, falling back to English.
             string text = StringTable.GetLocalizedString(ResourceUtils.HashString64(key));
             if (!string.IsNullOrEmpty(text) && text.Trim().Length != 0)
             {
                 return text;
             }
-
-#if DEBUG || ARCANA_LOCALIZATION_LOG
-            ReportFallback(key, "No string in the active table.");
-#endif
             return English(key);
         }
 
@@ -36,34 +31,16 @@ namespace SupernaturalExpanded.Journal
             }
             catch (FormatException)
             {
-#if DEBUG || ARCANA_LOCALIZATION_LOG
-                ReportFallback(key, "Invalid numbered placeholders in the active table.");
-#endif
                 return string.Format(CultureInfo.CurrentCulture, English(key), values);
             }
         }
-
-#if DEBUG || ARCANA_LOCALIZATION_LOG
-        private static void ReportFallback(string key, string reason)
-        {
-            string locale = StringTable.GetLocale() ?? "unknown";
-            JournalBootstrap.ReportOnce("Localizing " + key + " (" + locale + ")",
-                new InvalidOperationException(reason + " Using the English catalog."));
-        }
-#endif
     }
 
-    internal static class WitchText
+    internal static class PerkText
     {
-        internal static string[] Entry(string key)
+        internal static string[] Entry(string treePrefix, string key, int tiers)
         {
-            int tiers = ArcanaEnglish.PerkTiers(key);
-            if (tiers == 0)
-            {
-                return null;
-            }
-
-            string prefix = "Arcana.Witch.Perk." + key;
+            string prefix = treePrefix + key;
             string[] entry = new string[tiers + 1];
             entry[0] = JournalText.Get(prefix + ".Tagline");
             for (int tier = 1; tier <= tiers; tier++)
@@ -78,7 +55,6 @@ namespace SupernaturalExpanded.Journal
     {
         internal static long AbsoluteTenths(double percent)
         {
-            // Rounds a percentage to whole tenths without MidpointRounding, which the game's CLR lacks.
             return (long)Math.Floor(Math.Abs(percent) * 10.0 + 0.5);
         }
 

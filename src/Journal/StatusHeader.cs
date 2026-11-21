@@ -35,7 +35,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static StatusHeader Create(JournalWindow journal)
         {
-            // Creates the status header, or returns null when the installed layout predates it.
             return journal.HasControl(NativeLayouts.StatusPanel) ? new StatusHeader(journal) : null;
         }
 
@@ -51,7 +50,6 @@ namespace SupernaturalExpanded.Journal
 
         private void Bind(Row row, uint first)
         {
-            // Binds a header row's icon, label, value, glass, fill and track controls.
             row.Icon = journal.Control<Window>(first);
             row.IconImage = row.Icon.Drawable as ImageDrawable;
             row.DefaultIcon = row.IconImage == null ? null : row.IconImage.Image;
@@ -79,7 +77,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void Refresh(SimIdentity identity, IHudModel model, PowerSelection selection)
         {
-            // Refreshes the header, changing controls only when a value changes.
             OccultTypes primary = identity == null ? OccultTypes.None : OccultAssetData.Primary(identity.Occults);
             provider = OccultStatusProvider.For(primary);
             if (provider == null)
@@ -142,7 +139,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void Layout(float windowWidth)
         {
-            // Places the header panel for a journal of the given width.
             width = windowWidth;
             if (!visible)
             {
@@ -192,7 +188,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void RefreshBars()
         {
-            // Sizes each fill inside its (already scaled) track, so call it after the placements have been scaled.
             FillBar(progress);
             FillBar(power);
         }

@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using Sims3.Gameplay.ActorSystems;
 using Sims3.Gameplay.Abstracts;
 using Sims3.Gameplay.Actors;
 using Sims3.Gameplay.Autonomy;
 using Sims3.Gameplay.CAS;
+using Sims3.Gameplay.Core;
 using Sims3.Gameplay.Objects.Alchemy;
 using Sims3.Gameplay.Skills;
 using Sims3.SimIFace;
@@ -14,12 +16,12 @@ namespace SupernaturalExpanded.Journal
 {
     internal static class MagicCasters
     {
+        [PersistableStatic] internal static List<MagicHands> GeneratedHands;
         private static readonly FieldInfo PurchasedPrice = typeof(GameObject).GetField("mPurchasedPrice", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo CatalogPrice = typeof(GameObject).GetField("mIntPrice", BindingFlags.Instance | BindingFlags.NonPublic);
 
         internal static bool TryKind(Sim sim, out CasterKind kind)
         {
-            // Returns the Sim's casting tradition: Witch first, then Fairy, then Genie.
             kind = CasterKind.Witch;
             if (sim == null || sim.OccultManager == null) return false;
             if (sim.OccultManager.HasOccultType(OccultTypes.Witch)) return true;
@@ -48,7 +50,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static int SkillLevel(Sim sim, CasterKind kind)
         {
-            // Returns the level of the skill that decides a Fairy's or Genie's spell tiers.
             if (sim == null || sim.SkillManager == null) return 0;
             if (kind == CasterKind.Genie)
             {
@@ -58,35 +59,39 @@ namespace SupernaturalExpanded.Journal
             return Math.Max(0, sim.SkillManager.GetSkillLevel(SkillFor(kind)));
         }
 
-        internal static WitchCastingRules ReadRules(Sim sim)
+        internal static CastingRules ReadRules(Sim sim)
         {
-            // Reads the casting rules for any caster: a Witch's rank and perks, or a Fairy's or Genie's skill tier.
             CasterKind kind;
-            if (!TryKind(sim, out kind) || kind == CasterKind.Witch) return WitchCastingContext.ReadRules(sim);
-            return new WitchCastingRules(WitchCastingRules.RankForSkill(SkillLevel(sim, kind)), kind);
+            if (!TryKind(sim, out kind)) return new CastingRules(Rank.Novice);
+            if (kind == CasterKind.Witch) return WitchCastingContext.ReadRules(sim);
+            CastingRules rules = new CastingRules(CastingRules.RankForSkill(SkillLevel(sim, kind)), kind);
+            return kind == CasterKind.Genie ? GeniePerks.Apply(sim, rules) : rules;
         }
 
-        internal static float AvailablePower(Sim sim, WitchCastingRules rules)
+        internal static float RealPower(Sim sim, CastingRules rules)
         {
-            // Returns the caster's remaining power in the same units as spell costs.
             if (sim == null || sim.Motives == null) return 0f;
             switch (rules.Caster)
             {
                 case CasterKind.Fairy:
                     return Fraction(sim, CommodityKind.AuraPower) * rules.Capacity;
                 case CasterKind.Genie:
-                    return GeniePower.Get(sim.SimDescription) / GeniePower.Maximum * rules.Capacity;
+                    return Math.Min(GeniePower.Get(sim.SimDescription), rules.Capacity);
                 default:
                     float minimum = sim.Motives.GetMin(CommodityKind.MagicFatigue);
                     float maximum = sim.Motives.GetMax(CommodityKind.MagicFatigue);
-                    return rules.Capacity * WitchCastingRules.PowerFraction(sim.Motives.GetValue(CommodityKind.MagicFatigue), minimum, maximum);
+                    return rules.Capacity * CastingRules.PowerFraction(sim.Motives.GetValue(CommodityKind.MagicFatigue), minimum, maximum);
             }
         }
 
-        internal static float SpendInnate(Sim sim, WitchCastingRules rules, float cost)
+        internal static float AvailablePower(Sim sim, CastingRules rules)
         {
-            // Spends a Fairy's Faeric Power or a Genie's power and returns the power actually spent.
-            float spent = Math.Min(Math.Max(0f, cost), AvailablePower(sim, rules));
+            return rules.Chained ? 0f : RealPower(sim, rules);
+        }
+
+        internal static float SpendInnate(Sim sim, CastingRules rules, float cost)
+        {
+            float spent = Math.Min(Math.Max(0f, cost), RealPower(sim, rules));
             if (spent <= 0f) return 0f;
             if (rules.Caster == CasterKind.Fairy)
             {
@@ -96,9 +101,52 @@ namespace SupernaturalExpanded.Journal
             }
             else if (rules.Caster == CasterKind.Genie)
             {
-                GeniePower.Change(sim.SimDescription, -spent / rules.Capacity * GeniePower.Maximum);
+                GeniePower.Change(sim.SimDescription, -spent);
+                GeniePerks.Return(sim, rules, spent);
             }
             return spent;
+        }
+
+        internal static bool ResolveBacklash(Sim caster, CastingRules rules, MagicSpell spell, float accuracy, bool ability, ref bool succeeded)
+        {
+            if (!rules.HasBacklash) return !succeeded;
+            if (ability && rules.GenieLaw)
+            {
+                succeeded = true;
+                return false;
+            }
+            bool backlash = RollBacklash(rules, spell, accuracy, succeeded);
+            if (!ability) RisingTide.Record(caster, rules, succeeded, backlash);
+            if (!backlash) return false;
+            succeeded = !ability && rules.Unleashed;
+            GeniePerks.AfterBacklash(caster);
+            return !GeniePerks.TryRedirect(caster, rules);
+        }
+
+        internal static bool RollWishBacklash(CastingRules rules, float accuracy, ref bool succeeded)
+        {
+            bool backlash = rules.HasBacklash && RollBacklash(rules, new MagicSpell(4, MagicSpellKind.Spell), accuracy, succeeded);
+            if (backlash) succeeded = rules.Unleashed;
+            return backlash;
+        }
+
+        internal static bool CommitWishBacklash(Sim caster, CastingRules rules, bool succeeded, bool backlash)
+        {
+            RisingTide.Record(caster, rules, succeeded, backlash);
+            if (!backlash) return false;
+            GeniePerks.AfterBacklash(caster);
+            return !GeniePerks.TryRedirect(caster, rules);
+        }
+
+        private static bool RollBacklash(CastingRules rules, MagicSpell spell, float accuracy, bool succeeded)
+        {
+            if (float.IsNaN(accuracy)) return false;
+            float success = Math.Max(0f, Math.Min(100f, accuracy));
+            float natural = rules.NaturalBacklash(spell, success) / 100f;
+            float target = rules.BacklashChance(spell, success) / 100f;
+            bool occurs = !succeeded || RandomUtil.RandomChance(rules.ReboundChance(spell));
+            if (occurs) return !RandomUtil.RandomChance(natural > target && natural > 0f ? (1f - target / natural) * 100f : 0f);
+            return RandomUtil.RandomChance(target > natural && natural < 1f ? (target - natural) / (1f - natural) * 100f : 0f);
         }
 
         private static float Fraction(Sim sim, CommodityKind kind)
@@ -110,19 +158,13 @@ namespace SupernaturalExpanded.Journal
 
         internal static bool NeedsHands(Sim sim)
         {
-            // Returns whether Arcana should keep Magic Hands in the Sim's inventory: every Fairy and Genie, and Witches with Practically Magic.
             if (sim == null || sim.HasBeenDestroyed) return false;
             return IsInnateCaster(sim) || (WitchCastingContext.IsWitch(sim) && WitchCastingContext.HasPracticallyMagic(sim));
         }
 
         internal static bool EnsureHands(Sim sim)
         {
-            // Gives a Sim who needs them one worthless Magic Hands item, created exactly as the game's lifetime reward creates it.
             if (!NeedsHands(sim) || sim.Inventory == null) return false;
-            if (IsInnateCaster(sim))
-            {
-                foreach (MagicHands owned in sim.Inventory.FindAll<MagicHands>(false)) MakeWorthless(owned);
-            }
             if (sim.Inventory.FindAll<MagicWand>(false).Count > 0) return true;
             GameObject hands = Sims3.Gameplay.GlobalFunctions.CreateObject("magicHandsLHR", ProductVersion.EP7, Vector3.OutOfWorld, 0,
                 Vector3.UnitZ, null, (Simulator.ObjectInitParameters)null) as GameObject;
@@ -132,50 +174,48 @@ namespace SupernaturalExpanded.Journal
                 return false;
             }
             MakeWorthless((MagicHands)hands);
-            if (sim.Inventory.TryToAdd(hands)) return true;
+            if (sim.Inventory.TryToAdd(hands))
+            {
+                if (GeneratedHands == null) GeneratedHands = new List<MagicHands>();
+                GeneratedHands.Add((MagicHands)hands);
+                return true;
+            }
             hands.Destroy();
             return false;
         }
 
         internal static void UpdateHands(Sim sim)
         {
-            // Adds Magic Hands to Sims who need them and removes Arcana's from Sims who no longer do, such as a cured Fairy or Genie.
             if (sim == null || sim.Inventory == null) return;
             if (NeedsHands(sim))
             {
                 EnsureHands(sim);
                 return;
             }
+            if (GeneratedHands == null || GeneratedHands.Count == 0) return;
             foreach (MagicHands hands in sim.Inventory.FindAll<MagicHands>(false))
             {
-                if (!IsArcanaHands(hands)) continue;
-                sim.Inventory.TryToRemove(hands);
+                if (!GeneratedHands.Contains(hands) || !sim.Inventory.TryToRemove(hands)) continue;
+                GeneratedHands.Remove(hands);
                 hands.Destroy();
             }
         }
 
-        internal static void UpdateAllHands()
+        internal static void UpdateAllHands(Sim[] sims)
         {
-            foreach (Sim sim in Sims3.Gameplay.Queries.GetObjects<Sim>()) UpdateHands(sim);
+            if (GeneratedHands != null) GeneratedHands.RemoveAll(delegate(MagicHands item) { return item == null || item.HasBeenDestroyed; });
+            foreach (Sim sim in sims) UpdateHands(sim);
         }
 
         internal static void MakeWorthless(MagicHands hands)
         {
-            // Zeroes Arcana's Magic Hands' price so they are never counted as household value, which fire insurance would pay out.
             PurchasedPrice.SetValue(hands, 0);
             CatalogPrice.SetValue(hands, 0);
         }
 
-        private static bool IsArcanaHands(MagicHands hands)
-        {
-            // Recognizes Arcana's Magic Hands by their zero purchase price; the game's own reward keeps its catalog price.
-            object price = PurchasedPrice.GetValue(hands);
-            return price is int && (int)price == 0;
-        }
 
         internal static void EnsureSkill(Sim sim)
         {
-            // Gives a Genie the Genie Magic skill that stores its power and tier.
             CasterKind kind;
             if (TryKind(sim, out kind) && kind == CasterKind.Genie) GeniePower.Read(sim.SimDescription, true);
         }

@@ -103,7 +103,6 @@ class Module:
         last = self.row(2, ti + 1)[4] if ti < n else self.rows[4] + 1
         return [(f, self.s(self.row(4, f)[1])) for f in range(first, last)]
     def field_type(self, ti, name):
-        # Returns the declared class or interface name of a type's field, or None for other field types.
         for index, field in self.fields_of(ti):
             if field != name: continue
             p = self.blob + self.row(4, index)[2]; size = self.d[p]; sig = self.d[p + 1:p + 1 + size]

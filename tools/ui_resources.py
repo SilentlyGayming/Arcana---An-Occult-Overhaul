@@ -33,7 +33,6 @@ HALO_INSTANCE = fnv64("SupernaturalExpanded.UI.PerkHalo.r75")
 
 
 def halo_pixel(x, y):
-    # Returns a halo pixel from its signed distance to a rounded rectangle.
     radius = 4.0
     dx = abs((x + .5) / HALO_WIDTH - .5) * (HALO_FACE_WIDTH + 2 * HALO_PAD) - HALO_FACE_WIDTH / 2 + radius
     dy = abs((y + .5) / HALO_HEIGHT - .5) * (HALO_FACE_HEIGHT + 2 * HALO_PAD) - HALO_FACE_HEIGHT / 2 + radius
@@ -134,7 +133,6 @@ def portrait_mask_key():
 
 
 def _mask_coverage(x, y):
-    # Returns the fraction of a pixel inside the rounded rectangle.
     inside = 0
     for sy in range(_MASK_SAMPLES):
         for sx in range(_MASK_SAMPLES):
@@ -157,7 +155,6 @@ def portrait_mask_png():
 
 
 def portrait_mask_resources():
-    # Returns the mask resources the chosen source needs.
     return [] if MASK_SOURCE == "stock" else [(fnv64(MASK_CUSTOM_NAME), portrait_mask_png())]
 
 
@@ -174,7 +171,6 @@ TILE_EDGE_DEPTH = TILE_EDGE_RING + TILE_EDGE_GLOW
 
 
 def tile_edge_alpha(x, y):
-    # Returns the edge alpha at a point: a solid ring, then an inward glow.
     cx = min(max(x, TILE_EDGE_RADIUS), TILE_EDGE_WIDTH - TILE_EDGE_RADIUS)
     cy = min(max(y, TILE_EDGE_RADIUS), TILE_EDGE_HEIGHT - TILE_EDGE_RADIUS)
     corner = math.hypot(x - cx, y - cy)
@@ -194,7 +190,6 @@ def tile_edge_png():
     width, height = TILE_EDGE_WIDTH * TILE_EDGE_DENSITY, TILE_EDGE_HEIGHT * TILE_EDGE_DENSITY
 
     def pixel(column, row):
-        # Averages four samples so the ring's edges and corners stay smooth.
         alpha = sum(tile_edge_alpha((column + ox) / TILE_EDGE_DENSITY, (row + oy) / TILE_EDGE_DENSITY)
                     for ox in (.25, .75) for oy in (.25, .75)) / 4
         return (255, 255, 255, round(255 * alpha))

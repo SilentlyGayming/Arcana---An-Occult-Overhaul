@@ -15,7 +15,7 @@ namespace SupernaturalExpanded.Journal
     {
         private const BindingFlags StaticFields = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         private const string UpgradeClass = "MagicallyUpgrade";
-        private static readonly MethodInfo CloneMethod = typeof(object).GetMethod("MemberwiseClone", BindingFlags.Instance | BindingFlags.NonPublic);
+        internal static readonly MethodInfo CloneMethod = typeof(object).GetMethod("MemberwiseClone", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo ActualValue = typeof(CommodityChange).GetField("mActualValue", BindingFlags.Instance | BindingFlags.Public);
         private static readonly Dictionary<string, FieldInfo> nativeCosts = new Dictionary<string, FieldInfo>();
         private static readonly Dictionary<ulong, WeakReference> charged = new Dictionary<ulong, WeakReference>();
@@ -24,7 +24,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static void Start()
         {
-            // Watches every native wand drain so each native spell spends its fixed Arcana cost.
             active = true;
             Attach();
             if (model == null)
@@ -60,10 +59,9 @@ namespace SupernaturalExpanded.Journal
 
         private static void OnWandDrain()
         {
-            // Charges the running native cast of the Sim whose wand drain just raised this event.
             try
             {
-                Charge(CurrentTaskSim() ?? OnlyUnchargedCaster());
+                Charge(CurrentTaskSim());
             }
             catch (ResetException)
             {
@@ -77,33 +75,12 @@ namespace SupernaturalExpanded.Journal
 
         private static Sim CurrentTaskSim()
         {
-            // Returns the Sim whose script task is running the drain, which is the casting Witch.
             IScriptProxy proxy = Simulator.GetProxy(Simulator.CurrentTask);
             return proxy == null ? null : proxy.Target as Sim;
         }
 
-        private static Sim OnlyUnchargedCaster()
-        {
-            // Falls back to the single Witch with an uncharged native cast, and gives up when there are several.
-            Sim found = null;
-            foreach (Sim sim in Sims3.Gameplay.Queries.GetObjects<Sim>())
-            {
-                if (Pending(sim) == null)
-                {
-                    continue;
-                }
-                if (found != null)
-                {
-                    return null;
-                }
-                found = sim;
-            }
-            return found;
-        }
-
         private static InteractionInstance Pending(Sim sim)
         {
-            // Returns the caster's running native spell cast when its fixed cost has not been charged yet.
             if (!MagicCasters.IsCaster(sim) || sim.Motives == null || sim.SimDescription == null)
             {
                 return null;
@@ -119,9 +96,8 @@ namespace SupernaturalExpanded.Journal
             return charged.TryGetValue(sim.SimDescription.SimDescriptionId, out previous) && previous.Target == cast ? null : cast;
         }
 
-        private static void Charge(Sim sim)
+        internal static void Charge(Sim sim)
         {
-            // Replaces the native drain of the running cast with the fixed cost, once per cast.
             InteractionInstance cast = Pending(sim);
             if (cast == null)
             {
@@ -131,14 +107,14 @@ namespace SupernaturalExpanded.Journal
             SpellEntry entry = SpellKnowledgeGates.EntryFor(cast.InteractionDefinition);
             if (MagicCasters.IsInnateCaster(sim))
             {
-                WitchCastingRules innate = MagicCasters.ReadRules(sim);
-                MagicCasters.SpendInnate(sim, innate, innate.FinalCost(entry.Cost, WitchSpell.For(entry), 1f));
+                CastingRules innate = MagicCasters.ReadRules(sim);
+                MagicCasters.SpendInnate(sim, innate, innate.FinalCost(entry.Cost, MagicSpell.For(entry), 1f));
                 return;
             }
             MagicWand wand = WitchCastingContext.NativeWand(cast);
             float multiplier = (wand == null ? 1f : wand.MotiveDrainMultiplier) * WitchCastingContext.SituationalDrain(sim);
-            WitchCastingRules rules = WitchCastingContext.ReadRules(sim);
-            float change = rules.NativeCorrection(entry.Cost, WitchSpell.For(entry), NativeDrain(entry), multiplier,
+            CastingRules rules = WitchCastingContext.ReadRules(sim);
+            float change = rules.NativeCorrection(entry.Cost, MagicSpell.For(entry), NativeDrain(entry), multiplier,
                 sim.Motives.GetMin(CommodityKind.MagicFatigue), sim.Motives.GetMax(CommodityKind.MagicFatigue));
             if (change != 0f)
             {
@@ -148,7 +124,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static float NativeDrain(SpellEntry entry)
         {
-            // Returns the fatigue the native interaction drains before multipliers; Magically Upgrade drains none.
             if (entry.NativeClass == UpgradeClass)
             {
                 return 0f;
@@ -169,7 +144,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static void UseFixedAppleCost(InteractionInstance instance, Sim actor)
         {
-            // Gives one Conjure Apple cast its own tuning copy whose power output is the fixed ability cost.
             InteractionObjectPair pair = instance == null ? null : instance.InteractionObjectPair;
             InteractionTuning tuning = pair == null ? null : pair.Tuning;
             if (tuning == null || tuning.mTradeoff == null || tuning.mTradeoff.mOutputs == null || !WitchCastingContext.IsWitch(actor)

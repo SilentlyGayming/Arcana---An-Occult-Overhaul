@@ -97,7 +97,6 @@ namespace SupernaturalExpanded.Journal
 
         private void Undim()
         {
-            // Clears the counted dim layer once the last modal leaves, as the game's dialogs do.
             if (dimmed)
             {
                 dimmed = false;
@@ -107,7 +106,6 @@ namespace SupernaturalExpanded.Journal
 
         private void Pause()
         {
-            // Locks the game speed while remembering the speed to restore on unlock.
             Sims3.UI.IResponder responder = Sims3.UI.Responder.Instance;
             ISimClockSpeedModel clock = responder == null ? null : responder.ClockSpeedModel;
             if (clock == null || clock.GameSpeedLocked)

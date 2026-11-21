@@ -6,9 +6,19 @@ namespace SupernaturalExpanded.Journal
 {
     internal static class JournalTheme
     {
+        private static readonly Color ArrowEnabled = new Color(0xFFFFFFFF);
+        private static readonly Color ArrowDisabled = new Color(0xFFAEB9CC);
+
+        internal static void TintArrow(Button arrow, bool enabled)
+        {
+            Color shade = enabled ? ArrowEnabled : ArrowDisabled;
+            if (arrow.ShadeColor.ARGB == shade.ARGB) return;
+            arrow.ShadeColor = shade;
+            arrow.Invalidate();
+        }
+
         internal static void ApplyHud(Button book, Window glyph, Button familyTree, WindowBase panel)
         {
-            // Falls back to the layout's stock artwork and colors when the active UI skin cannot be read.
             try
             {
                 CopyFace(Frame(book.Drawable), Frame(familyTree.Drawable));
@@ -114,7 +124,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static void ApplyTooltip(Window frame, Text title, Text tagline, Text body)
         {
-            // Gives the perk tooltip the stock tooltip's background, text colour and font so it follows UI replacement mods.
             UseDonor("SimpleTextTooltip", 1, delegate(WindowBase donor)
             {
                 StdDrawable source = DialogFrame(donor);
@@ -161,13 +170,15 @@ namespace SupernaturalExpanded.Journal
                 close.ShadeColor = sample.ShadeColor;
             }
 
-            Window help = NativeLayouts.Find<Window>(journal,
-                WitchTree.Tree.Id(PageControl.Page, (int)PageSlot.PointsHelpOuter));
-            if (help != null && !help.Disposed)
+            foreach (PerkProgressSource source in PerkProgressSource.All)
             {
-                CopyFace(Frame(help.Drawable), Frame(close.Drawable));
-                help.ShadeColor = close.ShadeColor;
-                help.Invalidate();
+                Window help = NativeLayouts.Find<Window>(journal, source.Tree.Id(PageControl.Page, (int)PageSlot.PointsHelpOuter));
+                if (help != null && !help.Disposed)
+                {
+                    CopyFace(Frame(help.Drawable), Frame(close.Drawable));
+                    help.ShadeColor = close.ShadeColor;
+                    help.Invalidate();
+                }
             }
         }
 
@@ -245,10 +256,13 @@ namespace SupernaturalExpanded.Journal
 
         private static void StyleCounters(Dialog journal, StdDrawable face)
         {
-            OccultTree tree = WitchTree.Tree;
-            for (int i = 0; i < tree.Perks.Length; i++)
+            foreach (PerkProgressSource source in PerkProgressSource.All)
             {
-                StyleFace(NativeLayouts.Find<Window>(journal, tree.Id(PageControl.CounterPlate, i)), face);
+                OccultTree tree = source.Tree;
+                for (int i = 0; i < tree.Perks.Length; i++)
+                {
+                    StyleFace(NativeLayouts.Find<Window>(journal, tree.Id(PageControl.CounterPlate, i)), face);
+                }
             }
         }
 
@@ -263,7 +277,6 @@ namespace SupernaturalExpanded.Journal
 
         private static void UseDonor(string name, int export, Action<WindowBase> apply)
         {
-            // Copies a donor layout's style, leaving the stock style when the donor is unavailable.
             try
             {
                 Layout layout = UIManager.LoadLayout(NativeLayouts.Key(name));

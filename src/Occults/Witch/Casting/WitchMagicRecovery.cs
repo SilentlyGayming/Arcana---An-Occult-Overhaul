@@ -27,7 +27,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static void RegisterFizzle()
         {
-            // Registers the Magical Fizzle moodlet once.
             ulong id = (ulong)FizzleBuff;
             if (!BuffManager.BuffDictionary.ContainsKey(id))
             {
@@ -59,24 +58,27 @@ namespace SupernaturalExpanded.Journal
             }
         }
 
-        internal static void Fizzle(Sim sim, WitchCastingRules rules)
+        internal static void Fizzle(Sim sim, CastingRules rules)
         {
-            // Applies Magical Fizzle and refreshes the Witch's regeneration.
-            sim.BuffManager.RemoveElement(FizzleBuff);
-            sim.BuffManager.AddElementIgnoreDelay(FizzleBuff, FizzleMood, FizzleMinutes * rules.FizzleDuration, Origin.FromSpell);
+            Give(sim, rules.FizzleDuration);
             if (!rules.Innate) Refresh(sim, rules);
         }
 
-        internal static WitchRegeneration AppliedRegeneration(Motive motive)
+        internal static void Give(Sim sim, float duration)
+        {
+            sim.BuffManager.RemoveElement(FizzleBuff);
+            sim.BuffManager.AddElementIgnoreDelay(FizzleBuff, FizzleMood, FizzleMinutes * duration, Origin.FromSpell);
+        }
+
+        internal static PowerRecovery AppliedRegeneration(Motive motive)
         {
             DecayOverride current;
             return motive != null && overrides.TryGetValue(motive, out current) && motive.Tuning == current.Current
-                ? current.Regeneration : WitchRegeneration.Baseline;
+                ? current.Regeneration : PowerRecovery.Baseline;
         }
 
         internal static void RefreshAll()
         {
-            // Refreshes every Witch's regeneration and restores tuning no longer in use.
             Dictionary<Motive, bool> present = new Dictionary<Motive, bool>();
             foreach (Sim sim in Sims3.Gameplay.Queries.GetObjects<Sim>())
             {
@@ -115,9 +117,8 @@ namespace SupernaturalExpanded.Journal
             overrides.Clear();
         }
 
-        private static Motive Refresh(Sim sim, WitchCastingRules rules)
+        private static Motive Refresh(Sim sim, CastingRules rules)
         {
-            // Applies the Witch's regeneration rate to a cloned motive tuning.
             Motive motive = sim.Motives.GetMotive(CommodityKind.MagicFatigue);
             if (motive == null || motive.Tuning == null)
             {
@@ -130,7 +131,7 @@ namespace SupernaturalExpanded.Journal
                 fizzle.mBuffName = NativeBuffPrefix + FizzleName;
                 fizzle.mDescription = NativeBuffPrefix + FizzleDescription;
             }
-            WitchRegeneration regeneration = rules.RegenerationFactors(sim.IsSleeping, SimClock.Hours24 < 4, fizzle != null);
+            PowerRecovery regeneration = rules.RegenerationFactors(sim.IsSleeping, SimClock.Hours24 < 4, fizzle != null);
             float rate = regeneration.Rate;
             DecayOverride previous;
             if (overrides.TryGetValue(motive, out previous))
@@ -193,10 +194,10 @@ namespace SupernaturalExpanded.Journal
         private sealed class DecayOverride
         {
             internal readonly MotiveTuning Current;
-            internal WitchRegeneration Regeneration;
+            internal PowerRecovery Regeneration;
             private readonly MotiveTuning original;
 
-            internal DecayOverride(MotiveTuning original, MotiveTuning current, WitchRegeneration regeneration)
+            internal DecayOverride(MotiveTuning original, MotiveTuning current, PowerRecovery regeneration)
             {
                 this.original = original;
                 Current = current;

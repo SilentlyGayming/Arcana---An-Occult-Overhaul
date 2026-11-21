@@ -17,7 +17,7 @@ from journal_layouts import (layouts, GRIMOIRE_FIRST_TAB, GRIMOIRE_FIRST_ICON,
     GRIMOIRE_TABLE_HEADER, GRIMOIRE_FIRST_ROW, GRIMOIRE_SCROLL_TRACK,
     GRIMOIRE_SCROLL_THUMB, GRIMOIRE_SCROLL_UP, GRIMOIRE_SCROLL_DOWN,
     PORTRAIT, PORTRAIT_FRAME, PORTRAIT_BORDER, CONTENT, SURROUND, GRIMOIRE_ROWS,
-    STATUS_PANEL, WITCH,
+    STATUS_PANEL, WITCH, TREES,
     LIST_OUTLINE, SIMOLOGY_BUTTON, NAVY, FIRST_TAB, FOOTER_FONT,
     PERK_PULSE, RANK_GLITTER_TILES, SPARK_PARTICLES,
     ENTRY_GLYPH, HUD_BUTTON, PURCHASE_FLIGHT)
@@ -122,7 +122,6 @@ def check_localization():
 
 
 def generated_rgba(png):
-    # Decodes the unfiltered single-IDAT RGBA PNGs from ui_resources.
     assert png[:16] == b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR'
     width, height, depth, mode, compression, filtering, interlace = struct.unpack_from('>IIBBBBB', png, 16)
     assert (depth, mode, compression, filtering, interlace) == (8, 6, 0, 0, 0)
@@ -208,7 +207,7 @@ def main():
     for phrase in (b'Select an entry to view its details', b'Filter By...', b'Details'):
         assert phrase not in layout
     cs=cs_source.file_code(root_dir, 'GrimoirePage')
-    assert 'SetEntries(int index, IEnumerable<GrimoireEntry> incoming)' in cs
+    assert 'SetAllEntries(List<GrimoireEntry>[] incoming)' in cs
     assert 'StringComparer.OrdinalIgnoreCase' in cs and 'a.TierOrder.CompareTo' in cs
     assert 'a.EnergyCost.CompareTo' in cs
     assert 'MouseWheel += OnWheel' in cs
@@ -221,20 +220,16 @@ def main():
         assert int(match.group(2), 16) in known, f'NativeLayouts.{match.group(1)} is not in any layout'
     assert 'GetChildByIndex(9)' not in cs_source.class_code(root_dir, 'JournalTheme'), 'Index-based donor lookup remains'
     assert 'System.Reflection' not in cs and 'GetProperty(' not in cs, 'Reflection remains in GrimoirePage'
-    for call in ('UIManager.SetCaptureTarget(InputContext.kICMouse', 'UIManager.ReleaseCapture(InputContext.kICMouse',
-                 'args.MouseWheelDelta', 'UIManager.GetCursorPosition()', 'ScreenToWindow('):
-        assert call in cs, f'Missing {call}'
-    assert SORT_ASCENDING_ARROW == '424ae4f366bbd963' and SORT_DESCENDING_ARROW == '5cdfce63208c1e46'
-    test_file = cs_source.file_path(root_dir, 'GrimoireTestData')
-    test = test_file.read_text().strip()
-    assert test.startswith('#if ARCANA_GRIMOIRE_TEST') and test.endswith('#endif'), 'Test data is not fenced'
     window = cs_source.class_code(root_dir, 'JournalWindow')
-    assert '#if ARCANA_GRIMOIRE_TEST\n                GrimoireTestData.Apply(grimoirePage);\n#endif' in window.replace('\r\n', '\n')
+    for call in ('UIManager.SetCaptureTarget(InputContext.kICMouse', 'UIManager.ReleaseCapture(InputContext.kICMouse',
+                 'args.MouseWheelDelta', 'journal.TryGetCursor'):
+        assert call in cs, f'Missing {call}'
+    assert 'UIManager.GetCursorPosition()' in window and 'ScreenToWindow(' in window, 'The Journal reads the cursor in layout units'
+    assert SORT_ASCENDING_ARROW == '424ae4f366bbd963' and SORT_DESCENDING_ARROW == '5cdfce63208c1e46'
     build = (root_dir/'tools'/'build_journal.py').read_text()
-    assert build.count('ARCANA_GRIMOIRE_TEST') == 1 and 'if args.grimoire_test:' in build
-    assert 'ARCANA_GRIMOIRE_TEST' not in (root_dir/'build.bat').read_text(), 'build.bat must not enable test mode'
+    assert '/define:' not in build, 'Release builds have no development-only symbols'
     for source in (root_dir/'src').rglob('*.cs'):
-        assert 'ARCANA_GRIMOIRE_TEST' not in source.read_text().replace('#if ARCANA_GRIMOIRE_TEST', '') or source == test_file, source
+        assert '#if ' not in source.read_text(), f'{source} has conditional development code'
     check_phase_c(root, layout, cs, root_dir, constants)
     check_perk_feedback(root, root_dir, constants)
     check_perk_navigation(root_dir, window)
@@ -249,14 +244,13 @@ def main():
     check_innate_casters(root_dir)
     print('PASS: every 0x53E control constant exists in a packaged layout; no index-based donor lookup')
     print('PASS: no reflection in GrimoirePage; typed wheel/cursor/capture calls present')
-    print('PASS: sample entries compile only with --grimoire-test, which build.bat does not pass')
+    print('PASS: no development-only build symbols or conditional source')
     print('PASS: five categories (Spells, Charms, Curses, Rituals, Abilities) / 3 fixed column headers / 12 scrollable row slots')
     print('PASS: no dropdown, no Details heading and no square portrait matte')
     print('PASS: five untouched 60x60 icon PNG resources with distinct keys, native portrait frame')
     print('PASS: sorting/data-source/wheel hooks present in C# source')
     print('Separate checks: compile with build_journal.py and verify rendering and input in The Sims 3.')
 def check_r63(root, root_dir, layout):
-    # Checks the shared window and native upper frame on every page.
     import journal_layouts as jl
     src = root_dir/'src'
     window = cs_source.class_code(root_dir, 'JournalWindow')
@@ -333,7 +327,6 @@ def check_r63(root, root_dir, layout):
 
 
 def check_r69(root_dir, window, theme):
-    # Checks the Perks page two-button frame donor and its slicing.
     import journal_layouts as jl
     sources = ''.join(path.read_text() for path in (root_dir / 'src').rglob('*.cs'))
     for gone in ('PerksFrame', 'SetHoursFrame', 'FriendSearchFrame', 'EditCollectionsFrame',
@@ -372,7 +365,6 @@ def check_r69(root_dir, window, theme):
 
 
 def check_r70(root, root_dir, theme):
-    # Checks that every page takes its frame art and slicing from its native layout.
     def native(folder, layout_id):
         graph = ET.fromstring((root_dir / 'references' / folder / (layout_id + '.layout')).read_bytes())
         return next(node for node in graph if node.get('cls') == 'Dialog')
@@ -398,7 +390,6 @@ def check_r70(root, root_dir, theme):
 
 
 def check_r62(root, root_dir, layout):
-    # Checks footer button rules, tab geometry, Knowledge typography and icon quality.
     import struct
     import journal_layouts as jl
     src = root_dir/'src'
@@ -437,7 +428,6 @@ def check_r62(root, root_dir, layout):
 
 
 def check_r57(root, root_dir, constants, counts, layout):
-    # Checks the native Cancel, selected-tab body, Fairy rank handling and Knowledge rows.
     import math
     import journal_layouts as jl
     src = root_dir/'src'
@@ -562,11 +552,13 @@ def check_r57(root, root_dir, constants, counts, layout):
     assert 'upper <= lower' in read and 'float.IsInfinity(skill.SkillPoints)' in read
     assert read.count('return false;') == 5, 'No reading for an undefined skill, an absent Sim or unusable data'
     assert 'float.IsNaN(fraction)' in status.split('internal void Set(')[1][:400]
-    assert 'StatusReaders.ReadMotive(source, CommodityKind.AuraPower, JournalText.Get("Arcana.Status.Label.FaericPower"), field);' in status, 'Faeric Power is still read'
-    check_text(status, 'Arcana.Status.Label.FaericPower', 'Faeric Power')
+    assert 'StatusReaders.ReadMotive(source, CommodityKind.AuraPower, label, field)' in status, 'A Fairy\'s power is still read from its motive'
+    check_text(status, 'Arcana.Status.Label.MagicalPower', 'Magical Power')
+    assert 'Arcana.Status.Label.FaericPower' not in english() and 'Arcana.Status.Label.MagicPoints' not in english(), 'Every caster names its pool Magical Power'
     non_witch = data.split('private sealed class WitchOverview')[0]
     assert 'Novice' not in rank + non_witch, 'No rank is invented for a species without a ladder'
-    assert 'internal static bool HasLadder(OccultTypes types)' in rank and 'return OccultAssetData.Primary(types) == OccultTypes.Witch;' in rank
+    assert 'internal static bool HasLadder(OccultTypes types)' in rank and 'return primary == OccultTypes.Witch || primary == OccultTypes.Genie;' in rank
+    assert 'GenieRanks.TryRead(identity.Description, out genieRank)' in rank, 'Genie ranks come from Genie Magic'
     assert 'return "";' in rank.split('internal static string Rank(')[1].split('internal static string For(')[0], 'Unknown or unsupported progression gives no rank'
     assert 'string lifeState = LifeStateNames.For(primary);' in rank
     assert 'return rank.Length == 0 ? lifeState : JournalText.Format("Arcana.Common.WithQualifier", lifeState, rank);' in rank
@@ -582,7 +574,7 @@ def check_r57(root, root_dir, constants, counts, layout):
     assert 'rank >= RankNames.Length ? RankNames.Length - 1 : rank' in tree
     assert 'int index = ClampRank(rank);' in tree and 'RankNames[index]' in tree and 'rankTitles[index]' in tree
     assert 'rank = ClampRank(rank);' in tree and 'RankNames[rank];' in tree, 'A rank outside the table cannot throw'
-    assert 'WitchProgression' not in status.split('class FairyStatus')[1].split('class WerewolfStatus')[0], 'Fairies never read Witch progression'
+    assert 'PerkProgression' not in status.split('class FairyStatus')[1].split('class WerewolfStatus')[0], 'Fairies never read Witch progression'
 
     share = constant(lst, 'FillShare')
     assert 0.85 <= share <= 0.90
@@ -693,11 +685,10 @@ def check_phase_c(root, layout, cs, root_dir, constants):
     assert order.index(GRIMOIRE_DESC_TEXT) < order.index(GRIMOIRE_DESC_PANEL)
     fills = [control(root, GRIMOIRE_FIRST_ROW + 5 * i).find("prop[@name='FillColor']").get('value') for i in range(GRIMOIRE_ROWS)]
     assert fills == ['0x00000000' if i % 2 == 0 else ROW_ALTERNATE for i in range(GRIMOIRE_ROWS)], 'Row stripes'
-    perks_panel = WITCH.id(6, 11)
-    for cid in (CONTENT, perks_panel):
+    for cid in (CONTENT,) + tuple(tree.id(6, 11) for tree in TREES):
         face = control(root, cid).find("prop[@name='FillDrawable']")
         assert SURROUND in ET.tostring(face, encoding='unicode'), 'Inner panel must use the stock pale blue surround'
-    assert layout.count(SURROUND.encode()) == 2, 'Only the Overview/Grimoire and Perks panels use the surround; the rank emblem well is gone'
+    assert layout.count(SURROUND.encode()) == 1 + len(TREES), 'Only the Overview/Grimoire panel and one Perks panel per tree use the surround'
     assert 'IDENTITY_PANEL' not in (root_dir/'tools'/'journal_layouts.py').read_text() and not (root_dir/'tools'/'header_streak.py').exists()
     assert 'IdentityPanel' not in (root_dir/'src'/'Core'/'NativeLayouts.cs').read_text() and 'treak' not in cs_source.class_code(root_dir, 'JournalWindow') and 'identityPanel' not in cs_source.class_code(root_dir, 'JournalWindow')
     from dbpf import fnv64
@@ -719,8 +710,8 @@ def check_phase_c(root, layout, cs, root_dir, constants):
         tab = control(root, GRIMOIRE_FIRST_TAB + i)
         assert image_slots(tab, "prop[@name='ButtonDrawable']/object")[:4] == list(SIMOLOGY_BUTTON)
     check_header_bars(root, root_dir, order)
-    assert FOOTER_FONT == '0x062eae0d' and layout.count(FOOTER_FONT.encode()) == 3 + 5
-    assert order.index(perks_panel) < order.index(CONTENT)
+    assert FOOTER_FONT == '0x062eae0d' and layout.count(FOOTER_FONT.encode()) == 4 * len(TREES) + 4
+    assert all(order.index(tree.id(6, 11)) < order.index(CONTENT) for tree in TREES)
     window_src = cs_source.class_code(root_dir, 'JournalWindow')
     assert 'ContentBody' not in window_src
     theme_src = cs_source.class_code(root_dir, 'JournalTheme')
@@ -799,7 +790,6 @@ def check_phase_c(root, layout, cs, root_dir, constants):
 
 
 def effect_values(node):
-    # Reads each native effect of a window as a dictionary of its properties.
     procs = []
     for proc in node.findall("prop[@name='WinProcs']/object"):
         values = {p.get('name'): p.get('value') for p in proc.findall('prop')}
@@ -815,7 +805,6 @@ def glow_of(node):
 
 
 def check_namespaces(root_dir):
-    # Guards against compile errors that a static check can see.
     owners = {'OccultTypes': 'Sims3.UI.Hud', 'IHudModel': 'Sims3.UI.Hud', 'Audio': 'Sims3.SimIFace', 'ResetException': 'Sims3.SimIFace',
               'IconZoop': 'Sims3.UI.Hud', 'UIImage': 'Sims3.UI', 'ISimClockSpeedModel': 'Sims3.UI', 'ImageDrawable': 'Sims3.UI',
               'Vector2': 'Sims3.SimIFace'}
@@ -839,7 +828,6 @@ def check_animation_drawable(node, instance):
 
 
 def check_perk_feedback(root, root_dir, constants):
-    # Check the animation layout, resource bindings, input flags, draw order and lifecycle wiring.
     from build_journal import content_resources
     from trees import IMAGE
 
@@ -946,8 +934,8 @@ def check_perk_feedback(root, root_dir, constants):
     assert 'feedback.Preview(' not in page and 'ReportStarTicks(' not in window
     assert 'Staged = "ui_cart_add_to"' in sounds and 'JournalSounds.Play(JournalSounds.Staged)' in feedback
     assert page.count('feedback.Play(') == 1 and 'feedback.Release();' in page
-    assert 'StopAnimations();' in page and 'perkPage.StopAnimations();' in window
-    assert 'perkPage.Release();' in window and 'glitter.SetFill(progressFill.Area, track);' in page
+    assert 'StopAnimations();' in page and 'each.StopAnimations();' in window
+    assert 'each.Release();' in window and 'glitter.SetFill(progressFill.Area, track);' in page
     assert 'hasPoints && PanelShowing' in entry and 'PerkPoints.Available(identity)' in entry
     assert 'ReservedPerkPoints(identity.SimDescriptionId)' in entry
     assert 'buttonWidth' not in pulse and 'elapsed % 1600' in pulse
@@ -990,7 +978,6 @@ def check_native_bindings(root_dir, window, entry):
 
 
 def check_modal_and_purchase(root_dir, window, page, constants):
-    # Checks modal state, close and purchase sounds and the purchase effect wiring.
     src = root_dir/'src'
     modal = cs_source.class_code(root_dir, 'JournalModal')
     sounds = cs_source.class_code(root_dir, 'JournalSounds')
@@ -1065,7 +1052,6 @@ def check_modal_and_purchase(root_dir, window, page, constants):
 
 
 def check_overview(root, root_dir, constants, counts):
-    # Checks the Overview layout, source wiring and panel geometry.
     import journal_layouts as jl
     src = root_dir/'src'
     page = cs_source.class_code(root_dir, 'OverviewPage')
@@ -1232,7 +1218,7 @@ def check_overview(root, root_dir, constants, counts):
     assert 'width = WindowGeometry.Width;' in window and 'height = WindowGeometry.Height;' in window and 'private static float GetFitScale(float width, float height)' in window
 
     for call in ('UIManager.SetCaptureTarget(InputContext.kICMouse', 'UIManager.ReleaseCapture(InputContext.kICMouse',
-                 'args.MouseWheelDelta', 'UIManager.GetCursorPosition()', 'ScreenToWindow(', 'body.MouseWheel += OnWheel;'):
+                 'args.MouseWheelDelta', 'journal.TryGetCursorY(out y)', 'body.MouseWheel += OnWheel;'):
         assert call in lst, f'OverviewList lacks {call}'
     assert 'rows.Count - slots' in lst and 'Math.Max(24f, ' in lst, 'Any row count scrolls; the thumb never gets tiny'
     assert 'empty.Visible = visible && count == 0;' in lst
@@ -1279,7 +1265,6 @@ def check_overview(root, root_dir, constants, counts):
 
 
 def check_knowledge(root, root_dir, jl, data, page, window):
-    # Checks that Supernatural Knowledge rows read the Grimoire's per-Sim entries and refresh on change.
     src = root_dir/'src'
     grimoire = cs_source.file_code(root_dir, 'GrimoirePage')
     lst = cs_source.class_code(root_dir, 'OverviewList')
@@ -1294,10 +1279,12 @@ def check_knowledge(root, root_dir, jl, data, page, window):
     witch = data.split('private sealed class WitchOverview')[1]
     fill = witch.split('public void Fill')[1]
     assert fill.lstrip('(OverviewContext context, OverviewData data)\n {').startswith('AddKnowledge(context, data);'), 'Witch adds the shared rows before the progression check'
-    assert 'selection.Available' in fill.split('PowerSelection selection = context.Witch;')[1][:200]
-    magical = data.split('private sealed class MagicalOverview')[1].split('private sealed class WitchOverview')[0]
-    assert 'AddKnowledge(context, data);' in magical and 'Perks.Add' not in magical and 'RankDescription' not in magical, 'Fairy and Genie get the categories only'
-    assert re.search(r'case OccultTypes\.Witch:\s*return witch;\s*case OccultTypes\.Fairy:\s*case OccultTypes\.Genie:\s*return magical;\s*default:\s*return null;', data), 'Only Witch, Fairy and Genie are registered'
+    assert 'selection.Available' in fill.split('PowerSelection selection = context.Selection;')[1][:200]
+    magical = data.split('private sealed class MagicalOverview')[1].split('private sealed class GenieOverview')[0]
+    assert 'AddKnowledge(context, data);' in magical and 'Perks.Add' not in magical and 'RankDescription' not in magical, 'Fairies get the categories only'
+    genie = data.split('private sealed class GenieOverview')[1].split('private sealed class WitchOverview')[0]
+    assert 'AddKnowledge(context, data);' in genie and 'AddPerks(context, data);' in genie and 'GenieRanks.Description(rank, context.Identity.FirstName)' in genie, 'Genies get the categories, rank description and owned perks'
+    assert re.search(r'case OccultTypes\.Witch:\s*return witch;\s*case OccultTypes\.Fairy:\s*return magical;\s*case OccultTypes\.Genie:\s*return genie;\s*default:\s*return null;', data), 'Only Witch, Fairy and Genie are registered'
     for other in ('Vampire', 'Werewolf', 'Mermaid', 'Ghost'):
         assert f'case OccultTypes.{other}' not in data.split('private static IOverviewProvider For')[1].split('internal static OverviewData Build')[0], other
     pages = cs_source.file_code(root_dir, 'JournalPages')
@@ -1312,13 +1299,10 @@ def check_knowledge(root, root_dir, jl, data, page, window):
     assert icon_art is not None and 'NativeLayouts.GrimoireFirstIcon + (uint)i' in grimoire, 'The tab icon windows are the ones the rows read'
     assert 'return grimoire == null ? 0 : grimoire.GetEntryCount(category);' in data
     assert 'return grimoire == null ? null : grimoire.GetCategoryIcon(category);' in data
-    set_entries = grimoire.split('internal void SetEntries')[1].split('internal void SetAllEntries')[0]
-    assert 'if (!Replace(index, incoming)) return;' in set_entries and 'if (EntriesChanged != null) EntriesChanged(this, EventArgs.Empty);' in set_entries
     set_all = grimoire.split('internal void SetAllEntries')[1].split('private bool Replace')[0]
     assert set_all.count('EntriesChanged(this, EventArgs.Empty)') == 1 and 'changed |= Replace(i, incoming[i]);' in set_all, 'One notification per batch'
     knowledge = cs_source.class_code(root_dir, 'SpellKnowledge')
     assert knowledge.count('page.SetAllEntries(categories);') == 1 and 'page.SetEntries(' not in knowledge, 'Population raises one change'
-    assert 'ClearEntries(int index) { SetEntries(index, null); }' in grimoire, 'Clearing a category also raises the change'
     assert 'internal event EventHandler EntriesChanged;' in grimoire
     created = window.index('overviewPage = OverviewPage.Create(this);')
     assert created < window.index('grimoirePage.EntriesChanged += OnKnowledgeChanged;'), 'Subscribed once, after both pages exist'
@@ -1342,9 +1326,8 @@ def check_knowledge(root, root_dir, jl, data, page, window):
 
 
 def check_attributes(root_dir, data):
-    # Checks that Attributes use registered gameplay sources.
     bootstrap = cs_source.class_code(root_dir, 'JournalBootstrap')
-    witch = cs_source.class_code(root_dir, 'WitchAttributes') + cs_source.class_code(root_dir, 'WitchCastingContext')
+    witch = cs_source.class_code(root_dir, 'CasterAttributes') + cs_source.class_code(root_dir, 'WitchCastingContext')
     gameplay = cs_source.class_code(root_dir, 'WitchSimCast')
     sources = cs_source.class_code(root_dir, 'ModifierReading') + cs_source.class_code(root_dir, 'AttributeSources')
     page = cs_source.class_code(root_dir, 'OverviewPage')
@@ -1354,16 +1337,13 @@ def check_attributes(root_dir, data):
     assert 'string regenerationLabel = JournalText.Get(RegenerationKey);' in sources
     check_text(sources, 'Arcana.Journal.Overview.Attributes.PowerRegeneration', 'Power Regeneration')
     check_text(sources, 'Arcana.Common.UnavailableValue', '—')
-    assert 'AttributeSources.Register(OccultTypes.Witch' in bootstrap and 'WitchAttributes.ReadRegeneration' in bootstrap
+    assert 'AttributeSources.Register(OccultTypes.Witch' in bootstrap and 'CasterAttributes.ReadRegeneration' in bootstrap
     assert 'WitchMagicRecovery.AppliedRegeneration(motive)' in witch
     assert 'reading.Text, reading.Tip' in sources and 'power.Caption, power.Tip' in data
-    assert 'field.Tip = WitchAttributes.PowerTooltip(field.Label, rules)' in cs_source.class_code(root_dir, 'WitchStatus')
+    assert 'field.Tip = CasterAttributes.PowerTooltip(field.Label, rules)' in cs_source.class_code(root_dir, 'WitchStatus')
     assert 'rules.FatigueDrain(logicalCost, Actor.Motives.GetMin' in gameplay
     assert 'MagicWand wand = rules.Innate ? null : WitchCastingContext.WandForAccuracy(sim)' in witch and 'return arcanaCast.ActiveWand;' in witch
     assert 'data.mBuffName = FizzleName;' in cs_source.class_code(root_dir, 'WitchMagicRecovery')
-    test = cs_source.file_code(root_dir, 'AttributeTestData')
-    assert test.startswith('#if ARCANA_GRIMOIRE_TEST') and test.rstrip().endswith('#endif'), 'The sample figures are fenced behind the test flag'
-    assert '#if ARCANA_GRIMOIRE_TEST\n            AttributeTestData.Register();\n#endif' in sources.replace('\r\n', '\n')
     assert 'if (reading == null || !reading.Available)' in sources and 'continue;' in sources, 'A source with no figure adds no row'
     assert 'catch (ResetException)' in sources and 'ReportOnce("Reading "' in sources, 'One failing source cannot blank the Overview'
     percent = cs_source.class_code(root_dir, 'PercentText')
@@ -1378,27 +1358,27 @@ def check_attributes(root_dir, data):
     panel_rows = constant_int(page, 'UpperSlots') * constant(lst, 'RowHeight') / constant(lst, 'MinCompactRow')
     assert panel_rows >= 4.0 and constant_int(page, 'StatisticsRows') >= 4, 'Four attribute rows fit the unchanged panel without a scrollbar'
     accuracy = cs_source.file_code(root_dir, 'AccuracySources')
-    rules = cs_source.file_code(root_dir, 'WitchCastingRules')
+    rules = cs_source.file_code(root_dir, 'CastingRules')
     assert 'OverviewRow accuracy = AccuracySources.Row(context);' in sources and 'regenerationRow < 0 ? data.Statistics.Count : regenerationRow + 1' in sources
     assert 'PercentText.Format(reading.Overall, false)' in accuracy and 'reading.BaseLine, reading.Modifiers' in accuracy
     assert 'reading == null ? null :' in accuracy
     assert 'species == OccultTypes.Witch || species == OccultTypes.Genie || species == OccultTypes.Fairy' in accuracy
     assert 'catch (ResetException)' in accuracy and 'ReportOnce("Reading Accuracy"' in accuracy
-    assert 'AccuracySources.Register(OccultTypes.Witch, WitchAttributes.ReadAccuracy)' in bootstrap
-    assert 'WitchAttributes.ReadSpellCost' in bootstrap
+    assert 'AccuracySources.Register(OccultTypes.Witch, CasterAttributes.ReadAccuracy)' in bootstrap
+    assert 'CasterAttributes.ReadSpellCost' in bootstrap
     cost_body = witch.split('internal static ModifierReading ReadSpellCost')[1].split('private static void AddCostCategory')[0]
     assert 'rules.CostMultiplier(current)' in cost_body and cost_body.count('AddCostCategory(lines,') == 5
-    assert 'rules, new WitchSpell(tier, WitchSpellKind.Charm)' in cost_body
+    assert 'rules, new MagicSpell(tier, MagicSpellKind.Charm)' in cost_body
     assert cost_body.index('Accuracy.Spells') < cost_body.index('Accuracy.Charms') < cost_body.index('Accuracy.Curses')
-    assert 'rules, new WitchSpell(tier, WitchSpellKind.Curse)' in cost_body
-    assert 'rules, new WitchSpell(tier, WitchSpellKind.Ritual)' in cost_body
-    assert 'rules, new WitchSpell(WitchCastingRules.Legendary, WitchSpellKind.Spell)' in cost_body
+    assert 'rules, new MagicSpell(tier, MagicSpellKind.Curse)' in cost_body
+    assert 'rules, new MagicSpell(tier, MagicSpellKind.Ritual)' in cost_body
+    assert 'rules, new MagicSpell(CastingRules.Legendary, MagicSpellKind.Spell)' in cost_body
     assert 'return CostFactors(spell).Multiplier;' in rules
     assert 'rules.CostRange(spell.Kind, out minimum, out maximum)' in witch and 'new TooltipModifier(text, percent < 0f)' in witch
     category = witch.split('private static void AddCostCategory')[1].split('internal static AccuracyReading ReadAccuracy')[0]
     assert 'Cost.LowerTiers' not in cost_body + category and 'Arcana.Journal.Overview.Cost.LowerTiers' not in english()
-    assert 'rules.CostFactors(spell)' in category and 'rules.CostFactors(new WitchSpell((int)Rank.Novice, spell.Kind))' in category
-    assert category.index('spell.Tier == WitchCastingRules.Legendary') < category.index('WitchCostFactors lower')
+    assert 'rules.CostFactors(spell)' in category and 'rules.CostFactors(new MagicSpell((int)Rank.Novice, spell.Kind))' in category
+    assert category.index('spell.Tier == CastingRules.Legendary') < category.index('SpellCostFactors lower')
     assert 'lower.Apprentice, earlyTiers' in category and 'lower.Lessons, earlyTiers' in category and 'lower.Eidetic, lowerTiers' in category
     assert 'GetRomanNumeral((int)rules.Rank)' in category and 'JournalText.Format("Arcana.Common.WithQualifier", text, qualifier)' in category
     check_text(category, 'Arcana.Journal.Overview.Cost.EarlyTiers', 'Tier I-II')
@@ -1406,7 +1386,7 @@ def check_attributes(root_dir, data):
     check_text(category, 'Arcana.Journal.Overview.Cost.TierRange', 'Tier I-{0}')
     import journal_layouts as jl
     assert 2 + 5 + 4 * 3 + 5 + 4 * 3 + 1 <= jl.TOOLTIP_MODIFIERS
-    assert 'rules.CostRange(WitchSpellKind.Spell, out minimum, out maximum)' in cost_body
+    assert 'rules.CostRange(MagicSpellKind.Spell, out minimum, out maximum)' in cost_body
     assert 'AddCostTierGroups(lines, rules, spell.Kind)' in category
     assert 'tier <= rules.HighestTier + 1' in category and 'next == amount' in category
     assert 'if (a == b) return a;' in category and 'JournalText.Format("Arcana.Journal.Overview.Cost.Range", a, b)' in category
@@ -1419,13 +1399,13 @@ def check_attributes(root_dir, data):
     check_text(witch, 'Arcana.Journal.Overview.Cost.Base', 'Base Spell Cost: 100%')
     assert 'before wand and other casting effects' in english()['Arcana.Journal.Overview.Cost.Tagline']
 
-    assert 'new WitchSpell(rules.HighestTier, WitchSpellKind.Spell)' in witch
+    assert 'new MagicSpell(rules.HighestTier, MagicSpellKind.Spell)' in witch
     assert 'rules.AccuracyFor(currentRank' in witch and 'rules.Accuracy(' in gameplay
     assert 'previewMagicHands = !rules.Innate && wand == null && WitchCastingContext.HasPracticallyMagic(sim);' in witch
     assert 'WandBonus(wand, previewMagicHands)' in witch
     assert 'WandBonus(mWand, false)' in gameplay
     assert 'wand is MagicHands || (wand == null && previewMagicHands)' in witch
-    assert 'return WitchCastingRules.MagicHandsAccuracyBonus;' in witch
+    assert 'return CastingRules.MagicHandsAccuracyBonus;' in witch
     check_text(witch, 'Arcana.Journal.Overview.Accuracy.MagicHands', 'Magic Hands')
     bonus = int(constant(rules, 'MagicHandsAccuracyBonus'))
     assert bonus == 20
@@ -1440,7 +1420,6 @@ def check_attributes(root_dir, data):
     assert 'model.SimBuffsChanged += OnBuffsChanged;' in window and 'model.SimBuffsChanged -= OnBuffsChanged;' in window
     assert 'RefreshOverview();' in window.split('private void OnBuffsChanged(')[1].split('private void OnMagicMotiveChanged')[0]
     assert '20% slower' in english()['Arcana.Witch.Fizzle.Description']
-    assert 'AccuracySources.Register(' not in test and 'new AccuracyReading(' not in test
     for key, text in (('Attributes.Accuracy', 'Spell Accuracy'),
                       ('Accuracy.Tagline', 'Determines the chance that your Sim’s magic succeeds.')):
         check_text(accuracy, 'Arcana.Journal.Overview.' + key, text)
@@ -1472,7 +1451,6 @@ def check_attributes(root_dir, data):
 
 
 def check_overview_hover(root, root_dir, jl, data, page):
-    # Checks the Overview perk hover windows and their tooltips.
     lst = cs_source.class_code(root_dir, 'OverviewList')
     for index, rows in enumerate(jl.OV_LIST_ROWS):
         first = jl.OV_LIST_FIRST + index * jl.OV_LIST_STRIDE
@@ -1513,14 +1491,14 @@ def check_overview_hover(root, root_dir, jl, data, page):
     assert 'lightPanel ? DarkPositiveModifierColor : PositiveModifierColor' in tooltip
     assert 'lightPanel ? DarkNegativeModifierColor : NegativeModifierColor' in tooltip
     assert 'modifier.Visible = true;' in tooltip
-    accuracy_source = cs_source.class_code(root_dir, 'WitchAttributes').split('internal static AccuracyReading ReadAccuracy')[1]
+    accuracy_source = cs_source.class_code(root_dir, 'CasterAttributes').split('internal static AccuracyReading ReadAccuracy')[1]
     accuracy_body = accuracy_source.split('private static void AddCategory')[0]
     category_modifiers = accuracy_source.split('private static void AddCategoryModifiers')[1].split('private static void AddPercentModifier')[0]
     assert 5 + 6 + 1 + accuracy_body.count('AddPercentModifier(lines,') + 4 * category_modifiers.count('AddPercentModifier(lines,') + 1 <= len(modifiers)
     assert accuracy_body.index('string baseLine') < accuracy_body.index('accuracy.RankBonus') < accuracy_body.index('lines.AddRange(needLines)') < accuracy_body.index('Accuracy.Spells') < accuracy_body.index('Accuracy.Charms') < accuracy_body.index('Accuracy.Curses') < accuracy_body.index('Accuracy.Rituals') < accuracy_body.index('Accuracy.Legendary')
     assert 'new TooltipModifier(text, true, true, false, true)' in accuracy_source
     assert 'category.Coven' in category_modifiers and 'AddLimit(lines, category);' in category_modifiers
-    assert 'category.Limit > 0f) return;' in accuracy_source and 'category.Ceiling < WitchAccuracy.Maximum' in accuracy_source
+    assert 'category.Limit > 0f) return;' in accuracy_source and 'category.Ceiling < SpellAccuracy.Maximum' in accuracy_source
     assert 'new AccuracyReading(accuracy.Total, baseLine, lines.ToArray())' in accuracy_body
     assert 'Accuracy.Shared' not in accuracy_body and 'Arcana.Journal.Overview.Accuracy.Shared' not in english()
     for spell in ('currentRank', 'charmSpell', 'curseSpell', 'ritualSpell', 'legendarySpell'):
@@ -1529,37 +1507,54 @@ def check_overview_hover(root, root_dir, jl, data, page):
     assert 'rules.AccuracyFor(legendarySpell' in accuracy_body
     assert 'lines.AddRange(needLines)' in accuracy_source
     assert 'float.IsNaN(value)' in accuracy_source and accuracy_source.count('AddCategory(lines,') == 5
-    assert 'new WitchSpell(tier, WitchSpellKind.Charm)' in accuracy_body and 'rules.SpecialtyAccuracyBonus(charmSpell)' in accuracy_body
-    rank_copy = cs_source.class_code(root_dir, 'PowerPage')
-    for rank in range(1, 6):
-        key = f'Arcana.Witch.Rank.Unlock.{rank}'
-        text = english()[key]
-        assert text.splitlines()[0] == ('+50 Maximum Power' if rank == 1 else '+25 Maximum Power')
-        assert all(re.match(r'^[+-]\d', line) for line in text.splitlines())
-        check_text(rank_copy, key, text)
-    witch = data.split('class WitchOverview')[1]
-    assert 'PerkTip(perk, bought, selection.SimName)' in witch and 'perk.Describe(bought - 1, simName)' in witch, 'The description of the rank bought, with the Sim name filled in, from Perk.Describe'
-    assert 'perk.Tiers > 1 ? JournalText.Format("Arcana.Journal.Overview.Perks.OwnedRank", bought, perk.Tiers, description) : description' in witch
-    check_text(witch, 'Arcana.Journal.Overview.Perks.OwnedRank', 'Rank {0} / {1}\n{2}')
-    assert 'new OverviewTip(perk.Name, perk.Tagline, body, WitchPerkBenefits.For(perk, bought - 1))' in witch
-    benefits = cs_source.class_code(root_dir, 'WitchPerkBenefits')
-    perk_cases = re.findall(r'case "(\w+)":', benefits)
-    assert len(perk_cases) == len(set(perk_cases)) == 17
-    assert set(perk_cases) == set(re.findall(r'Power\("(\w+)"', cs_source.class_code(root_dir, 'WitchTree')))
-    assert 'perk.PreviewIndex(descriptionIndex) + 1' in benefits
-    assert 'WitchPerkBenefits.For(perk, selection.Tier(perk))' in cs_source.class_code(root_dir, 'PowerPage')
+    assert 'new MagicSpell(tier, MagicSpellKind.Charm)' in accuracy_body and 'rules.SpecialtyAccuracyBonus(charmSpell)' in accuracy_body
+    for tree_class, occult, first_lines in (('WitchTree', 'Witch', ('+50', '+25')),):
+        rank_copy = cs_source.class_code(root_dir, tree_class)
+        for rank in range(1, 6):
+            key = f'Arcana.{occult}.Rank.Unlock.{rank}'
+            text = english()[key].format('10%')
+            assert text.splitlines()[0] == (first_lines[0] if rank == 1 else first_lines[1]) + ' Maximum Power'
+            assert all(re.match(r'^[+-]\d', line) for line in text.splitlines())
+            check_text(rank_copy, key, english()[key])
+    genie_unlocks = [
+        '100 Maximum Magical Power\nUnlocks Clean Sim',
+        '+50 Maximum Magical Power\n+2% Spell Accuracy\nUnlocks Summon Food',
+        '+50 Maximum Magical Power\n+2% Spell Accuracy\n+25% Spell Learning Speed\nUnlocks Enchant Home\nUnlocks Banish Sim',
+        '+50 Maximum Magical Power\n+2% Spell Accuracy\nUnlocks Ensorcel Sim\nUnlocks Release Sim',
+        '+50 Maximum Magical Power\n+2% Spell Accuracy']
+    rain = (cs_source.class_code(root_dir, 'SummonStoneRain') + cs_source.class_code(root_dir, 'GenieRain')
+            + cs_source.class_code(root_dir, 'RainLuck'))
+    assert 'WeatherStone' in rain and 'BuffNames.FeelingLucky' in rain and 'BuffNames.FeelingUnlucky' in rain
+    assert 'SimTemperature.OutsideSimIsConsideredInside' in rain and 'GenieRain.Tick();' in cs_source.class_code(root_dir, 'GeniePower')
+    assert 'FortuneRain' in cs_source.class_code(root_dir, 'GeniePerks') and 'RainRegen' in cs_source.class_code(root_dir, 'CastingRules')
+    genie_ranks = cs_source.class_code(root_dir, 'GenieTree')
+    for rank, text in enumerate(genie_unlocks, 1):
+        assert english()[f'Arcana.Genie.Rank.Unlock.{rank}'].format('25%') == text, 'Genie rank tooltips list only what each rank awards'
+        check_text(genie_ranks, f'Arcana.Genie.Rank.Unlock.{rank}', english()[f'Arcana.Genie.Rank.Unlock.{rank}'])
+    assert 'SpellStudy.RankUnlockText(tree.RankUnlocks[rank])' in cs_source.class_code(root_dir, 'PowerPage'), 'Each tree supplies its rank unlock lines'
+    assert 'PerkTip(tree, perk, bought, selection.SimName)' in data and 'perk.Describe(bought - 1, simName)' in data, 'The description of the rank bought, with the Sim name filled in, from Perk.Describe'
+    assert 'perk.Tiers > 1 ? JournalText.Format("Arcana.Journal.Overview.Perks.OwnedRank", bought, perk.Tiers, description) : description' in data
+    check_text(data, 'Arcana.Journal.Overview.Perks.OwnedRank', 'Rank {0} / {1}\n{2}')
+    assert 'new OverviewTip(perk.Name, perk.Tagline, body, tree.BenefitsFor(perk, bought - 1))' in data
+    for benefit_class, tree_class, count in (('WitchPerkBenefits', 'WitchTree', 17), ('GeniePerkBenefits', 'GenieTree', 15)):
+        benefits = cs_source.class_code(root_dir, benefit_class)
+        perk_cases = re.findall(r'case "(\w+)":', benefits)
+        assert len(perk_cases) == len(set(perk_cases)) == count
+        assert set(perk_cases) == set(re.findall(r'Power\("(\w+)"', cs_source.class_code(root_dir, tree_class)))
+        assert 'perk.PreviewIndex(descriptionIndex) + 1' in benefits
+        for case in re.split(r'case "\w+":', benefits)[1:]:
+            assert 0 < case.split('break;')[0].count('Add') <= jl.TOOLTIP_MODIFIERS
+        assert 'Benefit.Planned' not in benefits and 'Benefit.Limited' not in benefits
+    assert 'tree.BenefitsFor(perk, selection.Tier(perk))' in cs_source.class_code(root_dir, 'PowerPage')
     assert 'modifiers[i].Neutral ? ink' in tooltip
-    for case in re.split(r'case "\w+":', benefits)[1:]:
-        assert 0 < case.split('break;')[0].count('lines.Add(') <= jl.TOOLTIP_MODIFIERS
-    assert 'Arcana.Witch.Benefit.Planned' not in benefits and 'Arcana.Witch.Benefit.Limited' not in benefits
     for key, text in english().items():
-        if key.startswith('Arcana.Witch.Benefit.') or key.startswith('Arcana.Witch.Rank.Unlock.'):
+        if key.startswith(('Arcana.Witch.Benefit.', 'Arcana.Witch.Rank.Unlock.', 'Arcana.Genie.Benefit.', 'Arcana.Genie.Rank.Unlock.')):
             assert '(planned)' not in text and not re.search(r'\bpp\b', text)
     selection = cs_source.class_code(root_dir, 'PowerSelection')
     assert 'case Block.Complete: return null;' in selection
     assert 'case Block.Points: return null;' in selection
     assert 'Tiers I-III' in english()['Arcana.Witch.Benefit.CovenFailure']
-    rules = cs_source.class_code(root_dir, 'WitchCastingRules')
+    rules = cs_source.class_code(root_dir, 'CastingRules')
     assert 'spell.Tier <= CovenMaximumTier && !spell.IsRitual' in rules
     assert 'CovenMaximumTier = (int)Rank.Adept' in rules
     assert 'perk.Descriptions' not in data and 'WitchText' not in data, 'Perk text exists in one place only'
@@ -1568,7 +1563,6 @@ def check_overview_hover(root, root_dir, jl, data, page):
 
 
 def check_row_alignment(root, root_dir, jl):
-    # Checks the Selected Perks row alignment.
     lst = cs_source.class_code(root_dir, 'OverviewList')
     page = cs_source.class_code(root_dir, 'OverviewPage')
     first = jl.OV_LIST_FIRST + 1 * jl.OV_LIST_STRIDE
@@ -1586,7 +1580,6 @@ def check_row_alignment(root, root_dir, jl):
 
 
 def check_header_bars(root, root_dir, order):
-    # Checks that both meters use the clipped stock capsule art with the glass in front.
     import journal_layouts as jl
     header = cs_source.class_code(root_dir, 'StatusHeader')
     geometry = cs_source.file_code(root_dir, 'WindowGeometry')
@@ -1626,10 +1619,10 @@ def check_header_bars(root, root_dir, order):
     assert 'drawable.ScaleAmount = new Vector2(scale, scale);' in header
     assert 'row.FillClip.Area = bounds.Fill;' in header and 'row.Fill.Area = bounds.FillArt;' in header
     witch = cs_source.class_code(root_dir, 'WitchStatus')
-    progress = cs_source.class_code(root_dir, 'WitchProgressSource')
+    progress = cs_source.class_code(root_dir, 'PerkProgressSource')
     assert 'selection.Proficiency' in witch and 'selection.RankProgress' not in witch
     assert 'skill.Progress' in progress
-    assert 'WitchProgression.GetRankState(experience, ladder, record.Claimed)' in progress
+    assert 'PerkProgression.GetRankState(experience, ladder, record.Claimed)' in progress
     assert 'bounds.Fill.Width <= 0f' in header and 'row.FillClip.Visible = false;' in header
     assert 'uint tint = OccultAssetData.BarTint(primary);' in header and 'Apply(progress, tint);' in header and 'Apply(power, tint);' in header
     assert 'row.Gloss.Visible = show;' in header and 'row.Track.Visible = show;' in header
@@ -1639,7 +1632,6 @@ def check_header_bars(root, root_dir, order):
 
 
 def check_bar_tints(root_dir):
-    # Checks that every species' fill stands apart from the track.
     import colorsys
     assert hud_icons.BAR_TRACK == 0xFF263158
     palette = dict(hud_icons.PALETTE)
@@ -1665,7 +1657,6 @@ def check_bar_tints(root_dir):
 
 
 def check_rank_panel(root, root_dir, jl, page, data, window):
-    # Checks the Rank panel's numeral, title and description.
     ids = {int(p.get('value'), 16) for p in root.iter('prop') if p.get('name') == 'ControlID'}
     for gone in (0x53E00328 + k for k in range(5)):
         assert gone not in ids, 'The rank bar windows are gone'
@@ -1719,12 +1710,11 @@ def check_rank_panel(root, root_dir, jl, page, data, window):
     for rank, text in enumerate(approved):
         shown = text.replace('{Name}', 'Gwendolyn')
         assert '{' not in shown and '}' not in shown
-    assert 'data.RankLevel = rank + 1;' in data and 'RankCount = 5' in cs_source.class_code(root_dir, 'WitchProgression')
+    assert 'data.RankLevel = rank + 1;' in data and 'RankCount = 5' in cs_source.class_code(root_dir, 'PerkProgression')
     print('PASS: Rank panel: no bar or percentage, standalone numeral, Rank title, five approved Witch descriptions with {Name} replaced, plain panel with no gradient')
 
 
 def check_life_state_art(root_dir, hud_icons, generated, src):
-    # Checks that every species' Life State art is packaged unmodified.
     import build_journal
     from dbpf import index, read, write
     from tempfile import TemporaryDirectory
@@ -1762,7 +1752,6 @@ def check_life_state_art(root_dir, hud_icons, generated, src):
 
 
 def check_r72(root, root_dir, layout):
-    # Checks Perks page states, the pending footer and the Grimoire's selection states.
     import journal_layouts as jl
     page = cs_source.file_code(root_dir, 'PowerPage')
     selection = cs_source.class_code(root_dir, 'PowerSelection')
@@ -1776,7 +1765,7 @@ def check_r72(root, root_dir, layout):
     assert 'SetPerkFaded(i, !open, selection.ShortOnPoints(perk));' in page and 'Color price = unaffordable ? UnaffordableCost : ink;' in page
     assert 'internal bool ShortOnPoints(Perk perk)' in selection and 'internal int PendingCount' in selection
     assert 'ConflictLine(perk)' in page and 'JournalText.Format("Arcana.Journal.Perks.Conflict.Acquired", other.Name)' in page
-    check_text(page, 'Arcana.Journal.Perks.Conflict.Acquired', 'Unavailable: incompatible with {0}, which is already acquired.')
+    check_text(page, 'Arcana.Journal.Perks.Conflict.Acquired', 'Unavailable: Conflicts with {0}.')
     assert 'pendingText.Caption = waiting > 0 ? JournalText.Format("Arcana.Journal.Perks.Pending", waiting) : "";' in page
     assert 'pendingText.Visible = visible && waiting > 0;' in page
     check_text(page, 'Arcana.Journal.Perks.Pending', 'Pending: {0}')
@@ -1814,6 +1803,7 @@ def check_r72(root, root_dir, layout):
     assert witch_tree.count('.Conflict = ') == 2 and 'perks[15].Conflict = perks[16];' in witch_tree, 'The two High Witch perks are the only specializations'
     assert witch_tree.count('.Face = ') == 2 and 'perks[15].Face = 0xFF7A45E0;' in witch_tree and 'perks[16].Face = 0xFF2E9E4F;' in witch_tree
     assert 'internal uint Face;' in cs_source.class_code(root_dir, 'Perk')
+    check_genie_tree(root, root_dir)
     assert 'SetEdge(i, perk, !open);' in page and 'if (perk.Face != 0)' in page, 'Only a perk with a Face gets an edge'
     assert 'edge.Visible = false;' in page and 'edges[i] = Add(edge);' in page
     assert 'edge.ShadeColor = new Color(perk.Face);' in page and 'edges[index].ShadeColor = new Color(wanted);' in page
@@ -1836,6 +1826,64 @@ def check_r72(root, root_dir, layout):
     print('PASS: specialization perks get an edge gradient in the colour their tree names; tile face, icon and regular perks untouched')
 
 
+def check_genie_tree(root, root_dir):
+    from trees import GENIE
+    genie_tree = cs_source.class_code(root_dir, 'GenieTree')
+    keys = GENIE.catalog()
+    assert keys == ['DomesticDjinn', 'AThousandAndOneNights', 'FinePrint', 'Unbound', 'Lampbound', 'RisingTide', 'Wellspring',
+                    'PocketPalace', 'SilkenCommand', 'FugitiveOfOld', 'HeartsDesire', 'Unleashed', 'Counterattack',
+                    'LawOfTheLamp', 'GenieLaw']
+    assert 'new OccultTree(0x53E14000, "Arcana.Genie.Perk.", GenieProgressStore.Ledger,' in genie_tree and GENIE.id_base == 0x53E14000
+    assert WITCH.id(9, len(WITCH.catalog())) <= GENIE.id(0, 0), 'The Genie block starts after every Witch control'
+    for kind in (0, 1, 2, 3, 4, 7, 8, 9):
+        for index in range(len(keys)):
+            control(root, GENIE.id(kind, index))
+    for rank in range(5):
+        control(root, GENIE.id(5, rank))
+    for slot in (0, 1, 6, 7, 8, 9, 10, 11, 14, 40, 64, 119):
+        control(root, GENIE.id(6, slot))
+    assert 'internal const uint Unbound = 0xFFC23B3B;' in genie_tree and 'internal const uint Lampbound = 0xFF2874C6;' in genie_tree, 'Unbound is red, Lampbound blue'
+    assert 'unbound.Conflict = lampbound;' in genie_tree and 'lampbound.Conflict = unbound;' in genie_tree
+    assert 'unbound.RequiresAny = foundation;' in genie_tree and 'lampbound.RequiresAny = foundation;' in genie_tree, 'Either path needs one Rank I perk'
+    assert 'fugitive.RequiresAny = new[] { Find(perks, "RisingTide"), Find(perks, "Wellspring") };' in genie_tree
+    assert 'heart.RequiresAny = new[] { Find(perks, "PocketPalace"), Find(perks, "SilkenCommand") };' in genie_tree
+    assert 'Branch(Find(perks, "Unleashed"), Unbound, fugitive);' in genie_tree and 'Branch(Find(perks, "GenieLaw"), Lampbound, heart);' in genie_tree
+    assert 'Branch(Find(perks, "Counterattack"), Unbound, Find(perks, "Unleashed"));' in genie_tree
+    assert 'Branch(Find(perks, "LawOfTheLamp"), Lampbound, Find(perks, "GenieLaw"));' in genie_tree
+    assert 'new PerkConnection(Find(tree.Perks, "Unleashed"), Find(tree.Perks, "Counterattack"), Unbound)' in genie_tree
+    assert 'new PerkConnection(Find(tree.Perks, "GenieLaw"), Find(tree.Perks, "LawOfTheLamp"), Lampbound)' in genie_tree
+    assert genie_tree.count('Rank.HighWitch') == 4 and 'Legendary' not in genie_tree, 'Exactly five ranks and no sixth row'
+    cost_rows = re.findall(r'Power\("([A-Za-z0-9]+)",\s*Rank\.\w+,\s*[^,]+,\s*JournalText\.Get\([^)]*\),\s*([\d, ]+)\)', genie_tree)
+    costs = {name: [int(value) for value in prices.split(',')] for name, prices in cost_rows}
+    assert len(costs) == 15, 'All 15 Genie perk prices should be parsed'
+    shared = sum(sum(costs[name]) for name in ('DomesticDjinn', 'AThousandAndOneNights', 'FinePrint'))
+    unbound = sum(sum(costs[name]) for name in ('Unbound', 'RisingTide', 'Wellspring', 'FugitiveOfOld', 'Unleashed', 'Counterattack'))
+    lampbound = sum(sum(costs[name]) for name in ('Lampbound', 'PocketPalace', 'SilkenCommand', 'HeartsDesire', 'GenieLaw', 'LawOfTheLamp'))
+    assert shared == 6 and unbound == 34 and lampbound == 34, 'Both paths must spend exactly 40 points including shared upgrades'
+    assert all(costs[name] == [8] for name in ('Unleashed', 'Counterattack', 'GenieLaw', 'LawOfTheLamp')), 'All Rank V Genie perks cost eight'
+    grimoire = cs_source.class_code(root_dir, 'InnateAbilities')
+    assert 'entries.Add(Entry(GenieLampRow, 0f, 0));' in grimoire, 'Return to Lamp displays numeric 0 in the Grimoire'
+    english_text = english()
+    assert not any('ULTIMATE' in text.upper() for key, text in english_text.items() if key.startswith('Arcana.Genie.Perk.')), 'No ultimate banner text'
+    assert english_text['Arcana.Genie.Path.Power'] == 'Path of the Unbound' and english_text['Arcana.Genie.Path.Genie'] == 'Path of the Lampbound'
+    for key in keys:
+        assert 'Arcana.Genie.Perk.' + key + '.Name' in english_text, key
+    for key, text in english_text.items():
+        if key.startswith(('Arcana.Genie.Perk.', 'Arcana.Genie.Benefit.')):
+            assert not re.search(r'requires one of|temporary|not yet|coming soon|placeholder', text, re.I), key
+    for i in range(48):
+        assert control(root, GENIE.id(10, i)).find("prop[@name='WindowFlags']").get('value') == '0x00002012'
+    for i in range(2): control(root, GENIE.id(11, i))
+    assert not (root_dir / 'src/Occults/OccultPerks.cs').read_text(encoding='utf-8').count('Pending'), 'Perk.Pending was removed'
+    selection = cs_source.class_code(root_dir, 'PowerSelection')
+    ledger = cs_source.class_code(root_dir, 'PerkLedger')
+    assert 'perk.Requires' in ledger, 'The ledger refuses what the page refuses'
+    assert 'HoldsAny(record, newTiers, perk.RequiresAny)' in ledger
+    assert 'internal static Dictionary<ulong, List<int>> sRecords' in cs_source.class_code(root_dir, 'WitchProgressStore'), 'Witch saves keep their field'
+    assert 'OccultTypes.Witch | OccultTypes.Genie, JournalText.Get("Arcana.Journal.Tab.Perks")' in cs_source.class_code(root_dir, 'JournalPages')
+    print('PASS: Genie perk tree: both paths cost exactly 40, Return to Lamp costs 0; 15 perks over five ranks, three shared Rank I perks, two coloured paths, two center ultimates with side connectors, 48 non-interactive line slots, any-of prerequisites and every perk purchasable')
+
+
 def check_perk_navigation(root_dir, window):
     prompt = cs_source.class_code(root_dir, 'PerkPurchaseDialog')
     page = cs_source.class_code(root_dir, 'PowerPage')
@@ -1854,7 +1902,7 @@ def check_perk_navigation(root_dir, window):
         assert resolve.index(marker) < resolve.index('SelectPage(index);'), marker
     assert 'if (!perkPage.Commit(true))\n                    {\n                        SetKeyboardButton(tabs[page]);\n                        return;' in resolve
     assert 'selection.DiscardStaged();' in page and 'if (!selection.Commit())' in page
-    assert purchase.index('WitchProgressStore.Purchase(simId, tree, purchased)') < purchase.index('Array.Clear(staged')
+    assert purchase.index('tree.Ledger.Purchase(simId, tree, purchased)') < purchase.index('Array.Clear(staged')
     assert 'if (record == null)\n            {\n                return false;\n            }' in purchase
     assert ': TwoButtonDialog' in prompt and 'StartModal(false);' in prompt
     assert 'endID == OkayID ? PerkPurchaseChoice.Yes' in prompt and 'endID == CancelID ? PerkPurchaseChoice.No' in prompt
@@ -1901,7 +1949,6 @@ def check_journal_eligibility(root_dir, window):
 
 
 def catalog_entries(root_dir):
-    # Parses SpellCatalog.cs into id, tier, category and learning tuples.
     source = cs_source.file_code(root_dir, 'SpellCatalog')
     entries = [(m.group(1), int(m.group(2)), m.group(3), m.group(4)) for m in re.finditer(
         r'Add\(entries, "([a-z_]+)", (\d), SpellCategory\.(\w+), SpellLearning\.(\w+),', source)]
@@ -1918,16 +1965,32 @@ def catalog_entries(root_dir):
 
 
 def check_innate_casters(root_dir):
-    rules = cs_source.file_code(root_dir, 'WitchCastingRules')
-    for name, value in (('InnateBaseAccuracy', '60f'), ('FairyInnateAccuracy', '25f'), ('GenieInnateDiscount', '0.15f'),
-                        ('InnateStudySpeed', '0.5f'), ('InnateCapacity', '100f'), ('InnateHighestTier', '3')):
-        assert f'internal const {"int" if value == "3" else "float"} {name} = {value};' in rules, name
+    rules = cs_source.file_code(root_dir, 'CastingRules')
+    profiles = cs_source.file_code(root_dir, 'CasterProfile')
+    for needle in ('internal const int InnateHighestTier = 2;', 'internal virtual float BaseAccuracy { get { return 60f; } }',
+                   'internal const float InnateAccuracyBonus = 25f;',
+                   'internal const float FixedCapacity = 100f;', 'internal const float BorrowedSpellCost = 1.25f;',
+                   'internal const float FirstRankCapacity = 100f;', 'internal const float CapacityPerRank = 50f;',
+                   'internal override float BaseAccuracy { get { return 50f; } }', 'private static readonly float[] Rebound = { 0f, 5f, 10f, 15f, 20f };', 'private static readonly float[] Floor = { 5f, 8f, 12f, 16f, 20f };',
+                   'internal const float AccuracyPerRank = 2f;',
+                   'internal override float RankAccuracy(Rank rank) { return AccuracyPerRank * (int)rank; }',
+                   'internal override int HighestLearnableTier { get { return CastingRules.Legendary - 1; } }'):
+        assert needle in profiles, needle
+    for needle in ('internal CasterProfile Profile { get { return CasterProfile.For(Caster); } }', 'factors.Innate = Unbound ? AncientSorceryCost : Profile.InnateSpellCost;',
+                   'factors.Apprentice = earlyTier ? 1f - Profile.EarlyTierDiscount(Rank) : 1f;', 'factors.HighWitch = 1f - Profile.RankDiscount(Rank);',
+                   'internal float RankCapacity { get { return Profile.Capacity(Rank); } }', 'float rankBonus = Profile.RankRegeneration(Rank);',
+                   'return tier <= HighestLearnableTier ? tier : -1;', 'get { return Math.Min((int)Rank, HighestLearnableTier); }',
+                   'get { return Math.Min(Legendary - 1, Profile.HighestLearnableTier + ExtraTiers); }',
+                   'return 100f - success + success * ReboundChance(spell) / 100f;',
+                   'return Math.Min(100f, Math.Max(Profile.BacklashFloor(spell.Tier), chance));'):
+        assert needle in rules, needle
+    for name in ('InnateBaseAccuracy', 'FairyInnateAccuracy', 'GenieInnateDiscount', 'InnateCapacity', '!Innate &&'):
+        assert name not in rules, name + ' belongs to the caster profiles'
     assert 'if (Innate && spell.Tier > InnateHighestTier) return true;' not in rules, 'Rank must never block a cast'
     assert 'internal const float OverreachPenaltyPerTier = 45f;' in rules
-    assert 'result.Overreach = above > 0 ? -OverreachPenaltyPerTier * above : 0f;' in rules
+    assert 'result.Overreach = above > 0 ? -OverreachPenalty * above : 0f;' in rules
+    assert 'internal float OverreachPenalty { get { return OverreachPenaltyPerTier; } }' in rules
     assert 'float raw = result.Starting + result.RankBonus + tierBonus + result.Overreach + wand;' in rules
-    assert 'factors.Innate = Caster == CasterKind.Genie ? 1f - GenieInnateDiscount : 1f;' in rules
-    assert '!Innate && earlyTier && Rank >= Rank.Apprentice' in rules and '!Innate && Rank == Rank.HighWitch' in rules
     casters = cs_source.file_code(root_dir, 'MagicCasters')
     assert 'CommodityKind.AuraPower' in casters and 'GeniePower.Change(' in casters
     assert casters.index('OccultTypes.Witch') < casters.index('OccultTypes.Fairy') < casters.index('OccultTypes.Genie')
@@ -1940,11 +2003,39 @@ def check_innate_casters(root_dir):
     assert 'availability.OccultRestrictions |= innate;' in gates and 'availability.SkillThresholdType = SkillNames.None;' in gates
     assert 'AddInnateMotives(charms ? SpellCategory.Charm : SpellCategory.Curse, pair.Target, expanded);' in gates
     assert 'MemberwiseClone' not in cs_source.file_code(root_dir, 'GeniePower')
+    genie_code = cs_source.file_code(root_dir, 'GeniePower')
+    assert 'get { return CasterProfile.Genie.Capacity(CastingRules.RankForSkill(SkillLevel)) * GeniePerks.CapacityFactor(SkillOwner); }' in genie_code
+    assert 'private float power = float.NaN;' in genie_code and 'set { power = Math.Max(0f, Math.Min(Capacity, value)); }' in genie_code, 'Genie power is absolute and capped by rank'
+    assert 'skill.Power += RegenerationPerHour * Recovery(sim).Rate * minutes / 60f;' in genie_code and 'HasElement(WitchMagicRecovery.FizzleBuff)' in genie_code
+    assert 'NativeCurrent.SetValue(points, NativeMaximum.GetValue(points));' in genie_code, 'The native Genie magic points never block Arcana abilities'
+    resolve = casters.split('internal static bool ResolveBacklash(')[1].split('private static float Fraction(')[0]
+    roll = casters.split('private static bool RollBacklash(')[1].split('private static float Fraction(')[0]
+    assert 'if (!rules.HasBacklash) return !succeeded;' in resolve and 'RandomUtil.RandomChance(rules.ReboundChance(spell))' in roll
+    assert 'rules.BacklashChance(spell, success)' in roll and 'if (!backlash) return false;' in resolve and 'succeeded = !ability && rules.Unleashed;' in resolve, 'The roll uses the chance the Journal shows'
+    assert 'if (!ability) RisingTide.Record(caster, rules, succeeded, backlash);' in resolve, 'Rising Tide counts successes and breaks on Backlash'
+    cast_code = cs_source.file_code(root_dir, 'WitchSimCast')
+    assert 'fizzlePenalty = MagicCasters.ResolveBacklash(Actor, rules, spell.Category, accuracy,' in cast_code and 'ref mSpellCastingSucceeded);' in cast_code
+    assert 'if (fizzlePenalty) WitchMagicRecovery.Fizzle(Actor, rules);' in cast_code, 'A cancelled Backlash fizzles without the penalty'
+    abilities_code = cs_source.file_code(root_dir, 'GenieAbilities')
+    for row in ('"genie_clean_sim", "CleanSim", Rank.Novice, 10f, 0', '"genie_meal", "SummonFood", Rank.Apprentice, 20f, 1',
+                '"genie_enchant_home", "EnchantHouse", Rank.Adept, 30f, 1', '"genie_banish", "RemoveSim", Rank.Adept, 40f, 2',
+                '"genie_ensorcel", "EnsorcelInteraction", Rank.Master, 80f, 3', '"genie_release", "ReleaseSim", Rank.Master, 0f, -1'):
+        assert row in abilities_code, row
+    assert 'class SoloGenieAbilityDefinition : GenieAbilityDefinition, ISoloInteractionDefinition' in abilities_code, 'Summon Food\'s singleton field needs the solo marker'
+    assert 'class GenieAbilityCast : InteractionGameObjectHit<Sim, GameObject>, ICannotStartInPool' in abilities_code
+    assert 'Running.SelectedObjects = SelectedObjects;' in abilities_code, 'Summon Food keeps the picked meal'
+    assert abilities_code.index('MagicCasters.SpendInnate(Actor, rules, cost);') < abilities_code.index('bool ran = Running.RunInteraction();')
+    assert re.search(r'if \(ran\)\s*\{\s*MagicCasters\.SpendInnate\(Actor, rules, cost\);\s*GeniePerks\.AfterAbility\(', abilities_code), 'Silken Command applies after the native ability ran'
+    assert 'GenieAbility Ability;' not in abilities_code, 'Persisted wrappers hold only the native definition'
+    assert 'if (rules.Rank < ability.Rank) return InteractionTestResult.Def_TestFailed;' in abilities_code, 'Locked abilities are hidden, not greyed out'
+    assert 'Arcana.Genie.Ability.Locked' not in english()
+    assert 'if (GenieAbilities.For(native) != null) return GenieAbilities.Wrap(native);' in gates and 'GenieAbilities.Singletons()' in gates
+    assert 'GenieAbilityDefinition genie = definition as GenieAbilityDefinition;' in gates
     assert 'class InnateAbilityDefinition : InteractionDefinition, ISoloInteractionDefinition,' in gates
     assert 'return new NativeSpellCast.Definition(native);' in gates and 'MagicCasters.EnsureHands(Actor)' in cs_source.file_code(root_dir, 'NativeSpellCast')
     innate_cast = cs_source.file_code(root_dir, 'NativeSpellCast')
     assert 'SpellKnowledgeGates.TestNative(Native, ref parameters, ref tooltip)' in innate_cast
-    assert '"w_cast_spell"' in innate_cast and 'return Running.RunInteraction();' in innate_cast
+    assert '"w_cast_spell"' in innate_cast and 'bool completed = Running.RunInteraction();' in innate_cast and 'if (completed) WitchNativeCosts.Charge(Actor);' in innate_cast
     assert 'return entry == null ? native : new NativeSpellCast.Definition(native);' in gates, 'Witch native casts must survive the queue re-test'
     assert 'if (known != null) cast = known.Running;' in cs_source.file_code(root_dir, 'WitchNativeCosts')
     assert 'class NativeSpellCast : InteractionGameObjectHit<Sim, GameObject>' in innate_cast, 'The queue re-test needs the click point'
@@ -1953,10 +2044,11 @@ def check_innate_casters(root_dir):
     casters_code = cs_source.file_code(root_dir, 'MagicCasters')
     assert 'PurchasedPrice.SetValue(hands, 0);' in casters_code and 'CatalogPrice.SetValue(hands, 0);' in casters_code, 'Magic Hands must never count toward fire insurance'
     assert 'IsInnateCaster(sim) || (WitchCastingContext.IsWitch(sim) && WitchCastingContext.HasPracticallyMagic(sim))' in casters_code
-    assert 'sim.Inventory.TryToRemove(hands);' in casters_code and 'if (!IsArcanaHands(hands)) continue;' in casters_code
+    assert 'if (!GeneratedHands.Contains(hands) || !sim.Inventory.TryToRemove(hands)) continue;' in casters_code
+    assert 'GeneratedHands.Add((MagicHands)hands);' in casters_code and 'MakeWorthless(owned)' not in casters_code
     sim_cast = cs_source.file_code(root_dir, 'WitchSimCast')
     assert 'MagicCasters.MakeWorthless(temporaryHands);' in sim_cast and 'Actor.Inventory.TryToRemove(temporaryHands);' in sim_cast
-    assert 'MagicCasters.UpdateAllHands();' in cs_source.file_code(root_dir, 'WitchCastingLifecycle')
+    assert 'MagicCasters.UpdateAllHands(sims);' in cs_source.file_code(root_dir, 'WitchCastingLifecycle')
     assert 'if (sim != null) Guard("Updating Magic Hands", delegate { MagicCasters.UpdateHands(sim); });' in gates
     objects = cs_source.file_code(root_dir, 'InnateObjectTests')
     for native_name in ('CastFireBlastTerrain', 'CastIceBlastTerrain', 'CastIceBlastPlumbing', 'CastFireBlastOnStatue', 'CastSunlightCharmOnStatue', 'MagicallyUpgrade', 'CastConvert'):
@@ -1964,11 +2056,11 @@ def check_innate_casters(root_dir):
     assert 'if (MagicCasters.IsInnateCaster(sim))' in cs_source.file_code(root_dir, 'WitchNativeCosts')
     assert 'InteractionTuning tuning = new InteractionObjectPair(native, pair.Target).Tuning;' in gates and 'pair is KnowledgePair' in gates
     lifecycle_code = cs_source.file_code(root_dir, 'WitchCastingLifecycle')
-    assert 'EventTracker.AddListener(EventTypeId.kBoughtObject, OnBought)' in lifecycle_code and 'EventTracker.RemoveListener(bought);' in lifecycle_code
+    assert 'EventTracker.AddListener(EventTypeId.kBoughtObject, OnBought)' in lifecycle_code and 'RemoveListener(ref bought);' in lifecycle_code
     assert 'SpellKnowledgeGates.InstallFor(Sims3.Gameplay.Core.Terrain.Singleton);' in lifecycle_code
     assert 'internal const string UnlockCommand = "unlockallspells";' in cs_source.file_code(root_dir, 'ArcanaCheats')
     assert english()['Arcana.Journal.Overview.Accuracy.InnateMagic'] == 'Innate Magic'
-    assert 'if (WrapSingleton(original.Key, original.Value)) wrapped++;' in gates and 'ReportOnce("Wrapping " + native.GetType().FullName, error);' in gates
+    assert 'WrapSingleton(original.Key, original.Value)) wrapped++;' in gates and 'ReportOnce("Wrapping " + native.GetType().FullName, error);' in gates
     tests = cs_source.file_code(root_dir, 'InnateSpellTests')
     assert 'MagicCasters.AvailablePower(actor, rules) + 0.005f < rules.FinalCost(' in tests and 'Overreaches' not in tests
     for name in ('WitchSimCast', 'SpellKnowledgeGates', 'NativeSpellCast', 'InnateObjectTests'):
@@ -1976,24 +2068,73 @@ def check_innate_casters(root_dir):
     assert 'if (casting == null && IsSimSpell(native)) casting = SimCasting(entry);' in gates, 'Witch Sim spells use Arcana accuracy'
     assert english()['Arcana.Journal.Overview.Accuracy.AboveRank'] == 'Each Tier Above Your Rank (Tier {0}+)'
     assert 'Arcana.Journal.Overview.Accuracy.AboveSkill' not in english(), 'Every caster shares the rank wording'
-    attributes = cs_source.file_code(root_dir, 'WitchAttributes')
-    above = attributes.index('AddPercentModifier(lines, above, -WitchCastingRules.OverreachPenaltyPerTier);')
+    attributes = cs_source.file_code(root_dir, 'CasterAttributes')
+    above = attributes.index('AddPercentModifier(lines, above, -rules.OverreachPenalty);')
     assert above < attributes.index('AddPercentModifier(lines, RankLabel(rules), accuracy.RankBonus);'), 'Overreach line sits directly under Base Accuracy'
-    assert 'return tier <= (Innate ? InnateHighestTier : Legendary - 1) ? tier : -1;' in rules
     cast = cs_source.file_code(root_dir, 'WitchSimCast')
     assert 'spent = MagicCasters.SpendInnate(Actor, rules, rules.FinalCost(spell.BaseCost, spell.Category, 1f));' in cast
     assert 'rules.Innate ? rules.InnateAccuracy : WitchCastingContext.WandBonus(mWand, false)' in cast
     study = cs_source.file_code(root_dir, 'StudySpells')
+    research = cs_source.class_code(root_dir, 'SpellResearchSettings')
+    assert 'settings.Speed(WitchCastingContext.ReadCapacityRules(actor)' in study
+    for tuning in ('kStudyResearchIntervalMinutes', 'kStudyDiscoveryChancePercent', 'kStudyExperienceFraction',
+                   'kStudyWitchSpeed', 'kStudyFairySpeed', 'kStudyGenieSpeed', 'kStudyWitchMasterBonusPercent',
+                   'kStudyGenieAscendantBonusPercent', 'kStudyWitchingHourBonusPercent'):
+        assert 'JournalBootstrap.' + tuning in study
+        assert tuning in (root_dir / 'src/Core/JournalBootstrap.xml').read_text()
+    assert 'rules.WitchingHour && night' in research and 'rules.Caster == CasterKind.Witch' in research
+    assert 'rules.WitchingHour = record != null && record.TierOf("TheWitchingHour") > 0;' in cs_source.class_code(root_dir, 'WitchCastingContext')
+    assert 'research.Advance(loop.mLifeTime, SpellStudy.Speed(Actor, settings), settings.IntervalMinutes)' in study
+    assert 'RandomUtil.RandomChance(settings.DiscoveryChancePercent)' in study
+    assert 'SpellStudy.Settings.WitchingHourBonusPercent' in cs_source.class_code(root_dir, 'WitchPerkBenefits')
+    assert 'Settings.WitchMasterBonusPercent' in study and 'Settings.GenieAscendantBonusPercent' in study
+    assert 'Settings.ExperienceFraction' in study and '* SpellStudy.Speed' not in study
+
     assert 'studiedName == SkillNames.FairyMagic' in study and 'ShowMeter.Invoke(Actor.SkillManager, new object[] { skill, false });' in study and 'if (hide) HideMeter.Invoke(Actor.SkillManager, null);' in study
     assert 'new SpellStudyTrack(OccultTypes.Fairy, SkillNames.FairyMagic)' in study and 'new SpellStudyTrack(OccultTypes.Genie, GenieMagicSkill.GenieGuid)' in study
     bootstrap = cs_source.file_code(root_dir, 'JournalBootstrap')
-    assert 'new OccultTypes[] { OccultTypes.Fairy, OccultTypes.Genie }' in bootstrap and 'AccuracySources.Register(innate, WitchAttributes.ReadAccuracy);' in bootstrap
-    assert 'WitchAttributes.ReadInnateRegeneration' in bootstrap and 'RefundInnate' not in cs_source.file_code(root_dir, 'MagicCasters')
-    attributes = cs_source.file_code(root_dir, 'WitchAttributes')
+    assert 'new OccultTypes[] { OccultTypes.Fairy, OccultTypes.Genie }' in bootstrap and 'AccuracySources.Register(innate, CasterAttributes.ReadAccuracy);' in bootstrap
+    assert 'CasterAttributes.ReadInnateRegeneration' in bootstrap and 'RefundInnate' not in cs_source.file_code(root_dir, 'MagicCasters')
+    assert 'AttributeSources.Register(OccultTypes.Genie, JournalText.Get("Arcana.Journal.Overview.Attributes.BacklashChance"),' in bootstrap
+    assert english()['Arcana.Journal.Overview.Attributes.BacklashChance'] == 'Backlash Chance'
+    assert [english()['Arcana.Genie.Rank.Full.' + key] for key in ('UnChained', 'Awakened', 'Ascendant', 'Transcendent', 'Almighty')] == \
+        ['Un-Chained Genie', 'Awakened Genie', 'Ascendant Genie', 'Transcendent Genie', 'Almighty Genie']
+    attributes = cs_source.file_code(root_dir, 'CasterAttributes')
     assert 'JournalText.Get("Arcana.Journal.Overview.Accuracy.InnatePower")' in attributes
     assert english()['Arcana.Journal.Overview.Accuracy.InnatePower'] == 'Innate Power'
     abilities = cs_source.file_code(root_dir, 'InnateAbilities')
     assert abilities.count('"Arcana.Ability.fairy_') == 10 and abilities.count('"Arcana.Ability.genie_') == 10 and 'float.NaN' in abilities
+    assert 'if (rules.Rank < ability.Rank || ability.Id == "genie_release") continue;' in abilities and 'ability.CostFor(rules)' in abilities, 'Genie abilities show once unlocked, with their costs'
+    for perk_rule in ('rules.Lampbound && GeniePerks.Owns(actor.SimDescription, "PocketPalace")', 'GeniePerks.Owns(actor.SimDescription, "HeartsDesire")',
+                      'if (rules.GenieLaw && rules.Rank >= Rank.HighWitch)', 'if (rules.Counterattack)'):
+        assert perk_rule in abilities, 'Perk abilities appear only once their perk is bought: ' + perk_rule
+    assert 'GenieUncosted' not in abilities and 'foreach (WishDefinition wish in WishCatalog.All)' in abilities, 'Unlocked wishes come from the shared catalog'
+    wishes = cs_source.file_code(root_dir, 'GenieWishes')
+    verbs = cs_source.file_code(root_dir, 'HeartsDesire')
+    gates = cs_source.file_code(root_dir, 'SpellKnowledgeGates')
+    labels = english()
+    assert 'new Definition(WishMode.Other), new Definition(WishMode.Own)' in wishes
+    assert 'new Definition(wish.Kind, WishMode.Guaranteed)' not in wishes, 'No separate guaranteed-wish interaction'
+    assert 'WishRules.GuaranteeAvailable(' in wishes, 'First eligible grant automatically uses guarantee'
+    assert 'if (guaranteed) skill.GuaranteeReady = WishState.After(24f);' in wishes, 'Daily guarantee is consumed on use'
+    assert wishes.index('if (!applied)') < wishes.index('skill.GuaranteeReady ='), 'Failed execution cannot consume guarantee'
+    assert 'mode == WishMode.Own || guaranteed || RandomUtil.RandomChance(accuracy)' in wishes, 'Guaranteed grant bypasses failure roll'
+    assert 'return new[] { GenieMenu.Root(female) };' in wishes, 'Both wish variants live under Genie submenu'
+    assert 'new[] { GenieMenu.Root(female), JournalText.Get("Arcana.Genie.Favor.Menu") }' in verbs, 'Favor variants live under Genie submenu'
+    assert 'return new[] { GenieMenu.Root(female) };' in verbs, "Ask About Their Heart's Desire lives under Genie submenu"
+    for s in ('Grant Wish...', 'Grant Genie Favor...', 'Genie...', 'Grant Your Own Wish...'):
+        assert s in labels.values(), 'Missing submenu label: ' + s
+    assert 'GuaranteedRow' not in abilities and 'genie_wish_guaranteed' not in abilities, 'No duplicate guaranteed wish in the Grimoire'
+    assert 'GenieWishMenu.Install(sim);' in gates and 'foreach (InteractionDefinition favor in GeniesFavor.Singletons)' in gates, 'Existing interaction registration preserved'
+    genie_abilities = cs_source.file_code(root_dir, 'GenieAbilities')
+    for row, rank in (('"genie_clean_sim", "CleanSim", Rank.Novice', 1), ('"genie_meal", "SummonFood", Rank.Apprentice', 2),
+                      ('"genie_enchant_home", "EnchantHouse", Rank.Adept', 3), ('"genie_banish", "RemoveSim", Rank.Adept', 3),
+                      ('"genie_ensorcel", "EnsorcelInteraction", Rank.Master', 4), ('"genie_release", "ReleaseSim", Rank.Master', 4)):
+        assert row in genie_abilities, f'{row} unlocks at rank {rank}'
+    assert 'rules.AbilityCostMultiplier' not in genie_abilities and 'AbilityCost(' not in profiles and 'BacklashCut(' not in profiles
+    assert 'FizzleDuration' not in profiles.split('internal sealed class GenieProfile')[1] and 'RankRegeneration' not in profiles.split('internal sealed class GenieProfile')[1]
+    assert 'Profile.RankAccuracy(Rank)' in rules and '5f * (int)Rank' not in rules
+    assert 'Rank.Master' not in profiles.split('internal sealed class GenieProfile')[1], 'No Genie bonus comes from Transcendent'
     page = cs_source.file_code(root_dir, 'GrimoirePage')
     assert 'float.IsNaN(entry.EnergyCost) ? JournalText.Get("Arcana.Common.UnavailableValue")' in page
     assert 'availablePower = MagicCasters.AvailablePower(actor, MagicCasters.ReadRules(actor));' in page
@@ -2001,9 +2142,9 @@ def check_innate_casters(root_dir):
     assert '[Persistable]\n    public sealed class GenieMagicSkill : Skill' in genie.replace('\r\n', '\n')
     assert 'internal const float RegenerationPerHour = 10f;' in genie
     lifecycle = cs_source.file_code(root_dir, 'WitchCastingLifecycle')
-    assert '"Arcana magic upkeep"' in lifecycle and 'manager.RemoveAlarm(upkeep);' in lifecycle
-    print('PASS: Fairies and Genies: 60% base accuracy, Innate Power (+25% Fairy accuracy, -15% Genie cost), skill tiers capped at Tier IV, '
-          'half-speed study, Faeric Power and saved Genie power, shared Overview rows, Grimoire abilities and costs')
+    assert '"Arcana magic upkeep"' in lifecycle and 'RemoveAlarm(ref upkeep);' in lifecycle
+    print('PASS: Fairies and Genies: shared caster profiles, 60% base accuracy, Innate Power (+25% Fairy accuracy, +25% Genie borrowed-spell cost), '
+          'learning capped at Tier III, Genie ranks with 100-300 Magical Power, Backlash as a fizzle, rank-gated costed Genie abilities')
 
 
 def check_fixed_costs(root_dir):
@@ -2014,17 +2155,17 @@ def check_fixed_costs(root_dir):
         assert re.search(rf'Add\(entries, "{spell_id}", .*?, {cost}f\);', catalog), f'{spell_id} must cost {cost}'
     assert 'internal const float ConjureAppleCost = 6f;' in catalog
     assert re.search(r'charmCosts = \{\s*30f, 34f, 0f, 30f, 0f, 0f\s*\}', catalog) and re.search(r'curseCosts = \{\s*36f, 40f, 0f, 36f, 0f, 0f\s*\}', catalog)
-    rules = cs_source.file_code(root_dir, 'WitchCastingRules')
+    rules = cs_source.file_code(root_dir, 'CastingRules')
     assert 'return baseCost * CostMultiplier(spell) * drainMultiplier;' in rules
     assert 'FatigueDrain(FinalCost(baseCost, spell, drainMultiplier), nativeMinimum, nativeMaximum) - nativeDrain * drainMultiplier' in rules
     quote = cs_source.class_code(root_dir, 'SpellPowerQuote')
-    assert 'rules.FinalCost(entry.Cost, WitchSpell.For(entry), drain * situational)' in quote and 'Capacity' not in quote
+    assert 'rules.FinalCost(entry.Cost, MagicSpell.For(entry), drain * situational)' in quote and 'Capacity' not in quote
     cast = cs_source.file_code(root_dir, 'WitchSimCast')
     assert 'rules.FinalCost(spell.BaseCost, spell.Category, 1f)' in cast and 'kMotiveDrain' not in cast
     assert 'NativeCost' not in cs_source.file_code(root_dir, 'TargetSpell')
     native = cs_source.file_code(root_dir, 'WitchNativeCosts')
     assert 'MagicMotiveChanged += OnWandDrain' in native and 'MagicMotiveChanged -= OnWandDrain' in native
-    assert 'rules.NativeCorrection(entry.Cost, WitchSpell.For(entry), NativeDrain(entry), multiplier' in native
+    assert 'rules.NativeCorrection(entry.Cost, MagicSpell.For(entry), NativeDrain(entry), multiplier' in native
     assert 'SpellCatalog.ConjureAppleCost' in native and 'SpellCatalog.ConjureAppleCost' in cs_source.file_code(root_dir, 'WitchAbilities')
     lifecycle = cs_source.file_code(root_dir, 'WitchCastingLifecycle')
     assert 'WitchNativeCosts.Start();' in lifecycle and 'WitchNativeCosts.Stop();' in lifecycle
@@ -2032,13 +2173,12 @@ def check_fixed_costs(root_dir):
     assert window.count('RefreshGrimoireCosts();') >= 2
     for path in (root_dir / 'src').rglob('*.cs'):
         text = path.read_text(encoding='utf-8')
-        uses = text.count('Capacity * ') - text.count('availablePower = rules.Capacity * WitchCastingRules.PowerFraction(')
-        assert uses == 0 or path.stem in ('WitchCastingRules', 'MagicCasters'), f'{path.name}: capacity-scaled cost'
+        uses = text.count('Capacity * ') - text.count('availablePower = rules.Capacity * CastingRules.PowerFraction(')
+        assert uses == 0 or path.stem in ('CastingRules', 'MagicCasters'), f'{path.name}: capacity-scaled cost'
     print('PASS: fixed base costs in one catalog; Grimoire quote, Arcana cast, native correction and Conjure Apple share FinalCost; Grimoire refreshes on HUD and moodlet changes')
 
 
 def check_charms(root_dir):
-    # Checks Charms classification, casting kinds, Grimoire population, counters and the five-tab row.
     entries = catalog_entries(root_dir)
     by_id = {entry[0]: entry for entry in entries}
     assert len(by_id) == len(entries) == 24, 'Stable catalog size and unique IDs'
@@ -2056,7 +2196,6 @@ def check_charms(root_dir):
     assert all(entry[2] != 'Ability' for entry in entries), 'Abilities stay out of the shared spell registry'
 
     def populate(known):
-        # Counts learned, enabled entries per category like SpellKnowledge.Populate.
         counts = {name: 0 for name in ('Spell', 'Charm', 'Curse', 'Ritual')}
         seen = set()
         for spell_id, tier, category, learning in entries:
@@ -2080,21 +2219,21 @@ def check_charms(root_dir):
     assert 'categories[(int)SpellCategory.Ability] = InnateAbilities.Entries(identity, quote);' in populate_source
     assert 'return WitchAbilities.Entries(identity);' in cs_source.file_code(root_dir, 'InnateAbilities')
     assert 'internal static List<GrimoireEntry> Entries(SimIdentity identity)' in cs_source.file_code(root_dir, 'WitchAbilities')
-    rules = cs_source.file_code(root_dir, 'WitchCastingRules')
+    rules = cs_source.file_code(root_dir, 'CastingRules')
     assert re.search(r'Spell = 0,\s*Curse = 1,\s*Ritual = 2,\s*Charm = 4\s*\}', rules), 'Charm must be an independent flag'
-    kind_of = rules.split('internal static WitchSpellKind KindOf(SpellCategory category)')[1].split('\n        }\n')[0]
+    kind_of = rules.split('internal static MagicSpellKind KindOf(SpellCategory category)')[1].split('\n        }\n')[0]
     for category in ('Charm', 'Curse', 'Ritual'):
-        assert f'case SpellCategory.{category}: return WitchSpellKind.{category};' in kind_of
-    assert 'default: return WitchSpellKind.Spell;' in kind_of
+        assert f'case SpellCategory.{category}: return MagicSpellKind.{category};' in kind_of
+    assert 'default: return MagicSpellKind.Spell;' in kind_of
     for path in (root_dir / 'src').rglob('*.cs'):
         text = path.read_text(encoding='utf-8')
-        assert '(WitchSpellKind)' not in text and '(SpellCategory)' not in text, f'{path.name}: numeric category cast'
+        assert '(MagicSpellKind)' not in text and '(SpellCategory)' not in text, f'{path.name}: numeric category cast'
     target = cs_source.file_code(root_dir, 'TargetSpell')
-    assert 'Category = WitchSpell.For(entry);' in target and 'BaseCost = entry.Cost;' in target and 'WitchSpellKind.' not in target
-    assert 'return new WitchSpell(entry.Tier, KindOf(entry.Category));' in rules
+    assert 'Category = MagicSpell.For(entry);' in target and 'BaseCost = entry.Cost;' in target and 'MagicSpellKind.' not in target
+    assert 'return new MagicSpell(entry.Tier, KindOf(entry.Category));' in rules
     for spell_id in ('good_luck', 'love', 'sunlight', 'pestilence', 'ice_blast', 'haunting'):
         assert f'new TargetSpell("{spell_id}",' in target, spell_id
-    assert 'WitchSpell.For(entry)' in cs_source.file_code(root_dir, 'SpellPowerQuote')
+    assert 'MagicSpell.For(entry)' in cs_source.file_code(root_dir, 'SpellPowerQuote')
     assert 'return spell.Tier >= 0 && spell.Tier <= CovenMaximumTier && !spell.IsRitual;' in rules and 'InCoven && CovenEligible(spell)' in rules
 
     page = cs_source.file_code(root_dir, 'GrimoirePage')

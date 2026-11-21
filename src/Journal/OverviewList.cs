@@ -25,8 +25,6 @@ namespace SupernaturalExpanded.Journal
         private const float StripInset = 3f;
         private const float StripGap = 4f;
         private const int WheelRows = 1;
-        private static readonly Color ArrowEnabled = new Color(0xFFFFFFFF);
-        private static readonly Color ArrowDisabled = new Color(0xFFAEB9CC);
 
         private readonly JournalWindow journal;
         private readonly int capacity;
@@ -71,7 +69,6 @@ namespace SupernaturalExpanded.Journal
         internal OverviewList(JournalWindow journal, uint firstId, int capacity, Window body, string emptyMessage,
             float detailWidth, float valueWidth, bool fill, bool compact)
         {
-            // Creates a pooled list that can fill its panel or compact its rows.
             this.journal = journal;
             this.capacity = capacity;
             this.fill = fill;
@@ -132,7 +129,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void SetRows(List<OverviewRow> incoming)
         {
-            // Replaces the rows; the scroll position stays where it was unless the list got shorter.
             if (HasSameRows(incoming))
             {
                 return;
@@ -153,7 +149,6 @@ namespace SupernaturalExpanded.Journal
 
         private bool HasSameRows(List<OverviewRow> incoming)
         {
-            // Returns whether the rows are unchanged so motive ticks do not rebuild them.
             int count = incoming == null ? 0 : incoming.Count;
             if (count != rows.Count)
             {
@@ -173,7 +168,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void Layout(float left, float top, float width, float height)
         {
-            // Places the row pool inside the panel.
             listLeft = left;
             listTop = top;
             listWidth = width;
@@ -193,7 +187,6 @@ namespace SupernaturalExpanded.Journal
 
         private void Fit()
         {
-            // Sizes the rows for the panel and the number of rows it holds.
             float nextRow = RowHeight;
             float nextIcon = IconSize;
             int nextSlots = capacity;
@@ -230,7 +223,6 @@ namespace SupernaturalExpanded.Journal
 
         private void PlaceRows()
         {
-            // Places the rows, leaving room for the scrollbar only while it shows.
             if (listWidth <= 0f)
             {
                 return;
@@ -255,7 +247,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void ApplyInk(Color ink, Color accent, Color muted)
         {
-            // Restores the layout's ink colours after a skin replaces them.
             for (int i = 0; i < capacity; i++)
             {
                 names[i].TextColor = ink;
@@ -313,7 +304,6 @@ namespace SupernaturalExpanded.Journal
 
         private bool UpdateHit(int slot, int index)
         {
-            // Shows or hides a row's hover window, hiding it whenever it stands for a different row.
             int target = index >= 0 && rows[index].Tip != null ? index : -1;
             if (hitRows[slot] == target)
             {
@@ -346,7 +336,6 @@ namespace SupernaturalExpanded.Journal
 
         private WindowBase.CreateTooltipCallback TooltipFor(int slot)
         {
-            // Builds the tooltip of whichever list row a pooled window currently shows.
             return delegate(Vector2 mouse, WindowBase window, ref Vector2 position)
             {
                 int index = hitRows[slot];
@@ -365,7 +354,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static void Reflow(Text text)
         {
-            // Sets the same caption again so the text wraps for the control's current size.
             string caption = text.Caption;
             if (!string.IsNullOrEmpty(caption))
             {
@@ -376,7 +364,6 @@ namespace SupernaturalExpanded.Journal
 
         private void RefreshScrollbar(bool shown)
         {
-            // Shows the scrollbar only for lists longer than their pool.
             int max = GetMaxScroll();
             bool scrollable = shown && max > 0;
             if (scrollable != barShown)
@@ -396,24 +383,12 @@ namespace SupernaturalExpanded.Journal
 
             up.Enabled = first > 0;
             down.Enabled = first < max;
-            Tint(up, up.Enabled);
-            Tint(down, down.Enabled);
+            JournalTheme.TintArrow(up, up.Enabled);
+            JournalTheme.TintArrow(down, down.Enabled);
 
             thumbSize = Math.Max(24f, trackHeight * slots / (float)rows.Count);
             travel = Math.Max(1f, trackHeight - thumbSize);
             journal.Place(thumb, scrollLeft, GetThumbTop(max), ScrollWidth, thumbSize);
-        }
-
-        private static void Tint(Button arrow, bool enabled)
-        {
-            // The stock arrow art has no disabled image, so a disabled arrow is dimmed with its shade colour.
-            Color shade = enabled ? ArrowEnabled : ArrowDisabled;
-            if (arrow.ShadeColor.ARGB == shade.ARGB)
-            {
-                return;
-            }
-            arrow.ShadeColor = shade;
-            arrow.Invalidate();
         }
 
         private float GetThumbTop(int max)
@@ -445,7 +420,7 @@ namespace SupernaturalExpanded.Journal
         private void OnTrackDown(WindowBase sender, UIMouseEventArgs args)
         {
             float y;
-            if (!visible || dragging || GetMaxScroll() == 0 || !TryGetCursorY(out y))
+            if (!visible || dragging || GetMaxScroll() == 0 || !journal.TryGetCursorY(out y))
             {
                 return;
             }
@@ -456,7 +431,7 @@ namespace SupernaturalExpanded.Journal
         private void OnThumbDown(WindowBase sender, UIMouseEventArgs args)
         {
             float y;
-            if (!visible || !TryGetCursorY(out y))
+            if (!visible || !journal.TryGetCursorY(out y))
             {
                 return;
             }
@@ -478,7 +453,7 @@ namespace SupernaturalExpanded.Journal
                 dragging = false;
                 return;
             }
-            if (!TryGetCursorY(out y))
+            if (!journal.TryGetCursorY(out y))
             {
                 return;
             }
@@ -514,22 +489,7 @@ namespace SupernaturalExpanded.Journal
 
         internal void Release()
         {
-            // Drops an active drag before the window goes away.
             EndDrag();
-        }
-
-        private bool TryGetCursorY(out float y)
-        {
-            // Reads the cursor's vertical position in layout units.
-            y = 0f;
-            WindowBase root = journal.RootWindow;
-            if (root == null || root.Disposed)
-            {
-                return false;
-            }
-            Vector2 cursor = root.ScreenToWindow(UIManager.GetCursorPosition());
-            y = cursor.y / Math.Max(0.01f, journal.LayoutScale);
-            return true;
         }
     }
 }

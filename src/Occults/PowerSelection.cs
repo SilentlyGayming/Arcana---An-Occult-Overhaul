@@ -10,9 +10,12 @@ namespace SupernaturalExpanded.Journal
         {
             None,
             Unavailable,
+            PreviewOnly,
             Rank,
             Complete,
             Conflict,
+            Requires,
+            AnyRequires,
             Points
         }
 
@@ -42,11 +45,11 @@ namespace SupernaturalExpanded.Journal
         }
 
         internal ulong SimDescriptionId { get { return simId; } }
+        internal OccultTree Tree { get { return tree; } }
         internal int Milestones { get { return milestones; } }
 
         internal bool Update(PowerProgress progress)
         {
-            // Takes in newly read progression, keeping staged picks, and reports whether anything shown changed.
             if (progress.Available && progress.SimDescriptionId != simId)
             {
                 return false;
@@ -104,6 +107,7 @@ namespace SupernaturalExpanded.Journal
 
         private Block Blocked(Perk perk)
         {
+            if (perk.PreviewOnly) return Block.PreviewOnly;
             if (!Available)
             {
                 return Block.Unavailable;
@@ -121,7 +125,23 @@ namespace SupernaturalExpanded.Journal
             {
                 return Block.Conflict;
             }
+            if (perk.Requires != null && Tier(perk.Requires) == 0)
+            {
+                return Block.Requires;
+            }
+            if (!HasAnyRequirement(perk))
+            {
+                return Block.AnyRequires;
+            }
             return PowerPointsLeft < perk.Costs[tier] ? Block.Points : Block.None;
+        }
+
+        private bool HasAnyRequirement(Perk perk)
+        {
+            if (perk.RequiresAny == null || perk.RequiresAny.Length == 0) return true;
+            foreach (Perk option in perk.RequiresAny)
+                if (Tier(option) > 0) return true;
+            return false;
         }
 
         internal bool CanStage(Perk perk)
@@ -131,7 +151,6 @@ namespace SupernaturalExpanded.Journal
 
         internal bool ShortOnPoints(Perk perk)
         {
-            // Returns whether Perk Points alone keep the next rank from being selected.
             return Blocked(perk) == Block.Points;
         }
 
@@ -150,10 +169,11 @@ namespace SupernaturalExpanded.Journal
 
         internal string Requirement(Perk perk)
         {
-            // Returns the requirement line a tooltip adds below the description.
             switch (Blocked(perk))
             {
+                case Block.PreviewOnly: return JournalText.Get("Arcana.Journal.Perks.Requirement.PreviewOnly");
                 case Block.Rank: return JournalText.Format("Arcana.Journal.Perks.Requirement.Rank", tree.RankTitle((int)perk.Rank));
+                case Block.Requires: return JournalText.Format("Arcana.Journal.Perks.Requirement.Perk", perk.Requires.Name);
                 case Block.Complete: return null;
                 case Block.Points: return null;
                 default: return null;
@@ -172,13 +192,11 @@ namespace SupernaturalExpanded.Journal
 
         internal void DiscardStaged()
         {
-            // Drops every staged rank; nothing is bought and the points stay unspent.
             Array.Clear(staged, 0, staged.Length);
         }
 
         internal bool Commit()
         {
-            // Buys every staged rank in one step.
             if (!Available)
             {
                 return false;
@@ -201,7 +219,7 @@ namespace SupernaturalExpanded.Journal
                 return false;
             }
 
-            WitchRecord record = WitchProgressStore.Purchase(simId, tree, purchased);
+            PerkRecord record = tree.Ledger.Purchase(simId, tree, purchased);
             if (record == null)
             {
                 return false;
@@ -230,7 +248,7 @@ namespace SupernaturalExpanded.Journal
         internal readonly Dictionary<string, int> Acquired;
         internal readonly bool Available;
 
-        internal static readonly PowerProgress Unavailable = new PowerProgress(0UL, WitchProgressSource.NoExperience,
+        internal static readonly PowerProgress Unavailable = new PowerProgress(0UL, PerkProgressSource.NoExperience,
             Rank.Novice, 0f, 0f, 0, 0, 0, new Dictionary<string, int>(), false);
 
         private PowerProgress(ulong simDescriptionId, long experience, Rank rank, float rankProgress, float proficiency, int powerPoints,
@@ -248,7 +266,7 @@ namespace SupernaturalExpanded.Journal
             Available = available;
         }
 
-        internal static PowerProgress From(ulong simDescriptionId, long experience, RankState state, float proficiency, WitchRecord record,
+        internal static PowerProgress From(ulong simDescriptionId, long experience, RankState state, float proficiency, PerkRecord record,
             OccultTree tree)
         {
             Dictionary<string, int> acquired = new Dictionary<string, int>();
@@ -283,7 +301,8 @@ namespace SupernaturalExpanded.Journal
 
         private static readonly Source[] sources =
         {
-            new Source(OccultTypes.Witch, WitchProgressSource.GetAvailablePoints)
+            new Source(OccultTypes.Witch, PerkProgressSource.Witch.GetAvailablePoints),
+            new Source(OccultTypes.Genie, PerkProgressSource.Genie.GetAvailablePoints)
         };
 
         internal static bool Applies(OccultTypes occults)

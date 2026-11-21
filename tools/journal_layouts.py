@@ -4,13 +4,12 @@ import xml.etree.ElementTree as ET
 from hud_icons import BAR_TRACK, PALETTE
 
 from cs_source import file_text
-from trees import ROOT as PROJECT, WITCH, icons
+from trees import ROOT as PROJECT, TREES, WITCH, icons
 from ui_resources import (GRIMOIRE_CATEGORY_NAMES, grimoire_icon_instance, portrait_mask_key, HALO_INSTANCE, STAR_INSTANCE,
     GLITTER_BODY_INSTANCE, GLITTER_TIP_INSTANCE, TILE_EDGE_INSTANCE)
 
 
 def _layout_name(constant):
-    # Reads a layout name from NativeLayouts.cs so the game never pairs the assembly with an older layout.
     text = file_text(PROJECT, "NativeLayouts")
     return re.search(constant + r' = "(\w+)"', text).group(1)
 
@@ -143,7 +142,8 @@ SIMOLOGY_BUTTON = ("133438cf8a8b7ca1", "61e57a7da8148ebb", "133438cf8a8b7ca1", "
 SKILLS_JOURNAL_ICON = "7f53ab12423911b1"
 NAVY = "0xff0b246e"
 BLUE = "0xff124f92"
-WITCH_ACCENT = f"0x{dict(PALETTE)['Witch']:08x}"
+def accent(occult):
+    return f"0x{dict(PALETTE)[occult]:08x}"
 MILESTONE_GREEN = "0x907fcf9f"
 STATUS_PLATE = "0xcfffffff"
 BAR_ART = "9c8c7369cf8efcc7"
@@ -294,7 +294,6 @@ def button(identifier, hud=False, grimoire=False, tab=False):
 
 
 def native_button(identifier, drawing):
-    # Builds a button whose artwork is one drawable and whose text lives in separate labels.
     node = control("Button", "0xeeefe2c3", identifier, "0x0000200a",
                    fill="0x00000000", font="0x062eae06", sound=2)
     prop(node, "ButtonFlags", "0xeec1d002", "uint32", 0)
@@ -312,7 +311,6 @@ def list_header(identifier):
 
 
 def sort_button(identifier):
-    # Builds a sort button whose face comes from the shared header.
     drawing = standard_drawable(("", "", HEADER_CELL, HEADER_CELL), edge=HEADER_SLICE)
     node = native_button(identifier, drawing)
     node.find("prop[@name='ShadeColor']").set("value", "0x30305480")
@@ -320,7 +318,6 @@ def sort_button(identifier):
 
 
 def scroll_arrow_button(identifier, images, glow_mask):
-    # Builds a stock scrollbar arrow with its normal and pressed images.
     return native_button(identifier, standard_drawable(
         (images[0], "", "", images[1]), stretch="1", glow_mask=glow_mask))
 
@@ -331,7 +328,6 @@ def scroll_thumb_button(identifier):
 
 
 def list_body(identifier):
-    # Builds the pale list surface of the stock lists.
     return window(identifier, standard_drawable((LIST_BODY,)), flags="0x00002003")
 
 
@@ -393,7 +389,6 @@ def hover_glow(node, color="0x22000000", time=0.12, interpolation=0, ease_in=0):
 
 
 def tile(identifier):
-    # Builds a perk tile with its normal, disabled, highlighted and active states.
     normal, hover, _, pressed = DIALOG_BUTTON
     node = state_button(identifier, TILE_SIZE, "0x062eae06", standard_drawable(
         (normal, hover, hover, pressed) * 2))
@@ -401,12 +396,10 @@ def tile(identifier):
 
 
 def perk_icon(identifier, art=None):
-    # Builds the perk icon window that PowerPage fades when unavailable.
     return hover_glow(window(identifier, image_drawable(f"{art[1]:016x}" if art else MOODLET_ICON)), "0x12ffffff")
 
 
 def tile_edge(identifier):
-    # Builds the coloured edge gradient of a specialization tile.
     return window(identifier, image_drawable(f"{TILE_EDGE_INSTANCE:016x}"), flags="0x00002012")
 
 
@@ -454,7 +447,6 @@ def checkmark(identifier):
 
 
 def cancel_button(identifier):
-    # Builds the native X glyph on a compact circular face.
     node = control("Sims3IconButton", "0x062569a8", identifier, "0x0000200b",
                    area=f"0,0,{CANCEL_SIZE},{CANCEL_SIZE}", fill="0xff7f7f7f", sound=2)
     hover_glow(node, "0x3accedff", 0.23, interpolation=1, ease_in=0.8)
@@ -489,7 +481,6 @@ def cancel_button(identifier):
 
 
 def frame_piece(identifier, two_faces=False):
-    # Builds a frame clip with the full-size native frame coordinates.
     clip = window(identifier, flags="0x00002413")
     faces = [window(identifier + 1, standard_drawable((COLLECTION_FRAME,), edge=FRAME_MARGINS))]
     if two_faces:
@@ -500,13 +491,11 @@ def frame_piece(identifier, two_faces=False):
 
 
 def help_face(identifier):
-    # Builds the perk footer help disc.
     return window(identifier, standard_drawable(CHECK_STATES, stretch="1"),
                   flags="0x00002003")
 
 
 def help_question(identifier):
-    # Builds the centred stock font question mark.
     return label(identifier, font=FOOTER_FONT, color="0xff002d74",
                  align=1, flags="0x00002003")
 
@@ -530,17 +519,14 @@ def cost_icon(identifier):
 
 
 def milestone(identifier):
-    # Builds one row of a translucent mint-green milestone tick on the rank bar.
     return window(identifier, fill=MILESTONE_GREEN)
 
 
 def status_sparkle(identifier, image, shade):
-    # Builds one stationary stock sparkle layer inside the filled region.
     return window(identifier, image_drawable(image), flags="0x00002412", shade=shade)
 
 
 def glow_window(identifier, mask, scale, color, flags):
-    # Builds a window that draws only the stock glow.
     face = standard_drawable((), stretch="2", glow_mask=mask, glow_scale=scale)
     face.find("prop[@name='GlowType']").set("value", "1")
     face.find("prop[@name='GlowColor']").set("value", color)
@@ -548,7 +534,6 @@ def glow_window(identifier, mask, scale, color, flags):
 
 
 def add_effect(node, cls, class_id, values):
-    # Adds one native effect (WinProc) to a window and keeps the WinProcs count right.
     proc = ET.Element("object", cls=cls, clsid=class_id)
     for name, identifier, kind, value in values:
         prop(proc, name, identifier, kind, value)
@@ -561,7 +546,6 @@ def add_effect(node, cls, class_id, values):
 
 
 def effect_timing(seconds, ease_out, loop, trigger=0):
-    # Returns native effect timing for a visible or hidden trigger.
     return (
         ("EffectGroupID", "0x4f2b000a", "uint32", 0),
         ("Time", "0x4f2b0000", "float", seconds),
@@ -601,7 +585,6 @@ def rank_glitter_tip(page):
 
 
 def sparkle_clip(first):
-    # Builds the clip that holds the stationary sparkle layers.
     clip = window(first, flags="0x00002412")
     prop(clip, "Children", "0xeec1b00b", "object", count=str(len(HUD_SPARKLES))).extend(
         status_sparkle(STATUS_SPARKLE_FIRST + layer, image, shade)
@@ -611,14 +594,12 @@ def sparkle_clip(first):
 
 
 def bar_drawable(image):
-    # Builds a stock nine-slice meter capsule.
     face = standard_drawable((image,), stretch="2", edge=BAR_EDGE, glow_scale=BAR_GLOW)
     face.find("prop[@name='GlowType']").set("value", "0")
     return face
 
 
 def status_row(first, default_icon=None, glint=False):
-    # Builds one header row with its icon, label, value and HUD meter bar.
     icon, text, value, gloss, fill, track = range(first, first + 6)
     fill_clip = window(first + 6, flags="0x00002412")
     prop(fill_clip, "Children", "0xeec1b00b", "object", count="1").append(
@@ -635,18 +616,17 @@ def status_row(first, default_icon=None, glint=False):
 
 
 def status_panel(identifier):
-    # Builds the status panel on the same native plate as the Overview list bodies.
     return window(identifier, standard_drawable((LIST_BODY,)), flags="0x00002003",
                   shade=STATUS_PLATE)
 
 
 def tree_controls(tree):
-    # Returns the front, middle and back controls of the perk tree.
     perks = range(len(tree.catalog()))
     art = icons(tree)
     ids = tree.id
     page = lambda slot: ids(6, slot)
     front = [
+        *(label(ids(11, i), font="0x062eae07", align=1, flags="0x00002012") for i in range(2) if tree.occult == "Genie"),
         sparkler_overlay(page),
         rank_glitter_tip(page),
         help_question(page(6)),
@@ -667,8 +647,9 @@ def tree_controls(tree):
     ]
     middle = [tile(ids(0, i)) for i in perks]
     back = [
+        *(window(ids(10, i), fill="0xffffffff", flags="0x00002012") for i in range(48) if tree.occult == "Genie"),
         rank_glitter_clip(page),
-        window(page(1), fill=WITCH_ACCENT),
+        window(page(1), fill=accent(tree.occult)),
         window(page(0), fill="0xffc1d7ed"),
         surround_panel(page(11)),
     ]
@@ -676,12 +657,10 @@ def tree_controls(tree):
 
 
 def transparent_button(identifier):
-    # Builds a clickable, unpainted hit region.
     return native_button(identifier, standard_drawable(("", "", "", "")))
 
 
 def grimoire_controls():
-    # Builds the Grimoire's category row, table header, pooled rows and native scrollbar.
     controls = [
         label(GRIMOIRE_LIST_TITLE, font="0x062eae06", color=NAVY,
               align=1, flags="0x00002003"),
@@ -749,7 +728,6 @@ def grimoire_controls():
 
 
 def overview_list(first, rows, font=OV_ROW_FONT):
-    # Builds one scrolling list with its pooled rows, scrollbar parts and empty message.
     track, thumb, up, down, empty = (first + OV_SCROLL_OFFSET + i for i in range(5))
     controls = [
         label(empty, font=OV_NOTE_FONT, color=OV_MUTED, align=1),
@@ -772,7 +750,6 @@ def overview_list(first, rows, font=OV_ROW_FONT):
 
 
 def overview_controls():
-    # Builds the five Overview panels front to back.
     controls = []
     for index, rows in enumerate(OV_LIST_ROWS):
         controls += overview_list(OV_LIST_FIRST + index * OV_LIST_STRIDE, rows,
@@ -798,7 +775,10 @@ def overview_controls():
 def dialog():
     root = control("Dialog", "0x0f0b8b73", ROOT, "0x0000200e",
                    export=1, area="0,0,896,546", fill="0x00000000")
-    front, middle, back = tree_controls(WITCH)
+    pages = [tree_controls(tree) for tree in TREES]
+    front = [control for page in pages for control in page[0]]
+    middle = [control for page in pages for control in page[1]]
+    back = [control for page in pages for control in page[2]]
     children = [
         checkmark(CLOSE),
         cancel_button(CANCEL),
@@ -833,7 +813,6 @@ def dialog():
 
 
 def purchase_flight():
-    # Builds the flying purchase icon whose image C# fills in.
     root = window(0x53E00200, image_drawable(SKILLS_JOURNAL_ICON), flags="0x00002012")
     root.set("id", hex_id(1))
     root.find("prop[@name='Area']").set("value", "0,0,64,64")
@@ -841,7 +820,6 @@ def purchase_flight():
 
 
 def perk_tooltip():
-    # Builds the perk tooltip layout with its title, tagline, description and modifier lines.
     root = panel(TOOLTIP_ROOT, flags="0x00002012")
     root.set("id", hex_id(1))
     root.find("prop[@name='Area']").set("value", "0,0,340,120")

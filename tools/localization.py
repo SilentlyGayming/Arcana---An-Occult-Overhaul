@@ -5,7 +5,7 @@ import struct
 from pathlib import Path
 
 from dbpf import Key, STBL, fnv64
-from trees import ROOT, WITCH
+from trees import ROOT, TREES, WITCH, GENIE
 from cs_source import class_text, file_text
 
 CATALOG_DIR = ROOT / "src" / "Localization"
@@ -17,30 +17,39 @@ LOCALE_IDS = {locale: index for index, locale in enumerate((
     "pt-PT", "pt-BR", "ru-RU", "es-ES", "es-MX", "sv-SE", "th-TH",
 ))}
 TABLE_FAMILY = fnv64("Arcana.Localization.Strings") & 0x00FFFFFFFFFFFFFF
-PERK_PREFIX = "Arcana.Witch.Perk."
+PERK_PREFIXES = tuple(tree.text_prefix for tree in TREES)
+EXPECTED_TREES = {WITCH.source: (17, 23), GENIE.source: (15, 19)}
 NATIVE_BUFF_PREFIX = "Gameplay/Excel/buffs/BuffList:"
-NATIVE_BUFF_KEYS = ("Arcana.Witch.Fizzle.Name", "Arcana.Witch.Fizzle.Description")
+NATIVE_BUFF_KEYS = ("Arcana.Witch.Fizzle.Name", "Arcana.Witch.Fizzle.Description") + tuple(
+    "Arcana.Genie.WishBuff." + name + "." + field
+    for name in ("Beauty", "Career", "Joy", "Love", "GoneWrong") for field in ("Name", "Description"))
 KEY = re.compile(r"Arcana(?:\.[A-Za-z0-9_]+)+")
 TOKEN = re.compile(r"\{(0|[1-9][0-9]*|name|Name)\}")
 HEADER = struct.Struct("<4sB2xI6x")
 ENTRY = struct.Struct("<QI")
 
 
-def perk_tiers():
-    source = class_text(ROOT, WITCH.source)
+def perk_tiers(tree=WITCH):
+    source = class_text(ROOT, tree.source)
     pattern = (
-        r'(?m)^\s*Power\("(\w+)",\s*Rank\.\w+,\s*\d+,\s*[\d.]+f,\s*'
-        r'JournalText\.Get\("Arcana\.Witch\.Perk\.\1\.Name"\),\s*'
+        r'(?m)^\s*Power\("(\w+)",\s*Rank\.\w+,\s*-?\d+,\s*-?[\d.]+f,\s*'
+        r'JournalText\.Get\("' + re.escape(tree.text_prefix) + r'\1\.Name"\),\s*'
         r'((?:\d+\s*,\s*)*\d+)\)'
     )
+    if tree.source == "GenieTree":
+        pattern = (
+            r'(?m)^\s*Power\("(\w+)",\s*Rank\.\w+,\s*-?[\d.]+f,\s*'
+            r'JournalText\.Get\("' + re.escape(tree.text_prefix) + r'\1\.Name"\),\s*'
+            r'((?:\d+\s*,\s*)*\d+)\)'
+        )
     tiers = {key: costs.count(",") + 1 for key, costs in re.findall(pattern, source)}
-    if list(tiers) != WITCH.catalog() or len(tiers) != 17 or sum(tiers.values()) != 23:
-        raise ValueError("Expected localized names and descriptions for 17 Witch perks and 23 ranks")
+    perks, ranks = EXPECTED_TREES[tree.source]
+    if list(tiers) != tree.catalog() or len(tiers) != perks or sum(tiers.values()) != ranks:
+        raise ValueError(f"Expected localized names and descriptions for {perks} {tree.occult} perks and {ranks} ranks")
     return tiers
 
 
 def format_argument_count(source, start):
-    # Counts the format arguments after a literal key, including nested calls.
     brackets = 0
     count = 0
     for token in re.finditer(r'"(?:\\.|[^"\\])*"|[()[\]{},]', source[start:]):
@@ -70,10 +79,11 @@ def runtime_keys():
             numbered = {str(index) for index in range(count)}
             if formatted.setdefault(key, numbered) != numbered:
                 raise ValueError(f"{path}: inconsistent format arguments for {key}")
-    for key, count in perk_tiers().items():
-        prefix = PERK_PREFIX + key
-        keys.add(prefix + ".Tagline")
-        keys.update(f"{prefix}.Description.{rank}" for rank in range(1, count + 1))
+    for tree in TREES:
+        for key, count in perk_tiers(tree).items():
+            prefix = tree.text_prefix + key
+            keys.add(prefix + ".Tagline")
+            keys.update(f"{prefix}.Description.{rank}" for rank in range(1, count + 1))
     catalog_source = file_text(ROOT, "SpellCatalog")
     spell_ids = set(re.findall(r'Add\(entries, "([a-z_]+)"', catalog_source))
     for motive in ("bladder", "hunger", "energy", "hygiene", "fun", "social"):
@@ -84,6 +94,11 @@ def runtime_keys():
     formatted["Arcana.Spell.IceOtherTargets"] = {"0"}
     formatted["Arcana.Spell.SunlightOtherTargets"] = {"0"}
     formatted["Arcana.Cheat.UnlockAll.Success"] = {"0", "1"}
+    formatted["Arcana.Genie.HeartsDesire.Revealed"] = {"0", "1"}
+    for key in ("HeartsDesire.Nothing", "Favor.Given", "Wish.Granted", "Wish.Failed", "Wish.Doom", "Fate.LifeForAWish", "Fate.ForgottenBonds",
+                "Rain.Summoned", "Rain.Failed"):
+        formatted["Arcana.Genie." + key] = {"0"}
+    formatted["Arcana.Genie.Wishes.DeathEscaped"] = {"0"}
     return keys, formatted
 
 
@@ -143,9 +158,9 @@ def catalogs(directory=CATALOG_DIR):
                          f"Unused keys {sorted(extra)}.")
     for key, placeholders in english_tokens.items():
         allowed = formatted.get(key, set())
-        if key.startswith(PERK_PREFIX) and ".Description." in key:
+        if key.startswith(PERK_PREFIXES) and ".Description." in key:
             allowed = {"name"}
-        elif key.startswith("Arcana.Witch.Rank.Description."):
+        elif key.startswith(("Arcana.Witch.Rank.Description.", "Arcana.Genie.Rank.Description.")):
             allowed = {"Name"}
         if not placeholders <= allowed or (key in formatted and placeholders != allowed):
             raise ValueError(f"{english_path}: {key} has incompatible placeholders {sorted(placeholders)}")
@@ -217,7 +232,7 @@ def resources(directory=CATALOG_DIR):
 def generate(destination=GENERATED):
     english = catalogs()[ENGLISH]
     lines = [
-        "// Generated by tools/localization.py from the English STBL catalog.",
+
         "namespace SupernaturalExpanded.Journal",
         "{",
         "    internal static class ArcanaEnglish",
@@ -233,15 +248,10 @@ def generate(destination=GENERATED):
         "            }",
         "            return null;",
         "        }",
+        "    }",
+        "}",
         "",
-        "        internal static int PerkTiers(string key)",
-        "        {",
-        "            switch (key)",
-        "            {",
     ])
-    for key, ranks in perk_tiers().items():
-        lines.append(f"                case {json.dumps(key)}: return {ranks};")
-    lines.extend(["            }", "            return 0;", "        }", "    }", "}", ""])
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes("\n".join(lines).encode("utf-8"))
 

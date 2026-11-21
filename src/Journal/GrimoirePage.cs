@@ -86,8 +86,6 @@ namespace SupernaturalExpanded.Journal
         private const uint OddRowFill = 0x70D2EBF7;
         private const uint HoverRowFill = 0xFFD2EBF7;
         private const uint SelectedRowFill = 0xFFB5D9FA;
-        private static readonly Color ArrowEnabled = new Color(0xFFFFFFFF);
-        private static readonly Color ArrowDisabled = new Color(0xFFAEB9CC);
         private readonly JournalWindow journal;
         private readonly Button[] tabs = new Button[CategoryCount];
         private readonly Window[] icons = new Window[CategoryCount];
@@ -144,13 +142,11 @@ namespace SupernaturalExpanded.Journal
 
         internal int GetEntryCount(int index)
         {
-            // Returns how many unlocked entries a category holds.
             return index < 0 || index >= CategoryCount ? 0 : entries[index].Count;
         }
 
         internal UIImage GetCategoryIcon(int index)
         {
-            // Returns the artwork on a category's tab, or null if it is not loaded.
             if (index < 0 || index >= CategoryCount)
             {
                 return null;
@@ -161,7 +157,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void UseFaces(TabFaces faces)
         {
-            // Applies the themed category button faces once they are available.
             tabFaces = faces;
             tabFaces.Show(category);
         }
@@ -298,16 +293,8 @@ namespace SupernaturalExpanded.Journal
             Select(0);
         }
 
-        internal void SetEntries(int index, IEnumerable<GrimoireEntry> incoming)
-        {
-            // Replaces a category's entries and notifies the pages that count them.
-            if (!Replace(index, incoming)) return;
-            if (EntriesChanged != null) EntriesChanged(this, EventArgs.Empty);
-        }
-
         internal void SetAllEntries(List<GrimoireEntry>[] incoming)
         {
-            // Replaces every category's entries and notifies the pages that count them once.
             bool changed = false;
             for (int i = 0; i < CategoryCount && i < incoming.Length; i++) changed |= Replace(i, incoming[i]);
             if (changed && EntriesChanged != null) EntriesChanged(this, EventArgs.Empty);
@@ -315,7 +302,6 @@ namespace SupernaturalExpanded.Journal
 
         private bool Replace(int index, IEnumerable<GrimoireEntry> incoming)
         {
-            // Copies the incoming entries without duplicate IDs, then re-sorts and refreshes the visible category.
             if (index < 0 || index >= CategoryCount) return false;
             List<GrimoireEntry> snapshot = incoming == null ? null : new List<GrimoireEntry>(incoming);
             List<GrimoireEntry> target = entries[index];
@@ -340,7 +326,6 @@ namespace SupernaturalExpanded.Journal
 
         private static bool SameEntries(List<GrimoireEntry> current, List<GrimoireEntry> incoming)
         {
-            // Returns whether a refresh would show exactly what the category already shows.
             int count = incoming == null ? 0 : incoming.Count;
             if (current.Count != count) return false;
             for (int i = 0; i < count; i++)
@@ -351,8 +336,6 @@ namespace SupernaturalExpanded.Journal
             }
             return true;
         }
-
-        internal void ClearEntries(int index) { SetEntries(index, null); }
 
         private void Select(int index)
         {
@@ -488,7 +471,6 @@ namespace SupernaturalExpanded.Journal
 
         private void RefreshDescription()
         {
-            // Shows the selected entry of the current category, or a hint when nothing is selected.
             int position = visible ? FindId(sorted[category], selectedIds[category]) : -1;
             GrimoireEntry entry = position < 0 ? null : sorted[category][position];
             descriptionName.Caption = entry == null ? String.Empty : entry.Name;
@@ -508,7 +490,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void RefreshAffordability()
         {
-            // Updates energy-cost colors when the selected Sim's available Magical Power changes.
             if (!visible) return;
             ReadAvailablePower();
             List<GrimoireEntry> items = sorted[category];
@@ -523,7 +504,6 @@ namespace SupernaturalExpanded.Journal
 
         private void ReadAvailablePower()
         {
-            // Reads the selected caster's remaining power in the same units as the displayed energy costs.
             hasAvailablePower = false;
             Sim actor = journal.CurrentActor;
             if (!MagicCasters.IsCaster(actor) || actor.Motives == null) return;
@@ -533,14 +513,12 @@ namespace SupernaturalExpanded.Journal
 
         private Color ColorForCost(GrimoireEntry entry)
         {
-            // Colors affordable costs green and unaffordable costs red while leaving unavailable readings neutral.
             if (!hasAvailablePower || float.IsNaN(entry.EnergyCost)) return TextColor;
             return entry.EnergyCost <= availablePower + 0.005f ? AffordableColor : UnaffordableColor;
         }
 
         private static string CostText(GrimoireEntry entry)
         {
-            // Formats an entry's cost, showing a dash for abilities whose cost the game sets.
             return float.IsNaN(entry.EnergyCost) ? JournalText.Get("Arcana.Common.UnavailableValue")
                 : entry.EnergyCost.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
         }
@@ -561,7 +539,7 @@ namespace SupernaturalExpanded.Journal
         {
             if (hoverRow < 0) return;
             float x, y;
-            if (TryGetCursor(out x, out y))
+            if (journal.TryGetCursor(out x, out y))
             {
                 float top = rowsTop + hoverRow * RowHeight;
                 if (x >= rowsLeft && x < rowsLeft + rowsWidth && y >= top && y < top + RowHeight) return;
@@ -594,8 +572,8 @@ namespace SupernaturalExpanded.Journal
             scrollThumb.Visible = scrollable;
             upArrow.Enabled = scrollable && scrollRow[category] > 0;
             downArrow.Enabled = scrollable && scrollRow[category] < max;
-            Tint(upArrow, upArrow.Enabled);
-            Tint(downArrow, downArrow.Enabled);
+            JournalTheme.TintArrow(upArrow, upArrow.Enabled);
+            JournalTheme.TintArrow(downArrow, downArrow.Enabled);
             if (!scrollable)
             {
                 EndDrag();
@@ -605,15 +583,6 @@ namespace SupernaturalExpanded.Journal
             scrollbarThumbSize = Math.Max(24f, trackHeight * VisibleRows / (float)sorted[category].Count);
             scrollbarTravel = Math.Max(1f, trackHeight - scrollbarThumbSize);
             journal.Place(scrollThumb, scrollbarLeft, GetThumbTop(max), ScrollWidth, scrollbarThumbSize);
-        }
-
-        private static void Tint(Button arrow, bool enabled)
-        {
-            // Dims a disabled arrow with its shade colour because the stock art has no disabled image.
-            Color shade = enabled ? ArrowEnabled : ArrowDisabled;
-            if (arrow.ShadeColor.ARGB == shade.ARGB) return;
-            arrow.ShadeColor = shade;
-            arrow.Invalidate();
         }
 
         private void OnWheel(WindowBase sender, UIMouseEventArgs args)
@@ -627,7 +596,7 @@ namespace SupernaturalExpanded.Journal
         private void OnThumbDown(WindowBase sender, UIMouseEventArgs args)
         {
             float y;
-            if (!visible || !TryGetCursorY(out y)) return;
+            if (!visible || !journal.TryGetCursorY(out y)) return;
             dragging = true;
             dragOffset = y - GetThumbTop(GetMaxScroll());
             UIManager.SetCaptureTarget(InputContext.kICMouse, scrollThumb);
@@ -637,7 +606,7 @@ namespace SupernaturalExpanded.Journal
         private void OnTrackDown(WindowBase sender, UIMouseEventArgs args)
         {
             float y;
-            if (!visible || dragging || GetMaxScroll() == 0 || !TryGetCursorY(out y)) return;
+            if (!visible || dragging || GetMaxScroll() == 0 || !journal.TryGetCursorY(out y)) return;
             ScrollBy(y < GetThumbTop(GetMaxScroll()) ? -VisibleRows : VisibleRows);
             args.Handled = true;
         }
@@ -651,7 +620,7 @@ namespace SupernaturalExpanded.Journal
                 dragging = false;
                 return;
             }
-            if (!TryGetCursorY(out y)) return;
+            if (!journal.TryGetCursorY(out y)) return;
             int max = GetMaxScroll();
             float fraction = (y - dragOffset - scrollbarTop - ScrollArrowHeight) / scrollbarTravel;
             int target = Math.Max(0, Math.Min(max, (int)Math.Round(fraction * max)));
@@ -678,7 +647,6 @@ namespace SupernaturalExpanded.Journal
 
         internal void Release()
         {
-            // Drops an active drag before the window goes away.
             EndDrag();
         }
 
@@ -691,26 +659,6 @@ namespace SupernaturalExpanded.Journal
         {
             return scrollbarTop + ScrollArrowHeight +
                 scrollbarTravel * scrollRow[category] / (float)Math.Max(1, max);
-        }
-
-        private bool TryGetCursor(out float x, out float y)
-        {
-            // Reads the cursor position in layout units from the Journal's top left, whatever its scale.
-            x = 0f;
-            y = 0f;
-            WindowBase root = journal.RootWindow;
-            if (root == null || root.Disposed) return false;
-            Vector2 cursor = root.ScreenToWindow(UIManager.GetCursorPosition());
-            float scale = Math.Max(0.01f, journal.LayoutScale);
-            x = cursor.x / scale;
-            y = cursor.y / scale;
-            return true;
-        }
-
-        private bool TryGetCursorY(out float y)
-        {
-            float x;
-            return TryGetCursor(out x, out y);
         }
 
         internal void Show(bool show)

@@ -90,7 +90,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static OccultStatusProvider For(OccultTypes primary)
         {
-            // Returns the status provider for a Sim's primary occult, or null when it has none.
             foreach (OccultStatusProvider provider in Providers)
             {
                 if (provider.Type == primary)
@@ -108,6 +107,12 @@ namespace SupernaturalExpanded.Journal
         private const float HudMeterScale = 0.005f;
         private static readonly Dictionary<SkillNames, UIImage> skillIcons = new Dictionary<SkillNames, UIImage>();
         private static readonly Dictionary<ulong, UIImage> statusIcons = new Dictionary<ulong, UIImage>();
+
+        internal static void ClearIcons()
+        {
+            skillIcons.Clear();
+            statusIcons.Clear();
+        }
 
         internal static UIImage StatusIcon(ulong instance)
         {
@@ -128,7 +133,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static bool ReadSkill(StatusSource source, SkillNames name, string label, StatusField field)
         {
-            // Reads a skill as its level and progress toward the next level.
             Skill template = SkillManager.GetStaticSkill(name);
             if (template == null || template.MaxSkillLevel <= 0)
             {
@@ -183,7 +187,6 @@ namespace SupernaturalExpanded.Journal
 
         private static UIImage SkillIcon(SkillNames name, Skill skill)
         {
-            // Returns the game's icon for a skill, loaded once.
             UIImage image;
             if (skillIcons.TryGetValue(name, out image))
             {
@@ -206,7 +209,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static bool ReadMotive(StatusSource source, CommodityKind kind, string label, StatusField field)
         {
-            // Reads a magic motive as the 0-100 value the HUD magic bar shows.
             float meter;
             Sim sim = source.LiveSim;
             Motives motives = sim == null ? null : sim.Motives;
@@ -238,7 +240,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static bool ReadEnergy(StatusSource source, OccultTypes type, string label, StatusField field)
         {
-            // Reads the mod's per-Sim energy pool for occults without a native magic motive.
             OccultEnergy energy = OccultEnergy.For(type);
             if (energy == null)
             {
@@ -257,7 +258,6 @@ namespace SupernaturalExpanded.Journal
 
         internal override void ReadProgress(StatusSource source, StatusField field)
         {
-            // Reads Witch progress across the whole native Spellcasting skill under the rank caption.
             PowerSelection selection = source.Selection;
             if (selection != null && selection.Available)
             {
@@ -273,16 +273,16 @@ namespace SupernaturalExpanded.Journal
                 Sim sim = source.LiveSim;
                 if (sim != null && WitchCastingLifecycle.CastingInstalled)
                 {
-                    WitchCastingRules rules = WitchCastingContext.ReadCapacityRules(sim);
+                    CastingRules rules = WitchCastingContext.ReadCapacityRules(sim);
                     const CommodityKind kind = CommodityKind.MagicFatigue;
                     Motives motives = sim.Motives;
                     if (motives != null && motives.GetMotive(kind) != null)
                     {
-                        field.Fraction = WitchCastingRules.PowerFraction(motives.GetValue(kind), motives.GetMin(kind), motives.GetMax(kind));
+                        field.Fraction = CastingRules.PowerFraction(motives.GetValue(kind), motives.GetMin(kind), motives.GetMax(kind));
                     }
                     field.Caption = JournalText.Format("Arcana.Common.Ratio", (int)Math.Round(field.Fraction * rules.Capacity),
                         (int)Math.Round(rules.Capacity));
-                    field.Tip = WitchAttributes.PowerTooltip(field.Label, rules);
+                    field.Tip = CasterAttributes.PowerTooltip(field.Label, rules);
                 }
                 UIImage powerIcon = StatusReaders.StatusIcon(OccultAssetData.WitchPowerStatus);
                 if (powerIcon != null)
@@ -304,7 +304,11 @@ namespace SupernaturalExpanded.Journal
 
         internal override void ReadPower(StatusSource source, StatusField field)
         {
-            StatusReaders.ReadMotive(source, CommodityKind.AuraPower, JournalText.Get("Arcana.Status.Label.FaericPower"), field);
+            string label = JournalText.Get("Arcana.Status.Label.MagicalPower");
+            if (StatusReaders.ReadMotive(source, CommodityKind.AuraPower, label, field) && source.LiveSim != null && WitchCastingLifecycle.CastingInstalled)
+            {
+                field.Tip = CasterAttributes.PowerTooltip(label, MagicCasters.ReadRules(source.LiveSim));
+            }
         }
     }
 
@@ -341,13 +345,29 @@ namespace SupernaturalExpanded.Journal
 
         internal override void ReadProgress(StatusSource source, StatusField field)
         {
-            StatusReaders.ReadSkill(source, GenieMagicSkill.GenieGuid, JournalText.Get("Arcana.Status.Label.GenieMagic"), field);
+            if (!StatusReaders.ReadSkill(source, GenieMagicSkill.GenieGuid, JournalText.Get("Arcana.Status.Label.GenieMagic"), field)) return;
+            Sim sim = source.LiveSim;
+            GenieMagicSkill skill = sim == null ? null : GeniePower.Read(sim.SimDescription, false);
+            if (skill == null) return;
+            Rank rank = CastingRules.RankForSkill(skill.SkillLevel);
+            field.Set(JournalText.Get("Arcana.Status.Label.MagicalProficiency"), GenieRanks.FullName(rank),
+                GenieRanks.Progress(skill.SkillLevel, field.Fraction), field.Icon);
         }
 
         internal override void ReadPower(StatusSource source, StatusField field)
         {
-            // Shows the Genie's saved power pool, which Genie spells spend.
-            StatusReaders.ReadEnergy(source, Type, JournalText.Get("Arcana.Status.Label.MagicPoints"), field);
+            Sim sim = source.LiveSim;
+            if (sim == null || !WitchCastingLifecycle.CastingInstalled)
+            {
+                StatusReaders.ReadEnergy(source, Type, JournalText.Get("Arcana.Status.Label.MagicalPower"), field);
+                return;
+            }
+            CastingRules rules = MagicCasters.ReadRules(sim);
+            float power = Math.Min(GeniePower.Get(sim.SimDescription), rules.Capacity);
+            string label = JournalText.Get("Arcana.Status.Label.MagicalPower");
+            field.Set(label, JournalText.Format("Arcana.Common.Ratio", (int)Math.Round(power), (int)Math.Round(rules.Capacity)),
+                rules.Capacity <= 0f ? 0f : power / rules.Capacity, OccultMeter.MeterIcon(Type));
+            field.Tip = CasterAttributes.PowerTooltip(label, rules);
         }
     }
 

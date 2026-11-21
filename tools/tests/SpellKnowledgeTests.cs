@@ -80,21 +80,24 @@ internal static class SpellKnowledgeTests
 
         SpellEntry fire = SpellCatalog.Find("fire_blast");
         Check(SpellCatalog.InnateDiscoverable(fire, 0, false, true), "Fairies and Genies cannot study starting spells");
-        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("conversion"), 3, false, false), "Uncastable spell entered innate study");
-        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("restoration"), 4, false, true), "Tier V entered innate study");
+        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("conversion"), 2, false, false), "Uncastable spell entered innate study");
+        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("restoration"), 2, false, true), "Tier V entered innate study");
+        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("sunlight"), 2, false, true), "Tier IV entered innate study");
         Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("love"), 1, false, true), "Innate study ignored the skill tier");
-        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("charm_energy"), 3, false, true), "Cut charm entered innate study");
-        Check(!SpellCatalog.InnateDiscoverable(fire, 3, true, true), "Known spell reentered innate study");
-        Check(SpellCatalog.InnateDiscoverable(SpellCatalog.Find("upgrade"), 3, false, true), "Fairies and Genies cannot learn Magically Upgrade");
-        Check(SpellCatalog.InnateDiscoverable(SpellCatalog.Find("conversion"), 3, false, true), "Fairies and Genies cannot learn Conversion");
+        Check(!SpellCatalog.InnateDiscoverable(SpellCatalog.Find("charm_energy"), 2, false, true), "Cut charm entered innate study");
+        Check(!SpellCatalog.InnateDiscoverable(fire, 2, true, true), "Known spell reentered innate study");
+        Check(SpellCatalog.InnateDiscoverable(SpellCatalog.Find("upgrade"), 2, false, true), "Fairies and Genies cannot learn Magically Upgrade");
+        Check(SpellCatalog.InnateDiscoverable(SpellCatalog.Find("conversion"), 2, false, true), "Fairies and Genies cannot learn Conversion");
 
-        float next = 30f;
-        Check(!SpellKnowledgeRecord.ResearchDue(29.9f, ref next, 30f), "Research rolled early");
-        Check(SpellKnowledgeRecord.ResearchDue(30f, ref next, 30f) && next == 60f, "First research interval failed");
-        Check(!SpellKnowledgeRecord.ResearchDue(30f, ref next, 30f), "Repeated callback duplicated a roll");
-        Check(SpellKnowledgeRecord.ResearchDue(60f, ref next, 30f), "Failed roll prevented subsequent research");
-        Check(SpellKnowledgeRecord.ResearchDue(360f, ref next, 30f) && next == 390f, "Long loop stall broke scheduling");
-        Check(!SpellKnowledgeRecord.ResearchDue(float.NaN, ref next, 30f), "Invalid loop time rolled");
+        SpellResearchClock research = new SpellResearchClock();
+        research.Start(1f, 30f);
+        Check(!research.Advance(29.9f, 1f, 30f), "Research rolled early");
+        Check(research.Advance(30f, 1f, 30f), "First research interval failed");
+        Check(!research.Advance(30f, 1f, 30f), "Repeated callback duplicated a roll");
+        Check(research.Advance(60f, 1f, 30f), "Failed roll prevented subsequent research");
+        Check(research.Advance(360f, 1f, 30f), "Long loop stall broke scheduling");
+        Check(!research.Advance(360f, 1f, 30f), "Long loop stall produced a burst of rolls");
+        Check(!research.Advance(float.NaN, 1f, 30f), "Invalid loop time rolled");
         List<string> normalized = SpellKnowledgeRecord.Normalize(new string[] { "good_luck", "", null, "good_luck", "future_spell" });
         Check(normalized.Count == 2 && normalized.Contains("future_spell"), "Normalization lost future IDs or retained duplicates");
 
@@ -250,6 +253,25 @@ internal static class SpellKnowledgeTests
         }
         catch (InvalidOperationException) { }
         Check(object.ReferenceEquals(levels, MagicWand.kSpellLevels), "Native exception left unlock tuning altered");
+
+        FieldInfo charmField = gates.GetField("CharmLevels", BindingFlags.Static | BindingFlags.NonPublic);
+        FieldInfo nativeCharm = (FieldInfo)charmField.GetValue(null);
+        object originalCharm = nativeCharm.GetValue(null);
+        try
+        {
+            nativeCharm.SetValue(null, null);
+            try
+            {
+                Activator.CreateInstance(scopeType, BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { true }, null);
+                throw new Exception("Expected construction failure");
+            }
+            catch (TargetInvocationException error)
+            {
+                Check(error.InnerException is NullReferenceException, "Unexpected scope failure");
+            }
+            Check(object.ReferenceEquals(levels, MagicWand.kSpellLevels), "Partial construction leaked unlock tuning");
+        }
+        finally { nativeCharm.SetValue(null, originalCharm); }
 
         Console.WriteLine("PASS: " + checks + " spell catalog, timer, per-Sim data, clone, native property-stream and native definition binding checks");
         Console.WriteLine("These are host-side checks. They do not run the Sims 3 simulation, world saving, travel or UI.");

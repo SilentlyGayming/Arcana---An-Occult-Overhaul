@@ -4,26 +4,38 @@ namespace SupernaturalExpanded.Journal
 {
     internal static class WitchTree
     {
-        internal static readonly OccultTree Tree = new OccultTree(
-            JournalText.Get("Arcana.LifeState.Name.Witch"), JournalText.Get("Arcana.Journal.Perks.Points"),
-            JournalText.Get("Arcana.Journal.Perks.PointsHelp"),
-            new[]
+        internal static readonly OccultTree Tree = Create();
+
+        private static OccultTree Create()
+        {
+            OccultTree tree = new OccultTree(0x53E12000, "Arcana.Witch.Perk.", WitchProgressStore.Ledger,
+                JournalText.Get("Arcana.LifeState.Name.Witch"), JournalText.Get("Arcana.Journal.Perks.Points"),
+                JournalText.Get("Arcana.Journal.Perks.PointsHelp"),
+                new[]
+                {
+                    JournalText.Get("Arcana.Witch.Rank.Short.Novice"),
+                    JournalText.Get("Arcana.Witch.Rank.Short.Apprentice"),
+                    JournalText.Get("Arcana.Witch.Rank.Short.Adept"),
+                    JournalText.Get("Arcana.Witch.Rank.Short.Master"),
+                    JournalText.Get("Arcana.Witch.Rank.Short.HighWitch"),
+                },
+                new[]
+                {
+                    JournalText.Get("Arcana.Witch.Rank.Full.Novice"),
+                    JournalText.Get("Arcana.Witch.Rank.Full.Apprentice"),
+                    JournalText.Get("Arcana.Witch.Rank.Full.Adept"),
+                    JournalText.Get("Arcana.Witch.Rank.Full.Master"),
+                    JournalText.Get("Arcana.Witch.Rank.Full.HighWitch"),
+                },
+                CreatePerks());
+            tree.RankUnlocks = new[]
             {
-                JournalText.Get("Arcana.Witch.Rank.Short.Novice"),
-                JournalText.Get("Arcana.Witch.Rank.Short.Apprentice"),
-                JournalText.Get("Arcana.Witch.Rank.Short.Adept"),
-                JournalText.Get("Arcana.Witch.Rank.Short.Master"),
-                JournalText.Get("Arcana.Witch.Rank.Short.HighWitch"),
-            },
-            new[]
-            {
-                JournalText.Get("Arcana.Witch.Rank.Full.Novice"),
-                JournalText.Get("Arcana.Witch.Rank.Full.Apprentice"),
-                JournalText.Get("Arcana.Witch.Rank.Full.Adept"),
-                JournalText.Get("Arcana.Witch.Rank.Full.Master"),
-                JournalText.Get("Arcana.Witch.Rank.Full.HighWitch"),
-            },
-            CreatePerks());
+                "Arcana.Witch.Rank.Unlock.1", "Arcana.Witch.Rank.Unlock.2", "Arcana.Witch.Rank.Unlock.3",
+                "Arcana.Witch.Rank.Unlock.4", "Arcana.Witch.Rank.Unlock.5"
+            };
+            tree.Benefits = WitchPerkBenefits.For;
+            return tree;
+        }
 
         private static Perk[] CreatePerks()
         {
@@ -61,8 +73,8 @@ namespace SupernaturalExpanded.Journal
 
         private static Perk Power(string key, Rank rank, int column, float shift, string name, params int[] costs)
         {
-            // Creates a perk with one cost per upgrade rank.
-            return new Perk(key, rank, column, shift, name, costs);
+            return new Perk(key, rank, column, shift, name, costs) { PreviewOnly = key == "TravellingScholar" || key == "SorcerersApprentice" ||
+                key == "AlchemicalSavant" || key == "TrialByFire" || key == "PowerShunt" };
         }
     }
 
@@ -72,14 +84,14 @@ namespace SupernaturalExpanded.Journal
         {
             int upgrade = perk.PreviewIndex(descriptionIndex) + 1;
             List<TooltipModifier> lines = new List<TooltipModifier>();
-            WitchCastingRules rules = new WitchCastingRules(Rank.Novice);
+            CastingRules rules = new CastingRules(Rank.Novice);
             switch (perk.Key)
             {
                 case "RestForTheWicked":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.SleepRegen", Signed(WitchCastingRules.RestBonus(upgrade) * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.SleepRegen", Signed(CastingRules.RestBonus(upgrade) * 100f)), true, false));
                     break;
                 case "LessonsInTheUnseenArts":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.BeginnerCost", Signed(-WitchCastingRules.LessonsDiscount * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.BeginnerCost", Signed(-CastingRules.LessonsDiscount * 100f)), true, false));
                     break;
                 case "TravellingScholar":
                     lines.Add(new TooltipModifier(JournalText.Get("Arcana.Witch.Benefit.PortableStudy"), true, false));
@@ -94,36 +106,36 @@ namespace SupernaturalExpanded.Journal
                     lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.RareIngredient", Unsigned(5f)), true, false));
                     break;
                 case "FamiliarBond":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.FamiliarCost", Signed(-WitchCastingRules.FamiliarDiscount * 100f)), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.FamiliarProtect", Unsigned(WitchCastingRules.FamiliarProtection)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.FamiliarCost", Signed(-CastingRules.FamiliarDiscount * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.FamiliarProtect", Unsigned(CastingRules.FamiliarProtection)), true, false));
                     break;
                 case "Hexweaver":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CurseCost", Signed(-WitchCastingRules.HexweaverDiscount * 100f)), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CurseDuration", Signed((WitchCastingRules.HexweaverDuration - 1f) * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CurseCost", Signed(-CastingRules.HexweaverDiscount * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CurseDuration", Signed((CastingRules.HexweaverDuration - 1f) * 100f)), true, false));
                     break;
                 case "TrialByFire":
                     lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.DuelDiscovery", Unsigned(30f)), true, false));
                     break;
                 case "TheWitchingHour":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.NightRegen", Signed(WitchCastingRules.WitchingHourRegen * 100f)), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.NightStudy", Signed(20f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.NightRegen", Signed(CastingRules.WitchingHourRegen * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.NightStudy", Signed(SpellStudy.Settings.WitchingHourBonusPercent)), true, false));
                     break;
                 case "ThePowerOfThree":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CovenRegen", Signed(WitchCastingRules.CovenRegen * 100f)), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CovenFailure", Signed(-WitchCastingRules.CovenFailureReduction * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CovenRegen", Signed(CastingRules.CovenRegen * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CovenFailure", Signed(-CastingRules.CovenFailureReduction * 100f)), true, false));
                     break;
                 case "DarkArts":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.EmotionPenalty", Signed(-WitchCastingRules.DarkArtsPenaltyReduction * 100f)), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.RefundChance", Unsigned(WitchCastingRules.DarkArtsRefundChance)), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.SpellRefund", Unsigned(rules.RefundFraction(new WitchSpell(0, WitchSpellKind.Spell)) * 100f)), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CurseRefund", Unsigned(rules.RefundFraction(new WitchSpell(0, WitchSpellKind.Curse)) * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.EmotionPenalty", Signed(-CastingRules.DarkArtsPenaltyReduction * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.RefundChance", Unsigned(CastingRules.DarkArtsRefundChance)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.SpellRefund", Unsigned(rules.RefundFraction(new MagicSpell(0, MagicSpellKind.Spell)) * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.CurseRefund", Unsigned(rules.RefundFraction(new MagicSpell(0, MagicSpellKind.Curse)) * 100f)), true, false));
                     break;
                 case "PracticallyMagic":
                     lines.Add(new TooltipModifier(JournalText.Get("Arcana.Witch.Benefit.Wandless"), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.HandsAccuracy", Signed(WitchCastingRules.MagicHandsAccuracyBonus)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.HandsAccuracy", Signed(CastingRules.MagicHandsAccuracyBonus)), true, false));
                     break;
                 case "EideticWitchary":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.LowerTierCost", Signed(-WitchCastingRules.EideticDiscount(upgrade) * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.LowerTierCost", Signed(-CastingRules.EideticDiscount(upgrade) * 100f)), true, false));
                     break;
                 case "PowerShunt":
                     lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.ShuntPower", Unsigned(20f)), true, false));
@@ -131,15 +143,15 @@ namespace SupernaturalExpanded.Journal
                     lines.Add(new TooltipModifier(JournalText.Get("Arcana.Witch.Benefit.ShuntCooldown"), false, false));
                     break;
                 case "Scapegoat":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.Redirect", Unsigned(WitchCastingRules.ScapegoatProtection(upgrade))), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.Redirect", Unsigned(CastingRules.ScapegoatProtection(upgrade))), true, false));
                     break;
                 case "ArcaneAscendancy":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.Capacity", Signed(WitchCastingRules.AscendancyCapacityBonus * 100f)), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.GeneralAccuracy", Signed(WitchCastingRules.AscendancyAccuracyBonus)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.Capacity", Signed(CastingRules.AscendancyCapacityBonus * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.GeneralAccuracy", Signed(CastingRules.AscendancyAccuracyBonus)), true, false));
                     break;
                 case "TheOldWays":
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.RitualCost", Signed(-WitchCastingRules.OldWaysDiscount * 100f)), true, false));
-                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.SpecialtyAccuracy", Signed(WitchCastingRules.OldWaysAccuracyBonus)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.RitualCost", Signed(-CastingRules.OldWaysDiscount * 100f)), true, false));
+                    lines.Add(new TooltipModifier(JournalText.Format("Arcana.Witch.Benefit.SpecialtyAccuracy", Signed(CastingRules.OldWaysAccuracyBonus)), true, false));
                     break;
             }
             return lines.ToArray();

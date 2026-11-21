@@ -65,7 +65,6 @@ namespace SupernaturalExpanded.Journal
 
         internal static Tooltip Create(string title, string tagline, string description, string conflict)
         {
-            // Builds the perk tooltip, falling back to the stock plain tooltip on failure.
             return Create(title, tagline, description, conflict, null);
         }
 
@@ -103,7 +102,6 @@ namespace SupernaturalExpanded.Journal
 
         private bool Fill(string title, string tagline, string description, string conflict, TooltipModifier[] modifiers)
         {
-            // Fills the tooltip controls and returns false when the layout lacks them.
             Window root = TooltipWindow as Window;
             if (root == null)
             {
@@ -182,7 +180,6 @@ namespace SupernaturalExpanded.Journal
 
         private float Place(Text text, string caption, float left, float top, float width, float scale)
         {
-            // Sets the caption, fits the Text's height to its wrapped text at the given width, and returns that height.
             text.Caption = caption;
             text.Area = new Rect(left, top, left + width, top + 10f);
             text.AutoSize(true);
@@ -197,7 +194,6 @@ namespace SupernaturalExpanded.Journal
 
         private static float Estimate(string caption, float width, float scale)
         {
-            // Estimates a text height from its length when AutoSize reports none.
             float perLine = Math.Max(1f, width / (6.5f * scale));
             int lines = Math.Max(1, (int)Math.Ceiling(caption.Length / perLine));
             return lines * 16f * scale;
@@ -205,7 +201,6 @@ namespace SupernaturalExpanded.Journal
 
         private static Tooltip Plain(string text)
         {
-            // Builds the stock plain tooltip at the same width where the game allows it.
             try
             {
                 return new SimpleTextTooltip(text, false, "SimpleTextTooltip", 1, (int)(TextWidth * NativeLayouts.UIScale()));

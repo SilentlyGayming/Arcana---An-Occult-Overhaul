@@ -33,7 +33,6 @@ def check_dds(blob: bytes, fmt: bytes, name: str):
 
 
 def replacement_payloads(assets: Path = None):
-    # Loads and validates the two DDS bite-mark replacements.
     directory = Path(assets) if assets is not None else DEFAULT_ASSETS
     resources = []
     for (typ, group, instance), filename in REPLACE.items():
@@ -50,7 +49,6 @@ def replacement_payloads(assets: Path = None):
 
 
 def thumbnail_payloads(assets: Path = None):
-    # Loads the four unedited 256px CAS thumbnails rendered by TS3.
     directory=Path(assets) if assets is not None else DEFAULT_THUMBNAILS
     resources=[]
     for group in THUMB_GROUPS:
